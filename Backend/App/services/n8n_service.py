@@ -9,7 +9,7 @@ from urllib.request import Request, urlopen
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_N8N_WEBHOOK_URL = "http://localhost:5678/webhook/contestacao"
+DEFAULT_N8N_WEBHOOK_URL = "http://localhost:5678/webhook/contestacao-claude"
 N8N_TIMEOUT_SECONDS = int(os.getenv("N8N_TIMEOUT_SECONDS", "60"))
 
 

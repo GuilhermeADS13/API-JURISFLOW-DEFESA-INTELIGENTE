@@ -20,14 +20,19 @@ def test_campos_extras_ignorados():
 
 def test_campos_conhecidos_preservados():
     r = N8NResponse(
-        status="concluido",
+        status="ok",
         mensagem="Contestacao gerada com sucesso",
-        contestacao_id="CTR-2026-000001",
-        workflow_id="wf-abc123",
+        numero_processo="0001234-56.2026.8.00.0000",
+        protocolo_n8n="wf-abc123",
+        arquivo_editado_base64="Y29udGVzdGFjYW8=",
+        arquivo_editado_nome="contestacao.txt",
     )
-    assert r.status == "concluido"
-    assert r.contestacao_id == "CTR-2026-000001"
-    assert r.workflow_id == "wf-abc123"
+    assert r.status == "ok"
+    assert r.mensagem == "Contestacao gerada com sucesso"
+    assert r.numero_processo == "0001234-56.2026.8.00.0000"
+    assert r.protocolo_n8n == "wf-abc123"
+    assert r.arquivo_editado_base64 == "Y29udGVzdGFjYW8="
+    assert r.arquivo_editado_nome == "contestacao.txt"
 
 
 def test_status_padrao_quando_ausente():
@@ -40,7 +45,7 @@ def test_campos_opcionais_nulos_excluidos_no_dump():
     r = N8NResponse(status="ok")
     data = r.model_dump(exclude_none=True)
     assert "mensagem" not in data
-    assert "contestacao_id" not in data
+    assert "numero_processo" not in data
     assert data["status"] == "ok"
 
 
@@ -49,6 +54,13 @@ def test_resposta_minima_valida():
     assert r.mensagem == "Timeout no modelo de IA"
 
 
-def test_fundamentos_como_lista():
-    r = N8NResponse(status="ok", fundamentos=["Art. 818 CLT", "OJ 301 TST"])
-    assert len(r.fundamentos) == 2
+def test_minuta_estruturada_preservada():
+    """O workflow retorna a minuta como dicionario com fundamentos, pedidos etc."""
+    minuta_payload = {
+        "tese_central": "Improcedencia dos pedidos autorais.",
+        "fundamentos": ["Art. 818 CLT", "OJ 301 TST"],
+        "pedidos": "Improcedencia total.",
+    }
+    r = N8NResponse(status="ok", minuta=minuta_payload)
+    assert r.minuta == minuta_payload
+    assert r.minuta["fundamentos"] == ["Art. 818 CLT", "OJ 301 TST"]

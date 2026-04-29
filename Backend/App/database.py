@@ -110,20 +110,6 @@ def _normalize_database_url(database_url: str) -> str:
 
 
 
-def _mask_database_url(database_url: str) -> str:
-    """Mascara senha da URL para logs de erro seguros."""
-    if "://" not in database_url or "@" not in database_url:
-        return database_url
-
-    scheme, rest = database_url.split("://", 1)
-    auth_part, host_part = rest.split("@", 1)
-    username = auth_part.split(":", 1)[0]
-    if username:
-        return f"{scheme}://{username}:***@{host_part}"
-    return f"{scheme}://***@{host_part}"
-
-
-
 def _get_database_url() -> str:
     """Retorna URL final de conexao priorizando `DATABASE_URL`."""
     raw_database_url = os.getenv("DATABASE_URL", "").strip()
@@ -138,32 +124,6 @@ def _get_session_ttl_seconds() -> int:
     ttl_hours = _safe_int(os.getenv("SESSION_TTL_HOURS", str(DEFAULT_SESSION_TTL_HOURS)), DEFAULT_SESSION_TTL_HOURS)
     return ttl_hours * 3600
 
-
-
-def _connect():
-    """Abre conexao direta com PostgreSQL (usado apenas para ping/healthcheck)."""
-    if psycopg2 is None:
-        raise RuntimeError(
-            "Driver PostgreSQL nao encontrado. Instale `psycopg2-binary` no ambiente do backend."
-        )
-
-    database_url = _get_database_url()
-    timeout = _safe_int(
-        os.getenv("DATABASE_CONNECT_TIMEOUT", str(DEFAULT_DATABASE_CONNECT_TIMEOUT)),
-        DEFAULT_DATABASE_CONNECT_TIMEOUT,
-    )
-
-    try:
-        return psycopg2.connect(database_url, connect_timeout=timeout)
-    except Exception as error:
-        if isinstance(error, (psycopg2.OperationalError, UnicodeDecodeError)):
-            technical_detail = str(error).replace("\n", " ").strip() or "sem detalhe adicional"
-            raise RuntimeError(
-                "Nao foi possivel conectar ao PostgreSQL. "
-                f"Verifique as variaveis do banco ({_mask_database_url(database_url)}). "
-                f"Detalhe tecnico: {technical_detail}"
-            ) from error
-        raise
 
 
 def _get_pool() -> "psycopg2_pool.ThreadedConnectionPool":
@@ -220,8 +180,12 @@ def _get_connection():
 
 
 def ping_database() -> None:
-    """Executa um ping simples no banco para healthcheck."""
-    with _connect() as connection:
+    """Executa um ping simples no banco para healthcheck.
+
+    Reusa o pool de conexoes para nao abrir TCP+TLS novo a cada healthcheck
+    (evita esgotar `max_connections` do pooler em escala).
+    """
+    with _get_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute("SELECT 1")
             row = cursor.fetchone()
@@ -389,6 +353,26 @@ def create_usuario(user_id: str, nome: str, email: str, senha_hash: str) -> dict
 
 
 
+def update_usuario_senha_hash(usuario_id: str, novo_hash: str) -> None:
+    """Atualiza apenas o hash da senha do usuario (re-hash transparente).
+
+    Usado quando o login detecta hash com iteracoes PBKDF2 desatualizadas.
+    """
+    _ensure_db_initialized()
+
+    with _get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE usuarios
+                SET senha_hash = %s
+                WHERE id = %s
+                """,
+                (novo_hash, usuario_id),
+            )
+        connection.commit()
+
+
 def get_usuario_por_email(email: str) -> dict[str, str] | None:
     """Busca usuario por e-mail retornando hash de senha para login."""
     _ensure_db_initialized()
@@ -531,6 +515,7 @@ def save_contestacao(payload: dict[str, Any], status: str, n8n_resposta: Any) ->
     _ensure_db_initialized()
 
     arquivo_nome = str(payload.get("arquivo_base_nome") or payload.get("arquivo_base") or "")
+    arquivo_conteudo = str(payload.get("arquivo_base_conteudo_base64") or "")
     arquivo_mime_type = str(payload.get("arquivo_base_mime_type") or "")
     arquivo_tamanho_raw = payload.get("arquivo_base_tamanho_bytes")
     try:
@@ -569,7 +554,7 @@ def save_contestacao(payload: dict[str, Any], status: str, n8n_resposta: Any) ->
                     str(payload.get("tipo_acao", "")),
                     str(payload.get("fatos", "")),
                     str(payload.get("pedido_autor", "")),
-                    arquivo_nome,
+                    arquivo_conteudo,
                     arquivo_nome,
                     arquivo_mime_type,
                     arquivo_tamanho,

@@ -32,6 +32,8 @@ logging.basicConfig(
     datefmt="%Y-%m-%dT%H:%M:%S",
 )
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
@@ -51,9 +53,16 @@ def parse_frontend_origins() -> list[str]:
     return [origin.strip().rstrip("/") for origin in raw_value.split(",") if origin.strip()]
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+
 app = FastAPI(
     title="API de Automacao de Contestacao",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.state.limiter = limiter
@@ -80,11 +89,6 @@ async def security_headers(request: Request, call_next) -> Response:
 app.include_router(contestacao.router, prefix="/api", tags=["Contestacao"])
 app.include_router(usuario.router, prefix="/api", tags=["Usuarios"])
 app.include_router(suporte.router, prefix="/api", tags=["Suporte"])
-
-
-@app.on_event("startup")
-def on_startup() -> None:
-    init_db()
 
 
 @app.get("/")

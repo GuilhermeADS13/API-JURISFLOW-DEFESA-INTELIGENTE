@@ -1,4 +1,6 @@
 # Schema Pydantic para validar resposta do webhook n8n antes de retornar ao cliente.
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict
 
 
@@ -13,7 +15,12 @@ class N8NResponse(BaseModel):
 
     status: str = "processando"
     mensagem: str | None = None
-    contestacao_id: str | None = None
-    workflow_id: str | None = None
-    minuta: str | None = None
-    fundamentos: list[str] | None = None
+    numero_processo: str | None = None
+    protocolo_n8n: str | None = None
+    engine_ia: Any | None = None
+    minuta: Any | None = None
+    arquivo_editado_base64: str | None = None
+    arquivo_editado_nome: str | None = None
+    defesas_anteriores: Any | None = None
+    auditoria: Any | None = None
+    contexto: Any | None = None

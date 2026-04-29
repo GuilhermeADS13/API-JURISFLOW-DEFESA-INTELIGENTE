@@ -1,4 +1,5 @@
 # Rotas HTTP de contestacoes: envio ao n8n e consulta de resumo do dashboard.
+import logging
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -12,6 +13,8 @@ from App.limiter import limiter
 from App.models.processo import Processo
 from App.security import get_authenticated_user
 from App.services.n8n_service import N8NServiceError, enviar_para_n8n
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -38,9 +41,16 @@ async def gerar_contestacao(
 
         if workflow_status in {"erro_validacao", "rejeitado"}:
             save_contestacao(payload, status=workflow_status, n8n_resposta=resposta)
+            # Log completo da resposta do n8n para diagnostico, sem vazar detalhes ao cliente.
+            logger.warning(
+                "n8n rejeitou contestacao usuario_id=%s status=%s resposta=%s",
+                usuario["id"],
+                workflow_status,
+                resposta,
+            )
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=(resposta.get("mensagem") if isinstance(resposta, dict) else "Falha de validacao no workflow."),
+                detail="Nao foi possivel gerar a contestacao com os dados informados. Revise os campos e tente novamente.",
             )
 
         registro_id = save_contestacao(payload, status=workflow_status, n8n_resposta=resposta)

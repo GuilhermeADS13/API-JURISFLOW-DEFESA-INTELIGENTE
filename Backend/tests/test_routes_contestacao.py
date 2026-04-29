@@ -136,8 +136,14 @@ def test_gerar_contestacao_retorna_422_em_erro_validacao(monkeypatch, processo_v
         )
 
     assert exc_info.value.status_code == 422
-    assert "invalido" in str(exc_info.value.detail).lower()
+    # Mensagem do n8n NAO deve vazar para o cliente — usuario recebe texto generico,
+    # detalhes ficam no log estruturado e na coluna n8n_resposta da tabela contestacoes.
+    detail = str(exc_info.value.detail).lower()
+    assert "invalido" not in detail
+    assert "revise" in detail
     assert calls["save"]["status"] == "erro_validacao"
+    # Mensagem original do n8n permanece persistida para auditoria.
+    assert calls["save"]["n8n_resposta"]["mensagem"] == "Numero de processo invalido no workflow."
 
 
 def test_obter_resumo_contestacoes_retorna_cards_e_historico(monkeypatch):
