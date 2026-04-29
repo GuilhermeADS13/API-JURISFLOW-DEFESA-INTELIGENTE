@@ -1,5 +1,7 @@
 """Schema Pydantic da entrada de suporte/contato."""
 
+from typing import Annotated
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from App.models.processo import PROCESSO_REGEX
@@ -11,12 +13,12 @@ class SuporteContato(BaseModel):
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
-    nome: str = Field(..., min_length=3, max_length=120, alias="name")
-    email: str = Field(..., min_length=6, max_length=254)
-    categoria: str = Field(..., min_length=3, max_length=120, alias="category")
-    numero_processo: str | None = Field(default=None, alias="processo")
-    assunto: str = Field(..., min_length=4, max_length=160, alias="subject")
-    mensagem: str = Field(..., min_length=15, max_length=4000, alias="message")
+    nome: Annotated[str, Field(min_length=3, max_length=120, alias="name")]
+    email: Annotated[str, Field(min_length=6, max_length=254)]
+    categoria: Annotated[str, Field(min_length=3, max_length=120, alias="category")]
+    numero_processo: Annotated[str | None, Field(default=None, alias="processo")] = None
+    assunto: Annotated[str, Field(min_length=4, max_length=160, alias="subject")]
+    mensagem: Annotated[str, Field(min_length=15, max_length=4000, alias="message")]
 
     @field_validator("nome")
     @classmethod

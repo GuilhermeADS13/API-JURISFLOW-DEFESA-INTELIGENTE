@@ -1,6 +1,7 @@
 """Schemas Pydantic relacionados ao ciclo de usuario/autenticacao."""
 
 import re
+from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -38,10 +39,10 @@ class Usuario(BaseModel):
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
-    id: str = Field(..., min_length=1, max_length=64)
-    nome: str = Field(..., min_length=3, max_length=120, alias="name")
-    email: str = Field(..., min_length=6, max_length=254)
-    senha: str = Field(..., min_length=8, max_length=128, alias="password")
+    id: Annotated[str, Field(min_length=1, max_length=64)]
+    nome: Annotated[str, Field(min_length=3, max_length=120, alias="name")]
+    email: Annotated[str, Field(min_length=6, max_length=254)]
+    senha: Annotated[str, Field(min_length=8, max_length=128, alias="password")]
 
     @field_validator("nome")
     @classmethod
@@ -83,9 +84,9 @@ class UsuarioCadastro(BaseModel):
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
-    nome: str = Field(..., min_length=3, max_length=120, alias="name")
-    email: str = Field(..., min_length=6, max_length=254)
-    senha: str = Field(..., min_length=8, max_length=128, alias="password")
+    nome: Annotated[str, Field(min_length=3, max_length=120, alias="name")]
+    email: Annotated[str, Field(min_length=6, max_length=254)]
+    senha: Annotated[str, Field(min_length=8, max_length=128, alias="password")]
 
     @field_validator("nome")
     @classmethod
@@ -119,8 +120,8 @@ class UsuarioLogin(BaseModel):
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
-    email: str = Field(..., min_length=6, max_length=254)
-    senha: str = Field(..., min_length=1, max_length=128, alias="password")
+    email: Annotated[str, Field(min_length=6, max_length=254)]
+    senha: Annotated[str, Field(min_length=1, max_length=128, alias="password")]
 
     @field_validator("email")
     @classmethod
