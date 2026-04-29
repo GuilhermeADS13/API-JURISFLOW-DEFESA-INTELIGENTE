@@ -1,5 +1,3 @@
-version: '3.8'
-
 # ─────────────────────────────────────────────────────────────────────────────
 # AutoJuri — Backend + n8n
 #
@@ -31,6 +29,7 @@ services:
       - DATABASE_USER=${DATABASE_USER}
       - DATABASE_PASSWORD=${DATABASE_PASSWORD}
       - DATABASE_SSLMODE=${DATABASE_SSLMODE:-require}
+      - DATABASE_CONNECT_TIMEOUT=${DATABASE_CONNECT_TIMEOUT:-30}
 
       # Supabase Auth
       - SUPABASE_URL=${SUPABASE_URL}
@@ -41,7 +40,8 @@ services:
       - FRONTEND_ORIGINS=${FRONTEND_ORIGINS:-http://localhost:5173}
 
       # n8n webhook (backend chama o n8n internamente via rede Docker)
-      - N8N_WEBHOOK_URL=http://n8n:5678/webhook/contestacao
+      - N8N_WEBHOOK_URL=http://n8n:5678/webhook/contestacao-claude
+      - N8N_TIMEOUT_SECONDS=${N8N_TIMEOUT_SECONDS:-180}
 
       # Sessao
       - SESSION_COOKIE_SAMESITE=${SESSION_COOKIE_SAMESITE:-lax}
@@ -49,8 +49,9 @@ services:
       - SESSION_TTL_HOURS=${SESSION_TTL_HOURS:-12}
       - SESSION_CACHE_TTL_SECONDS=${SESSION_CACHE_TTL_SECONDS:-60}
 
-      # Rate limiter
-      - RATE_LIMIT_TRUST_FORWARDED=${RATE_LIMIT_TRUST_FORWARDED:-true}
+      # Rate limiter — habilitar somente em deploy atras de proxy reverso confiavel.
+      # Em dev local sem proxy, X-Forwarded-For pode ser injetado e burlar o limite.
+      - RATE_LIMIT_TRUST_FORWARDED=${RATE_LIMIT_TRUST_FORWARDED:-false}
 
       # Observabilidade
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
@@ -67,8 +68,10 @@ services:
       start_period: 20s
 
   # ── n8n Workflow Automation ──────────────────────────────────────────────
+  # Versao pinada em 2.17.5 (validada com o workflow contestacao-claude em 2026-04-29).
+  # Antes de subir versao, valide os Code nodes do workflow contra a nova versao.
   n8n:
-    image: n8nio/n8n:latest
+    image: n8nio/n8n:2.17.5
     container_name: autojuri_n8n
     ports:
       - "${N8N_PORT:-5678}:5678"
