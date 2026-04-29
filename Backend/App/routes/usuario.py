@@ -10,6 +10,7 @@ from App.database import (
     create_usuario,
     get_usuario_por_email,
     revoke_sessao,
+    update_usuario_senha_hash,
 )
 from App.limiter import limiter
 from App.models.usuario import UsuarioCadastro, UsuarioLogin, UsuarioLogout
@@ -19,7 +20,7 @@ from App.security import (
     extract_session_token,
     get_authenticated_user,
 )
-from App.services.auth_service import hash_password, verify_password
+from App.services.auth_service import hash_password, needs_rehash, verify_password
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +104,19 @@ async def login_usuario(request: Request, payload: UsuarioLogin, response: Respo
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciais invalidas.",
         )
+
+    # Migracao transparente para parametros PBKDF2 atuais — so executa se o
+    # hash em repouso usa iteracoes desatualizadas. Falha aqui nao bloqueia o
+    # login, apenas adia a migracao para a proxima autenticacao.
+    if needs_rehash(usuario["senha_hash"]):
+        try:
+            update_usuario_senha_hash(usuario["id"], hash_password(payload.senha))
+        except Exception as error:
+            logger.warning(
+                "Falha ao re-hashear senha usuario_id=%s erro=%s",
+                usuario["id"],
+                error,
+            )
 
     token = create_sessao_usuario(usuario["id"])
     apply_session_cookie(response, token)

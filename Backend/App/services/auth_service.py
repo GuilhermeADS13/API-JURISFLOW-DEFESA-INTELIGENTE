@@ -6,8 +6,9 @@ import hmac
 import os
 
 # Parametros do PBKDF2 para proteger senhas em repouso no banco.
+# 600k iteracoes seguem a recomendacao OWASP 2023 para PBKDF2-SHA256.
 PBKDF2_ALGORITHM = "sha256"
-PBKDF2_ITERATIONS = 120_000
+PBKDF2_ITERATIONS = 600_000
 SALT_BYTES = 16
 
 
@@ -45,3 +46,24 @@ def verify_password(password: str, stored_hash: str) -> bool:
         iterations,
     )
     return hmac.compare_digest(actual_digest, expected_digest)
+
+
+def needs_rehash(stored_hash: str) -> bool:
+    """Indica se o hash usa parametros antigos e precisa ser regerado.
+
+    Permite migracao transparente para a politica atual: ao validar a senha no
+    login, se este metodo retornar True, regera o hash com PBKDF2_ITERATIONS
+    novo e atualiza o registro do usuario sem pedir nova senha.
+    """
+    try:
+        algorithm, iterations_str, _, _ = stored_hash.split("$", 3)
+    except ValueError:
+        return True
+
+    if algorithm != f"pbkdf2_{PBKDF2_ALGORITHM}":
+        return True
+
+    try:
+        return int(iterations_str) < PBKDF2_ITERATIONS
+    except ValueError:
+        return True
