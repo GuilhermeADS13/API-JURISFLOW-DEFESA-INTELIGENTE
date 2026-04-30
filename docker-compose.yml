@@ -39,8 +39,9 @@ services:
       # CORS — origens permitidas separadas por virgula
       - FRONTEND_ORIGINS=${FRONTEND_ORIGINS:-http://localhost:5173}
 
-      # n8n webhook (backend chama o n8n internamente via rede Docker)
+      # n8n webhooks (backend chama o n8n internamente via rede Docker)
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook/contestacao-claude
+      - N8N_EDICAO_WEBHOOK_URL=http://n8n:5678/webhook/editar-contestacao
       - N8N_TIMEOUT_SECONDS=${N8N_TIMEOUT_SECONDS:-180}
 
       # Sessao

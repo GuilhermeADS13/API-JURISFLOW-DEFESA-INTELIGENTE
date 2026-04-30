@@ -11,7 +11,11 @@ from io import BytesIO
 import pytest
 from docx import Document
 
-from App.services.docx_editor import SubstituicaoError, aplicar_substituicoes
+from App.services.docx_editor import (
+    SubstituicaoError,
+    aplicar_substituicoes,
+    extrair_texto,
+)
 
 
 def _docx_simples(texto: str) -> bytes:
@@ -205,3 +209,57 @@ def test_resultado_eh_docx_valido_e_relegivel():
     # Deve abrir sem erro e ter o texto novo.
     doc = Document(BytesIO(novo_bytes))
     assert doc.paragraphs[0].text == "Original: Maria Souza."
+
+
+# ── extrair_texto ──────────────────────────────────────────────────────────
+
+
+def test_extrair_texto_de_paragrafo_simples():
+    docx = _docx_simples("Reu: Janaina Pereira da Silva Matos.")
+    assert extrair_texto(docx) == "Reu: Janaina Pereira da Silva Matos."
+
+
+def test_extrair_texto_de_multiplos_paragrafos_preserva_ordem():
+    doc = Document()
+    doc.add_paragraph("Primeiro paragrafo.")
+    doc.add_paragraph("Segundo paragrafo.")
+    doc.add_paragraph("Terceiro paragrafo.")
+    out = BytesIO()
+    doc.save(out)
+
+    texto = extrair_texto(out.getvalue())
+    assert texto == "Primeiro paragrafo.\nSegundo paragrafo.\nTerceiro paragrafo."
+
+
+def test_extrair_texto_inclui_celulas_de_tabela():
+    docx = _docx_com_tabela([
+        ["Campo", "Valor"],
+        ["Reclamado", "Janaina Pereira"],
+    ])
+    texto = extrair_texto(docx)
+
+    assert "Campo" in texto
+    assert "Valor" in texto
+    assert "Reclamado" in texto
+    assert "Janaina Pereira" in texto
+
+
+def test_extrair_texto_ignora_paragrafos_vazios():
+    doc = Document()
+    doc.add_paragraph("Um.")
+    doc.add_paragraph("")
+    doc.add_paragraph("Tres.")
+    out = BytesIO()
+    doc.save(out)
+
+    assert extrair_texto(out.getvalue()) == "Um.\nTres."
+
+
+def test_extrair_texto_bytes_vazios_levanta_erro():
+    with pytest.raises(SubstituicaoError):
+        extrair_texto(b"")
+
+
+def test_extrair_texto_bytes_invalidos_levantam_erro():
+    with pytest.raises(SubstituicaoError):
+        extrair_texto(b"nao eh um docx valido")

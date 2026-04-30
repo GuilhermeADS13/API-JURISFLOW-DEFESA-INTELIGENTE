@@ -23,6 +23,32 @@ class SubstituicaoError(Exception):
     """Falha ao processar o documento (bytes invalidos, formato corrompido)."""
 
 
+def extrair_texto(docx_bytes: bytes) -> str:
+    """Extrai texto plano de um .docx, incluindo paragrafos do corpo e tabelas.
+
+    O texto retornado eh enviado ao agente IA para identificar pares
+    antigo<->novo de substituicao. Mantem ordem visual dos paragrafos para
+    facilitar localizacao e validacao das ocorrencias.
+    """
+    if not docx_bytes:
+        raise SubstituicaoError("Conteudo do documento vazio.")
+
+    try:
+        doc = Document(BytesIO(docx_bytes))
+    except Exception as error:
+        raise SubstituicaoError(
+            f"Falha ao abrir o .docx: {type(error).__name__}: {error}"
+        ) from error
+
+    linhas: list[str] = []
+    for paragraph in _iterar_paragrafos(doc):
+        texto = paragraph.text
+        if texto:
+            linhas.append(texto)
+
+    return "\n".join(linhas)
+
+
 def aplicar_substituicoes(
     docx_bytes: bytes,
     pares: list[dict[str, str]],
