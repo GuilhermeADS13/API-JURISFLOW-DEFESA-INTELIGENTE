@@ -272,6 +272,44 @@ def init_db() -> None:
                     ON contestacoes (usuario_id, status)
                     """
                 )
+
+                # Fase 2: feedback loop — adiciona colunas se nao existirem
+                cursor.execute(
+                    "ALTER TABLE contestacoes ADD COLUMN IF NOT EXISTS feedback_util BOOLEAN"
+                )
+                cursor.execute(
+                    "ALTER TABLE contestacoes ADD COLUMN IF NOT EXISTS feedback_comentario TEXT"
+                )
+                cursor.execute(
+                    "ALTER TABLE contestacoes ADD COLUMN IF NOT EXISTS feedback_em TIMESTAMPTZ"
+                )
+                cursor.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_contestacoes_tipo_feedback
+                    ON contestacoes (tipo_acao, feedback_util, criado_em DESC)
+                    """
+                )
+
+                # Fase 2: tabela de contestacoes exemplares (curadoria admin)
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS contestacoes_exemplares (
+                        id                  BIGSERIAL PRIMARY KEY,
+                        tipo_acao           TEXT NOT NULL,
+                        tese_central        TEXT NOT NULL,
+                        fundamentos_resumo  TEXT NOT NULL,
+                        nota_qualidade      SMALLINT NOT NULL DEFAULT 5
+                            CHECK (nota_qualidade BETWEEN 1 AND 10),
+                        criado_em           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                    """
+                )
+                cursor.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_exemplares_tipo_acao
+                    ON contestacoes_exemplares (tipo_acao, nota_qualidade DESC)
+                    """
+                )
             connection.commit()
 
         _db_initialized = True
@@ -667,3 +705,97 @@ def get_dashboard_cards_por_usuario(usuario_id: str) -> list[dict[str, str]]:
         {"label": "Em analise", "value": str(em_analise)},
         {"label": "Com pendencia", "value": str(pendencias)},
     ]
+
+
+def salvar_feedback(
+    contestacao_id: int,
+    usuario_id: str,
+    util: bool,
+    comentario: str | None,
+) -> bool:
+    """Persiste feedback do advogado sobre a minuta.
+
+    Retorna True se a contestacao existia e pertencia ao usuario, False caso contrario.
+    """
+    _ensure_db_initialized()
+
+    with _get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE contestacoes
+                SET feedback_util       = %s,
+                    feedback_comentario = %s,
+                    feedback_em         = NOW()
+                WHERE id = %s
+                  AND usuario_id = %s
+                """,
+                (util, comentario, contestacao_id, usuario_id),
+            )
+            updated = cursor.rowcount
+        connection.commit()
+
+    return updated > 0
+
+
+
+def get_contestacoes_exemplares(tipo_acao: str) -> list[dict[str, Any]]:
+    """Retorna exemplares curados para o tipo_acao, ordenados por nota_qualidade DESC.
+
+    Usados pelo workflow n8n como few-shot examples no system prompt do agente Claude.
+    """
+    _ensure_db_initialized()
+
+    with _get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT tipo_acao, tese_central, fundamentos_resumo, nota_qualidade
+                FROM contestacoes_exemplares
+                WHERE tipo_acao = %s
+                ORDER BY nota_qualidade DESC
+                LIMIT 3
+                """,
+                (tipo_acao,),
+            )
+            rows = cursor.fetchall()
+
+    return [
+        {
+            "tipo_acao":          row[0],
+            "tese_central":       row[1],
+            "fundamentos_resumo": row[2],
+            "nota_qualidade":     row[3],
+        }
+        for row in rows
+    ]
+
+
+
+def salvar_exemplar(
+    tipo_acao: str,
+    tese_central: str,
+    fundamentos_resumo: str,
+    nota_qualidade: int = 5,
+) -> int:
+    """Insere uma contestacao exemplar (endpoint admin). Retorna o id criado."""
+    _ensure_db_initialized()
+
+    with _get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO contestacoes_exemplares
+                    (tipo_acao, tese_central, fundamentos_resumo, nota_qualidade)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id
+                """,
+                (tipo_acao, tese_central, fundamentos_resumo, nota_qualidade),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                raise RuntimeError("Falha ao inserir exemplar.")
+            inserted_id = row[0]
+        connection.commit()
+
+    return int(inserted_id)
