@@ -42,7 +42,7 @@ from slowapi.errors import RateLimitExceeded
 
 from App.database import init_db, ping_database
 from App.limiter import limiter
-from App.routes import contestacao, edicao, suporte, usuario
+from App.routes import contestacao, edicao, feedback, suporte, usuario
 
 
 def parse_frontend_origins() -> list[str]:
@@ -90,6 +90,7 @@ app.include_router(contestacao.router, prefix="/api", tags=["Contestacao"])
 app.include_router(edicao.router, prefix="/api", tags=["Edicao"])
 app.include_router(usuario.router, prefix="/api", tags=["Usuarios"])
 app.include_router(suporte.router, prefix="/api", tags=["Suporte"])
+app.include_router(feedback.router, prefix="/api", tags=["Feedback"])
 
 
 @app.get("/")
@@ -118,3 +119,4 @@ def healthcheck_database() -> dict[str, str]:
         ) from error
 
     return {"status": "healthy", "database": "postgresql"}
+
