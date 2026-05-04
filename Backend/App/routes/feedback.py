@@ -4,11 +4,9 @@ Permite ao advogado autenticado avaliar uma minuta (util/nao-util + comentario o
 O feedback e usado pelo RAG do agente para ponderar ranking das defesas anteriores.
 """
 
-from __future__ import annotations
-
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, Request, status
 from pydantic import ValidationError
 
 from App.database import (
@@ -32,7 +30,7 @@ router = APIRouter()
 async def registrar_feedback(
     request: Request,
     contestacao_id: int = Path(..., ge=1),
-    payload: FeedbackContestacao = ...,
+    payload: FeedbackContestacao = Body(...),
     usuario: dict[str, str] = Depends(get_authenticated_user),
 ) -> dict:
     """Registra avaliacao (util/nao-util) do advogado sobre a minuta gerada.
