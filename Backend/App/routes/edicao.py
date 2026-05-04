@@ -11,12 +11,10 @@ Fluxo:
    base64 + relatorio textual.
 """
 
-from __future__ import annotations
-
 import base64
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from pydantic import ValidationError
 
 from App.limiter import limiter
@@ -82,7 +80,7 @@ def _montar_relatorio(
 @limiter.limit("5/minute")
 async def editar_contestacao(
     request: Request,
-    payload: EdicaoContestacao,
+    payload: EdicaoContestacao = Body(...),
     usuario: dict[str, str] = Depends(get_authenticated_user),
 ) -> dict:
     """Recebe .docx base + campos novos, retorna .docx editado + relatorio."""
