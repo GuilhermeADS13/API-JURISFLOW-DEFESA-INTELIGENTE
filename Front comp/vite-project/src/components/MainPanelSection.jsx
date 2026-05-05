@@ -211,7 +211,7 @@ export default function MainPanelSection({
                         onDrop={handleDrop}
                       >
                         <Upload size={28} className="mb-2" />
-                        <div className="fw-semibold">Upload da peca base</div>
+                        <div className="fw-semibold">Upload da peça base</div>
                         <small className="text-secondary">
                           Arraste ou clique para anexar DOCX, DOC ou PDF.
                         </small>

@@ -1092,6 +1092,18 @@ export default function App() {
     return lines.join("\n");
   };
 
+  const triggerBlobDownload = (blob, filename) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
   const handleDownloadDoc = () => {
     if (!submitted) {
       setFeedback({
@@ -1101,15 +1113,47 @@ export default function App() {
       return;
     }
 
-    const blob = new Blob([buildDocumentText()], {
+    const baseName = normalizeFileName(form.processo || lastCaseId || "defesa");
+    const safeProcesso = escapeHtml(form.processo || "");
+    const safeCliente = escapeHtml(form.cliente || "");
+    const safeTipoAcao = escapeHtml(form.tipoAcao || "");
+    const safeDraft = escapeHtml(liveDraft.trim() || generatedDraftText).replace(/\n/g, "<br/>");
+
+    const docHtml = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+        <head>
+          <meta charset="utf-8" />
+          <title>Defesa ${safeProcesso}</title>
+          <style>
+            @page { size: A4; margin: 2.5cm; }
+            body { font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 1.6; color: #000; }
+            h1 { font-size: 16pt; text-align: center; margin-bottom: 24px; }
+            .meta { margin-bottom: 24px; font-size: 11pt; }
+            .meta strong { display: inline-block; min-width: 140px; }
+            .corpo { white-space: pre-wrap; text-align: justify; }
+          </style>
+        </head>
+        <body>
+          <h1>DEFESA - MINUTA GERADA PELO SISTEMA</h1>
+          <div class="meta">
+            <p><strong>Processo:</strong> ${safeProcesso || "-"}</p>
+            <p><strong>Cliente/Parte:</strong> ${safeCliente || "-"}</p>
+            <p><strong>Ramo do direito:</strong> ${safeTipoAcao || "-"}</p>
+          </div>
+          <div class="corpo">${safeDraft}</div>
+        </body>
+      </html>
+    `;
+
+    const blob = new Blob(["﻿", docHtml], {
       type: "application/msword;charset=utf-8",
     });
-    const baseName = normalizeFileName(form.processo || lastCaseId || "defesa");
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `${baseName}.doc`;
-    link.click();
-    URL.revokeObjectURL(link.href);
+    triggerBlobDownload(blob, `${baseName}.doc`);
+
+    setFeedback({
+      variant: "success",
+      text: "Download do DOCX iniciado. Verifique sua pasta de downloads.",
+    });
   };
 
   const handleDownloadPdf = () => {
@@ -1122,37 +1166,67 @@ export default function App() {
     }
 
     const safeProcesso = escapeHtml(form.processo || "");
+    const safeCliente = escapeHtml(form.cliente || "");
+    const safeTipoAcao = escapeHtml(form.tipoAcao || "");
     const safeDraft = escapeHtml(liveDraft.trim() || generatedDraftText).replace(/\n/g, "<br/>");
-    const printable = `
-      <html>
+    const printable = `<!doctype html>
+      <html lang="pt-BR">
         <head>
-          <title>Defesa ${safeProcesso}</title>
+          <meta charset="utf-8" />
+          <title>Defesa ${safeProcesso || ""}</title>
           <style>
-            body { font-family: Arial, sans-serif; margin: 32px; line-height: 1.6; color: #222; }
-            h1 { font-size: 18px; margin-bottom: 16px; }
-            p { margin: 0 0 12px 0; white-space: pre-line; }
+            @page { size: A4; margin: 2.5cm; }
+            body { font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 1.6; color: #000; margin: 0; padding: 32px; }
+            h1 { font-size: 16pt; text-align: center; margin-bottom: 24px; }
+            .meta { margin-bottom: 24px; font-size: 11pt; border-bottom: 1px solid #ccc; padding-bottom: 12px; }
+            .meta p { margin: 4px 0; }
+            .meta strong { display: inline-block; min-width: 140px; }
+            .corpo { white-space: pre-wrap; text-align: justify; }
+            .actions { position: fixed; top: 12px; right: 12px; }
+            .actions button { padding: 10px 16px; font-size: 14px; cursor: pointer; }
+            @media print { .actions { display: none; } body { padding: 0; } }
           </style>
         </head>
         <body>
-          <h1>Defesa - Minuta</h1>
-          <p>${safeDraft}</p>
+          <div class="actions">
+            <button onclick="window.print()">Imprimir / Salvar como PDF</button>
+          </div>
+          <h1>DEFESA - MINUTA GERADA PELO SISTEMA</h1>
+          <div class="meta">
+            <p><strong>Processo:</strong> ${safeProcesso || "-"}</p>
+            <p><strong>Cliente/Parte:</strong> ${safeCliente || "-"}</p>
+            <p><strong>Ramo do direito:</strong> ${safeTipoAcao || "-"}</p>
+          </div>
+          <div class="corpo">${safeDraft}</div>
+          <script>setTimeout(function(){ window.print(); }, 400);<\/script>
         </body>
-      </html>
-    `;
+      </html>`;
 
-    const printWindow = window.open("", "_blank", "width=900,height=700");
+    const blob = new Blob([printable], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const printWindow = window.open(url, "_blank");
+
     if (!printWindow) {
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${normalizeFileName(form.processo || lastCaseId || "defesa")}.html`;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
       setFeedback({
-        variant: "danger",
-        text: "Nao foi possivel abrir a janela para gerar o PDF.",
+        variant: "warning",
+        text: "Pop-up bloqueado. Baixamos o arquivo .html — abra no navegador e use Ctrl+P para salvar como PDF.",
       });
       return;
     }
 
-    printWindow.document.write(printable);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    setFeedback({
+      variant: "success",
+      text: "Janela de impressao aberta. Use 'Salvar como PDF' no dialogo de impressao.",
+    });
   };
 
   const handleNavigate = (pageId) => {
