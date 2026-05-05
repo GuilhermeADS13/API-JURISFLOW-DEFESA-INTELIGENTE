@@ -41,9 +41,6 @@ class Processo(BaseModel):
 
     # Campo opcional para edicao humana da minuta.
     texto_editado_ao_vivo: str | None = None
-    # Controle explicito de qual motor IA o n8n deve usar.
-    modo_ia: str = Field(default="teste_gratis")
-    openai_free_test_mode: bool | None = None
 
     @field_validator("numero_processo")
     @classmethod
@@ -124,14 +121,6 @@ class Processo(BaseModel):
             return None
         return texto
 
-    @field_validator("modo_ia")
-    @classmethod
-    def normalizar_modo_ia(cls, value: str | None) -> str:
-        modo = (value or "teste_gratis").strip().lower()
-        if modo not in {"teste_gratis", "openai"}:
-            return "teste_gratis"
-        return modo
-
     @model_validator(mode="after")
     def validar_consistencia_arquivo(self):
         """Mantem consistencia entre nome, conteudo e tamanho do arquivo."""
@@ -146,8 +135,5 @@ class Processo(BaseModel):
         if nome:
             self.arquivo_base = nome
             self.arquivo_base_nome = nome
-
-        if self.openai_free_test_mode is None:
-            self.openai_free_test_mode = self.modo_ia != "openai"
 
         return self

@@ -93,10 +93,6 @@ services:
       - CLAUDE_TEMPERATURE=${CLAUDE_TEMPERATURE:-0.12}
       - CLAUDE_TIMEOUT_MS=${CLAUDE_TIMEOUT_MS:-120000}
 
-      # ── IA – OpenAI (fallback, opcional) ────────────────────────────────
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}
-
       # ── Supabase ─────────────────────────────────────────────────────────
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}

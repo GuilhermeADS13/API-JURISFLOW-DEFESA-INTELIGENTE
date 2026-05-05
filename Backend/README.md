@@ -19,18 +19,19 @@ API FastAPI do projeto de automacao de contestacao com integracao n8n e persiste
 
 ## Variaveis do agente de IA (n8n)
 
-O workflow n8n `AutoJuri - Webhook Contestacao` usa estas variaveis no processo do n8n:
+O workflow n8n `AutoJuri - Webhook Contestacao Claude` usa estas variaveis no processo do n8n:
 
 ```env
-OPENAI_API_KEY=sua_openai_api_key
-OPENAI_MODEL=gpt-5.3-codex
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_MAX_OUTPUT_TOKENS=2200
-OPENAI_TEMPERATURE=0.15
-OPENAI_TIMEOUT_MS=35000
+ANTHROPIC_API_KEY=sua_anthropic_api_key
+CLAUDE_MODEL=claude-sonnet-4-6
+ANTHROPIC_BASE_URL=https://api.anthropic.com
+ANTHROPIC_VERSION=2023-06-01
+CLAUDE_MAX_TOKENS=6000
+CLAUDE_TEMPERATURE=0.12
+CLAUDE_TIMEOUT_MS=120000
 ```
 
-Sem `OPENAI_API_KEY`, o workflow entra em fallback local para nao interromper o fluxo.
+Sem `ANTHROPIC_API_KEY`, o workflow entra em fallback local determinist para nao interromper o fluxo.
 
 Opcao 1 (recomendada): `DATABASE_URL`
 

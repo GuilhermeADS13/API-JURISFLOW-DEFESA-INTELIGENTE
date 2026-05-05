@@ -1,10 +1,10 @@
 # JurisFlow - Automacao de Contestacoes Juridicas
 
-Sistema web fullstack para automacao de contestacoes juridicas. O usuario preenche os dados do processo (numero CNJ, partes, fatos, pedido do autor) e o sistema gera automaticamente uma minuta de contestacao utilizando IA via workflow n8n, com suporte a Claude (Anthropic) e OpenAI como fallback.
+Sistema web fullstack para automacao de contestacoes juridicas. O usuario preenche os dados do processo (numero CNJ, partes, fatos, pedido do autor) e o sistema gera automaticamente uma minuta de contestacao utilizando IA via workflow n8n, com Claude (Anthropic) como motor de IA.
 
 ## Funcionalidades
 
-- **Geracao automatizada de contestacoes** com IA (Claude/OpenAI) via workflow n8n
+- **Geracao automatizada de contestacoes** com IA (Claude) via workflow n8n
 - **Autenticacao dupla**: sistema proprio (cadastro/login com cookie HTTPOnly) + Supabase Auth
 - **Upload de peca base** (PDF, DOC, DOCX) com validacao de extensao, MIME type e limite de 10MB
 - **Dashboard** com historico de casos, cards de resumo (total, concluidas, em analise, pendencias)
@@ -23,7 +23,7 @@ Sistema web fullstack para automacao de contestacoes juridicas. O usuario preenc
 ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
 │    Frontend      │       │    Backend       │       │      n8n        │
 │  React 19 + Vite │──────▶│  FastAPI + Python │──────▶│  Workflow IA    │
-│  Bootstrap 5     │  HTTP │  PostgreSQL      │  POST │  Claude/OpenAI  │
+│  Bootstrap 5     │  HTTP │  PostgreSQL      │  POST │  Claude         │
 │  Supabase Auth   │◀──────│  Cookie HTTPOnly │◀──────│  Webhook        │
 └─────────────────┘       └─────────────────┘       └─────────────────┘
 ```
@@ -95,7 +95,7 @@ API-DE-AUTOMA-AO-DE-CONTESTACAO/
 │   ├── package.json
 │   └── vite.config.js             # Configuracao Vite + Vitest + coverage
 │
-└── docker-compose.yml             # Container n8n com Claude/OpenAI/Supabase/PostgreSQL
+└── docker-compose.yml             # Container n8n com Claude/Supabase/PostgreSQL
 ```
 
 ## Stack Tecnologica
@@ -126,8 +126,7 @@ API-DE-AUTOMA-AO-DE-CONTESTACAO/
 |---|---|
 | PostgreSQL (Supabase) | Banco de dados |
 | n8n (Docker) | Orquestrador de workflow IA |
-| Claude (Anthropic) | Motor de IA principal |
-| OpenAI (GPT-4o) | Motor de IA fallback |
+| Claude (Anthropic) | Motor de IA |
 
 ## Endpoints da API
 

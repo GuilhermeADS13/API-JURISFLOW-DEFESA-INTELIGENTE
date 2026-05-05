@@ -1054,8 +1054,7 @@ export default function App() {
       setAutomationStatus({ webhook: 100, ia: 86, validacao: 92 });
 
       const providerLabel =
-        engine?.provider === "claude" ? "Claude (Anthropic)" :
-        engine?.provider === "openai" ? "OpenAI" : "Agente IA";
+        engine?.provider === "claude" ? "Claude (Anthropic)" : "Agente IA";
 
       setFeedback({
         variant: "success",
@@ -1279,8 +1278,6 @@ export default function App() {
             <strong>
               {iaResult?.engine?.provider === "claude"
                 ? `Claude (${iaResult.engine.model || "Anthropic"})`
-                : iaResult?.engine?.provider === "openai"
-                ? `OpenAI (${iaResult.engine.model || "GPT"})`
                 : "Agente IA (fallback local)"}
             </strong>
             {iaResult?.defesasConsultadas > 0 && (
