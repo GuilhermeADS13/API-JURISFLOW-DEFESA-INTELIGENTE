@@ -4,18 +4,16 @@ Sistema web fullstack para automacao de contestacoes juridicas. O usuario preenc
 
 ## Funcionalidades
 
-- **Geracao automatizada de contestacoes** com IA (Claude) via workflow n8n
-- **Autenticacao dupla**: sistema proprio (cadastro/login com cookie HTTPOnly) + Supabase Auth
-- **Upload de peca base** (PDF, DOC, DOCX) com validacao de extensao, MIME type e limite de 10MB
-- **Dashboard** com historico de casos, cards de resumo (total, concluidas, em analise, pendencias)
-- **Edicao ao vivo** da minuta gerada antes do envio final
-- **Canal de suporte** com envio de reclamacoes por e-mail e protocolo automatico
-- **Rate limiting** em todos os endpoints criticos: cadastro (5/min), login (10/min), gerar-contestacao (2/min), resumo (10/min), suporte/contato (5/min)
-- **Security headers** em todas as respostas (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`)
-- **Validacao MIME via magic bytes** no upload de arquivos (PDF, DOC, DOCX verificados no conteudo, nao so na extensao)
-- **Protecao contra path traversal** com `os.path.basename()` no nome de arquivo
-- **Schema validado** da resposta do n8n com Pydantic (`N8NResponse`) — campos extras ignorados
-- **Sessoes com cache em memoria** e cleanup automatico de sessoes expiradas
+- **Geracao de contestacoes com IA** — minutas estruturadas (sintese, tese central, fundamentos, pedidos, riscos e observacoes) a partir dos dados do processo (numero CNJ, partes, fatos, pedido do autor e pontos estrategicos).
+- **Edicao ciruurgica de modelos base** — substituicao automatica de campos (nome da parte, numero do processo, valor da causa) em documentos `.docx` do escritorio, preservando integralmente a formatacao original.
+- **Aprendizado com o historico do escritorio** — a IA consulta contestacoes anteriores do mesmo tipo de acao e mantem o estilo, a tese e a estrategia argumentativa do escritorio em cada nova peca gerada.
+- **Avaliacao continua de qualidade** — o advogado marca cada minuta como util ou nao util, com comentario opcional. O sistema usa esse retorno para refinar as proximas geracoes.
+- **Edicao ao vivo da minuta** — ajuste do texto diretamente na tela antes de exportar.
+- **Exportacao para Microsoft Word** — download do arquivo final em formato `.doc/.docx`, com formatacao pronta para impressao ou protocolo no PJe.
+- **Painel de controle do escritorio** — total de casos, contestacoes concluidas, pecas em analise e itens com pendencia. Historico completo com data, tipo de acao, numero CNJ e status.
+- **Cadastro e login seguros** — autenticacao por conta propria ou login social, com sessao persistente entre dispositivos.
+- **Canal de suporte com protocolo** — abertura de chamados pelo proprio sistema, com geracao automatica de protocolo e categorizacao.
+- **Curadoria de exemplares (area administrativa)** — coordenacao do escritorio cadastra contestacoes modelo de alta qualidade que orientam a IA na producao de novas pecas.
 
 ## Arquitetura
 
@@ -158,7 +156,52 @@ API-DE-AUTOMA-AO-DE-CONTESTACAO/
 
 ## Como Executar
 
-### Frontend
+> Todos os comandos rodam em terminal — PowerShell ou CMD no Windows, Terminal no macOS, bash/zsh no Linux.
+
+### Pre-requisitos
+
+Instale na maquina antes de continuar:
+
+| Ferramenta | Versao minima | Para que serve |
+|---|---|---|
+| [Docker Desktop](https://www.docker.com/products/docker-desktop) | 4.x | Subir backend + n8n em containers (rota recomendada) |
+| [Node.js](https://nodejs.org/) | 20 LTS | Rodar o frontend Vite (`npm`) |
+| [Python](https://www.python.org/downloads/) | 3.12+ | Rodar o backend isoladamente, fora do Docker |
+| [Git](https://git-scm.com/) | 2.x | Clonar o repositorio |
+
+Verifique as versoes:
+
+```bash
+docker --version
+node --version
+npm --version
+python --version
+git --version
+```
+
+Configure tambem os arquivos de ambiente antes da primeira execucao:
+
+- Copie `.env.example` da raiz para `.env` e preencha as variaveis (chave Anthropic, credenciais Supabase, banco PostgreSQL).
+- Copie `Backend/.env.example` para `Backend/.env` quando for rodar o backend fora do Docker.
+- Copie `Front comp/vite-project/.env.example` para `.env` quando for usar Supabase Auth no frontend.
+
+### 1. Subir tudo de uma vez (Backend + n8n via Docker)
+
+A partir da raiz do projeto:
+
+```bash
+docker compose up -d --build
+```
+
+Isso sobe o backend em `http://localhost:8000` e o n8n em `http://localhost:5678`. Aguarde os containers ficarem `healthy` — o backend espera o n8n estar pronto antes de iniciar.
+
+Para encerrar:
+
+```bash
+docker compose down
+```
+
+### 2. Frontend (Vite)
 
 ```bash
 cd "Front comp/vite-project"
@@ -166,26 +209,26 @@ npm install
 npm run dev
 ```
 
-Acesse em `http://localhost:5173`
+Acesse em `http://localhost:5173`.
 
-### Backend
+### 3. Backend isoladamente (sem Docker)
 
 ```bash
 cd Backend
 python -m venv .venv
 .venv\Scripts\activate        # Windows
-# source .venv/bin/activate   # Linux/Mac
+# source .venv/bin/activate   # Linux/macOS
 pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 ```
 
-### n8n (Docker)
+### 4. Healthchecks rapidos
 
 ```bash
-docker-compose up -d
+curl http://localhost:8000/health        # backend
+curl http://localhost:8000/health/db     # backend + banco
+curl http://localhost:5678/healthz       # n8n
 ```
-
-Acesse o painel em `http://localhost:5678`
 
 ## Variaveis de Ambiente
 
