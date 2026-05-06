@@ -1,0 +1,157 @@
+{
+  "id": "WF_AUTOJURI_CONTESTAR_POR_PETICAO",
+  "name": "AutoJuri - Webhook Contestar por Peticao",
+  "description": "Webhook POST /contestar-por-peticao -> recebe texto extraido da peticao inicial (extracao no backend) -> Claude extrai dados estruturados -> RAG no Supabase para defesas anteriores -> Claude gera minuta JSON ponto a ponto -> backend monta o .docx final.",
+  "active": true,
+  "createdAt": "2026-05-06T00:00:00.000Z",
+  "updatedAt": "2026-05-06T00:00:00.000Z",
+  "nodes": [
+    {
+      "id": "node-wh-peticao",
+      "name": "Webhook Contestar por Peticao",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "contestar-por-peticao",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "autojuri-contestar-por-peticao-webhook"
+    },
+    {
+      "id": "node-validar-peticao",
+      "name": "Validar Entrada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Valida payload vindo do backend (texto ja extraido).\nconst item = $input.first();\nconst raw = item.json?.body ?? item.json ?? {};\nconst now = new Date().toISOString();\n\nconst texto_peticao = String(raw.texto_peticao || '').trim();\nconst modelo_base_texto = String(raw.modelo_base_texto || '').trim();\nconst tipo_acao_hint = String(raw.tipo_acao_hint || '').trim();\nconst pontos_contestante = String(raw.pontos_contestante || '').trim();\nconst usuario_id = String(raw.usuario_id || '').trim();\n\nif (!texto_peticao || texto_peticao.length < 50) {\n  return [{ json: {\n    status: 'erro_validacao',\n    mensagem: 'texto_peticao obrigatorio com pelo menos 50 caracteres.',\n    recebido_em: now\n  }}];\n}\n\nif (texto_peticao.length > 25000) {\n  return [{ json: {\n    status: 'erro_validacao',\n    mensagem: 'texto_peticao excede 25000 caracteres.',\n    recebido_em: now\n  }}];\n}\n\nreturn [{ json: {\n  status: 'entrada_validada',\n  contexto: { texto_peticao, modelo_base_texto, tipo_acao_hint, pontos_contestante, usuario_id },\n  recebido_em: now\n}}];\n"
+      }
+    },
+    {
+      "id": "node-extrator-peticao",
+      "name": "Claude Extrator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Fase 1: Claude extrai dados estruturados da peticao em texto.\nconst envelope = $input.first().json;\nif (envelope.status === 'erro_validacao') return [{ json: envelope }];\n\nconst { contexto, recebido_em } = envelope;\n\nconst readEnv = (key, fb = '') => {\n  try {\n    if (typeof $vars !== 'undefined' && $vars && $vars[key]) return String($vars[key]).trim();\n    return ($env && $env[key]) ? String($env[key]).trim() : (process.env[key] || fb);\n  } catch { return process.env[key] || fb; }\n};\n\nconst stripFences = s => {\n  const cleaned = String(s || '').trim().replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/i, '').trim();\n  const first = cleaned.indexOf('{');\n  const last = cleaned.lastIndexOf('}');\n  if (first === -1 || last === -1 || last < first) return cleaned;\n  return cleaned.slice(first, last + 1);\n};\n\nconst ANTHROPIC_KEY = readEnv('ANTHROPIC_API_KEY') || readEnv('CLAUDE_API_KEY');\nconst CLAUDE_MODEL = readEnv('CLAUDE_EXTRACAO_MODEL') || readEnv('CLAUDE_MODEL') || 'claude-sonnet-4-6';\nconst BASE_URL = (readEnv('ANTHROPIC_BASE_URL') || 'https://api.anthropic.com').replace(/\\/$/, '');\nconst API_VERSION = readEnv('ANTHROPIC_VERSION') || '2023-06-01';\nconst TIMEOUT_MS = 60000;\n\nconst SYSTEM_EXTRACAO = `Voce eh um extrator de dados juridicos brasileiros.\nSua unica funcao eh ler uma peticao inicial e retornar JSON estruturado.\nNao invente dados. Se um campo nao estiver claro, use null.\nRetorne SOMENTE JSON valido, sem markdown, sem codeblock.`;\n\nconst USER_EXTRACAO = `Leia a peticao abaixo e extraia os dados.\n\nPETICAO:\n${contexto.texto_peticao}\n\n${contexto.tipo_acao_hint ? `HINT DO TIPO DE ACAO: ${contexto.tipo_acao_hint}` : ''}\n\nRetorne exatamente este JSON:\n{\n  \"numero_processo\": \"string ou null\",\n  \"autor\": \"nome do reclamante/autor\",\n  \"reu\": \"nome do reclamado/reu\",\n  \"tipo_acao\": \"tipo da acao (ex: Trabalhista - Horas Extras, Direito do Consumidor)\",\n  \"vara\": \"vara/tribunal se mencionado ou null\",\n  \"fatos_resumo\": \"resumo dos fatos em 3-5 paragrafos, na voz do autor\",\n  \"pedidos\": [\"pedido 1\", \"pedido 2\"],\n  \"valores\": {\"total_estimado\": \"valor total ou null\"},\n  \"argumentos_autor\": [\"argumento 1\", \"argumento 2\"],\n  \"pontos_vulneraveis\": [\"ponto fraco 1 para contestar\"],\n  \"confianca\": 0.9\n}`;\n\nlet dados_extraidos = null;\nlet erro_extracao = null;\nlet provider = 'fallback';\n\nif (!ANTHROPIC_KEY) {\n  erro_extracao = 'ANTHROPIC_API_KEY nao configurada';\n} else {\n  const controller = new AbortController();\n  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);\n  try {\n    const resp = await fetch(`${BASE_URL}/v1/messages`, {\n      method: 'POST',\n      headers: {\n        'x-api-key': ANTHROPIC_KEY,\n        'anthropic-version': API_VERSION,\n        'content-type': 'application/json',\n        'anthropic-beta': 'prompt-caching-2024-07-31'\n      },\n      body: JSON.stringify({\n        model: CLAUDE_MODEL,\n        max_tokens: 2000,\n        temperature: 0,\n        system: [{ type: 'text', text: SYSTEM_EXTRACAO, cache_control: { type: 'ephemeral' } }],\n        messages: [{ role: 'user', content: USER_EXTRACAO }]\n      }),\n      signal: controller.signal\n    });\n    if (!resp.ok) {\n      const e = await resp.text().catch(() => '');\n      throw new Error(`HTTP ${resp.status}: ${e.slice(0, 200)}`);\n    }\n    const payload = await resp.json();\n    const raw = (payload.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();\n    if (!raw) throw new Error('resposta_ia_sem_conteudo');\n    dados_extraidos = JSON.parse(stripFences(raw));\n    provider = 'claude';\n  } catch (e) {\n    erro_extracao = e.name === 'AbortError' ? `timeout_${TIMEOUT_MS}ms` : e.message;\n  } finally {\n    clearTimeout(timer);\n  }\n}\n\nif (!dados_extraidos) {\n  // Fallback minimo\n  dados_extraidos = {\n    numero_processo: null,\n    autor: 'Autor a identificar',\n    reu: 'Reu a identificar',\n    tipo_acao: contexto.tipo_acao_hint || 'Nao identificado',\n    vara: null,\n    fatos_resumo: contexto.texto_peticao.slice(0, 2000),\n    pedidos: [],\n    valores: {},\n    argumentos_autor: [],\n    pontos_vulneraveis: [],\n    confianca: 0.1,\n    _erro_extracao: erro_extracao\n  };\n}\n\nreturn [{ json: {\n  ...envelope,\n  status: 'dados_extraidos',\n  dados_extraidos,\n  engine_extracao: { provider, model: CLAUDE_MODEL, api_error: erro_extracao }\n}}];\n"
+      }
+    },
+    {
+      "id": "node-buscar-defesas-peticao",
+      "name": "Buscar Defesas Anteriores Supabase",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through em caso de erro anterior.\nconst envelope = $input.first().json;\nif (envelope.status === 'erro_validacao') {\n  return [{ json: envelope }];\n}\n\nconst dados = envelope.dados_extraidos || {};\n\nconst readEnv = (key, fb = '') => {\n  try {\n    if (typeof $vars !== 'undefined' && $vars && $vars[key]) return String($vars[key]).trim();\n    return ($env && $env[key]) ? String($env[key]).trim() : (process.env[key] || fb);\n  } catch { return process.env[key] || fb; }\n};\n\nconst SUPABASE_URL = readEnv('SUPABASE_URL');\nconst SUPABASE_KEY = readEnv('SUPABASE_PUBLISHABLE_KEY') || readEnv('SUPABASE_ANON_KEY') || readEnv('SUPABASE_SERVICE_ROLE_KEY');\n\nif (!SUPABASE_URL || !SUPABASE_KEY) {\n  return [{ json: {\n    ...envelope,\n    defesas_anteriores: { status: 'sem_credenciais', detalhe: 'SUPABASE nao configurado', casos: [], total: 0 },\n    exemplares_fewshot: []\n  }}];\n}\n\nfunction tokenize(text) {\n  return (text || '').toLowerCase()\n    .normalize('NFD').replace(/\\p{Diacritic}/gu, '')\n    .replace(/[^a-z0-9\\s]/g, ' ')\n    .split(/\\s+/).filter(t => t.length > 2);\n}\nfunction buildTF(tokens) {\n  const tf = {};\n  for (const t of tokens) tf[t] = (tf[t] || 0) + 1;\n  const total = tokens.length || 1;\n  for (const t in tf) tf[t] /= total;\n  return tf;\n}\nfunction cosineSimilarity(tfA, tfB) {\n  let dot = 0, normA = 0, normB = 0;\n  for (const t in tfA) { normA += tfA[t]*tfA[t]; if (tfB[t]) dot += tfA[t]*tfB[t]; }\n  for (const t in tfB) normB += tfB[t]*tfB[t];\n  if (!normA || !normB) return 0;\n  return dot / (Math.sqrt(normA) * Math.sqrt(normB));\n}\nfunction scoreCase(c, queryTF) {\n  const caseTF = buildTF(tokenize((c.fatos || '') + ' ' + (c.pedido_autor || '')));\n  const sim = cosineSimilarity(queryTF, caseTF);\n  const fb = c.feedback_util === true ? 1.0 : c.feedback_util === false ? 0.0 : 0.5;\n  return 0.6 * sim + 0.4 * fb;\n}\n\nconst SAFE_TIPO_RX = /^[\\w\\sÀ-ÿ\\-().]{1,100}$/;\nconst SAFE_NUMERO_RX = /^[\\w\\-./]{1,40}$/;\nconst tipoRaw = String(dados.tipo_acao || '').trim();\nconst numeroRaw = String(dados.numero_processo || 'sem-numero').trim();\n\nlet defesas_anteriores;\nif (!tipoRaw || !SAFE_TIPO_RX.test(tipoRaw) || !SAFE_NUMERO_RX.test(numeroRaw)) {\n  defesas_anteriores = { status: 'input_invalido', detalhe: 'tipo_acao/numero_processo invalidos', casos: [], total: 0 };\n} else {\n  const tipo = encodeURIComponent(tipoRaw);\n  const numero = encodeURIComponent(numeroRaw);\n  const url = `${SUPABASE_URL}/rest/v1/contestacoes`\n    + `?select=numero_processo,tipo_acao,fatos,pedido_autor,n8n_resposta,status,feedback_util,criado_em`\n    + `&status=eq.ok`\n    + `&tipo_acao=eq.${tipo}`\n    + `&numero_processo=neq.${numero}`\n    + `&order=criado_em.desc&limit=10`;\n\n  const controller = new AbortController();\n  const timer = setTimeout(() => controller.abort(), 8000);\n  try {\n    const resp = await fetch(url, {\n      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },\n      signal: controller.signal\n    });\n    if (!resp.ok) {\n      const body = await resp.text().catch(() => '');\n      defesas_anteriores = { status: 'erro_http', detalhe: `HTTP ${resp.status}: ${body.slice(0,150)}`, casos: [], total: 0 };\n    } else {\n      const rows = await resp.json();\n      if (!rows || rows.length === 0) {\n        defesas_anteriores = { status: 'sem_resultados', detalhe: 'nenhuma defesa anterior', casos: [], total: 0 };\n      } else {\n        const queryTF = buildTF(tokenize((dados.fatos_resumo || '') + ' ' + (dados.pedidos || []).join(' ')));\n        const casosRaw = rows.map(row => {\n          const minuta = (row.n8n_resposta || {}).minuta || {};\n          return {\n            numero_processo: row.numero_processo,\n            tipo_acao: row.tipo_acao,\n            fatos: row.fatos || '',\n            pedido_autor: row.pedido_autor || '',\n            feedback_util: row.feedback_util,\n            fatos_resumo: (row.fatos || '').slice(0, 500),\n            pedido_autor_resumo: (row.pedido_autor || '').slice(0, 300),\n            tese_central: minuta.tese_central || '',\n            resumo_estrategico: minuta.resumo_estrategico || '',\n            fundamentos_curtos: (minuta.fundamentos || '').slice(0, 1500),\n            riscos: (minuta.riscos || []).slice(0, 3),\n            criado_em: row.criado_em,\n            _score: 0\n          };\n        });\n        for (const c of casosRaw) c._score = scoreCase(c, queryTF);\n        casosRaw.sort((a, b) => b._score - a._score);\n        const relevantes = casosRaw.filter(c => c._score >= 0.1);\n        const casos = (relevantes.length > 0 ? relevantes : casosRaw).slice(0, 3);\n        for (const c of casos) { delete c._score; delete c.fatos; delete c.pedido_autor; delete c.feedback_util; }\n        defesas_anteriores = {\n          status: 'sucesso',\n          detalhe: `${casos.length} defesa(s) selecionada(s) de ${rows.length}`,\n          casos, total: casos.length\n        };\n      }\n    }\n  } catch (e) {\n    defesas_anteriores = { status: e.name === 'AbortError' ? 'timeout_8s' : 'erro_conexao', detalhe: e.message, casos: [], total: 0 };\n  } finally {\n    clearTimeout(timer);\n  }\n}\n\n// Buscar exemplares few-shot\nconst BACKEND_URL = readEnv('BACKEND_URL', 'http://autojuri_backend:8000');\nconst ADMIN_TOKEN = readEnv('BACKEND_ADMIN_TOKEN', '');\nlet exemplares_fewshot = [];\nif (ADMIN_TOKEN && tipoRaw) {\n  try {\n    const ex_ctrl = new AbortController();\n    const ex_timer = setTimeout(() => ex_ctrl.abort(), 5000);\n    const ex_resp = await fetch(\n      `${BACKEND_URL}/api/admin/exemplares?tipo_acao=${encodeURIComponent(tipoRaw)}`,\n      { headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}`, 'Content-Type': 'application/json' }, signal: ex_ctrl.signal }\n    );\n    clearTimeout(ex_timer);\n    if (ex_resp.ok) {\n      const ex_data = await ex_resp.json();\n      exemplares_fewshot = ex_data.exemplares || [];\n    }\n  } catch (_) {}\n}\n\nreturn [{ json: { ...envelope, defesas_anteriores, exemplares_fewshot } }];\n"
+      }
+    },
+    {
+      "id": "node-gerador-peticao",
+      "name": "Claude Gerador de Contestacao",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Fase 2: Claude gera minuta da contestacao ponto a ponto.\nconst envelope = $input.first().json;\nif (envelope.status === 'erro_validacao') return [{ json: envelope }];\n\nconst readEnv = (key, fb = '') => {\n  try {\n    if (typeof $vars !== 'undefined' && $vars && $vars[key]) return String($vars[key]).trim();\n    return ($env && $env[key]) ? String($env[key]).trim() : (process.env[key] || fb);\n  } catch { return process.env[key] || fb; }\n};\n\nconst stripFences = s => {\n  const cleaned = String(s || '').trim().replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/i, '').trim();\n  const first = cleaned.indexOf('{');\n  const last = cleaned.lastIndexOf('}');\n  if (first === -1 || last === -1 || last < first) return cleaned;\n  return cleaned.slice(first, last + 1);\n};\n\nconst ANTHROPIC_KEY = readEnv('ANTHROPIC_API_KEY') || readEnv('CLAUDE_API_KEY');\nconst CLAUDE_MODEL = readEnv('CLAUDE_MODEL') || 'claude-sonnet-4-6';\nconst BASE_URL = (readEnv('ANTHROPIC_BASE_URL') || 'https://api.anthropic.com').replace(/\\/$/, '');\nconst API_VERSION = readEnv('ANTHROPIC_VERSION') || '2023-06-01';\nconst TIMEOUT_MS = parseInt(readEnv('CLAUDE_TIMEOUT_MS', '120000'), 10) || 120000;\n\nconst dados = envelope.dados_extraidos || {};\nconst defesas = (envelope.defesas_anteriores || {}).casos || [];\nconst exemplares = envelope.exemplares_fewshot || [];\nconst contexto = envelope.contexto || {};\n\nlet fewShotBlock = '';\nif (exemplares.length > 0) {\n  fewShotBlock = '\\n\\n== EXEMPLOS DE ALTA QUALIDADE ==\\n' +\n    exemplares.map((ex, i) =>\n      `Exemplo ${i+1} (${ex.tipo_acao}):\\n  Tese: ${ex.tese_central}\\n  Fundamentos: ${(ex.fundamentos_resumo || '').slice(0,600)}`\n    ).join('\\n\\n');\n}\n\nconst SYSTEM_GERACAO = `Voce eh advogado especialista em contestacoes civis e trabalhistas no Brasil.\nTarefa: gerar minuta de contestacao baseada nos dados extraidos de uma peticao inicial.\n\n== REGRAS CRITICAS ==\n- Responda PONTO A PONTO cada pedido do autor (use a lista pedidos[]).\n- Ataque os pontos vulneraveis identificados pelo extrator.\n- Cite legislacao genericamente correta — NUNCA invente numero de acordao.\n- Estrutura: Preliminares (se couber) -> Merito -> Impugnacao dos Pedidos -> Pedidos.\n- Linguagem formal, sem superlativos, sem repetir fatos do autor sem contraposicao.\n- Se modelo_base_texto existir, preserve estilo e estrutura.${fewShotBlock}\n\nRetorne SOMENTE JSON valido:\n{\n  \"resumo_estrategico\": \"...\",\n  \"tese_central\": \"...\",\n  \"preliminares\": \"... ou null\",\n  \"merito\": \"texto do merito ponto a ponto\",\n  \"impugnacao_pedidos\": {\"pedido 1\": \"impugnacao...\", \"pedido 2\": \"...\"},\n  \"fundamentos\": \"fundamentos juridicos completos\",\n  \"pedidos\": \"pedidos da contestacao\",\n  \"observacoes\": \"...\",\n  \"riscos\": [\"risco 1\", \"risco 2\"]\n}`;\n\nlet defesasCtx = '';\nif (defesas.length > 0) {\n  defesasCtx = '\\n\\nDEFESAS ANTERIORES SIMILARES:\\n' +\n    defesas.map((c, i) => `Caso ${i+1}: Tese: ${c.tese_central} | Estrategia: ${c.resumo_estrategico}`).join('\\n');\n}\n\nconst pedidosStr = Array.isArray(dados.pedidos)\n  ? dados.pedidos.map((p, i) => `  ${i+1}. ${p}`).join('\\n')\n  : String(dados.pedidos || '');\n\nconst pontosFracosStr = Array.isArray(dados.pontos_vulneraveis)\n  ? dados.pontos_vulneraveis.map((p, i) => `  ${i+1}. ${p}`).join('\\n') : '';\n\nconst USER_MSG = `DADOS EXTRAIDOS DA PETICAO:\nProcesso: ${dados.numero_processo || 'nao identificado'}\nAutor: ${dados.autor}\nReu: ${dados.reu}\nTipo de acao: ${dados.tipo_acao}\nVara: ${dados.vara || 'nao informada'}\n\nFATOS NARRADOS PELO AUTOR:\n${dados.fatos_resumo || ''}\n\nPEDIDOS DO AUTOR:\n${pedidosStr}\n\nVALORES PLEITEADOS:\n${JSON.stringify(dados.valores || {})}\n\nARGUMENTOS CENTRAIS DO AUTOR:\n${(dados.argumentos_autor || []).join('; ')}\n\nPONTOS VULNERAVEIS PARA ATACAR:\n${pontosFracosStr}\n\nPONTOS ADICIONAIS DO ADVOGADO:\n${contexto.pontos_contestante || '(nenhum)'}\n\n${contexto.modelo_base_texto ? `MODELO BASE DO ESCRITORIO:\\n${contexto.modelo_base_texto}` : ''}\n${defesasCtx}`;\n\nlet minuta = null;\nlet provider = 'fallback';\nlet apiError = null;\n\nif (ANTHROPIC_KEY) {\n  const controller = new AbortController();\n  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);\n  try {\n    const resp = await fetch(`${BASE_URL}/v1/messages`, {\n      method: 'POST',\n      headers: {\n        'x-api-key': ANTHROPIC_KEY,\n        'anthropic-version': API_VERSION,\n        'content-type': 'application/json',\n        'anthropic-beta': 'prompt-caching-2024-07-31'\n      },\n      body: JSON.stringify({\n        model: CLAUDE_MODEL,\n        max_tokens: 8000,\n        temperature: 0.12,\n        system: [{ type: 'text', text: SYSTEM_GERACAO, cache_control: { type: 'ephemeral' } }],\n        messages: [{ role: 'user', content: USER_MSG }]\n      }),\n      signal: controller.signal\n    });\n    if (!resp.ok) {\n      const e = await resp.text().catch(() => '');\n      throw new Error(`HTTP ${resp.status}: ${e.slice(0, 200)}`);\n    }\n    const payload = await resp.json();\n    const raw = (payload.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();\n    minuta = JSON.parse(stripFences(raw));\n    provider = 'claude';\n  } catch (e) {\n    apiError = e.name === 'AbortError' ? `timeout_${TIMEOUT_MS}ms` : e.message;\n  } finally {\n    clearTimeout(timer);\n  }\n}\n\nif (!minuta) {\n  // Fallback deterministico para nao bloquear o fluxo.\n  minuta = {\n    resumo_estrategico: `Contestacao ao processo ${dados.numero_processo || 'sem-numero'} - ${dados.tipo_acao}`,\n    tese_central: 'Improcedencia total dos pedidos por ausencia de fundamento legal e factual.',\n    preliminares: null,\n    merito: `Os pedidos formulados pelo autor carecem de fundamento juridico-factual.\\n${pedidosStr}`,\n    impugnacao_pedidos: Object.fromEntries((dados.pedidos || []).map(p =>\n      [String(p), 'Impugna-se por falta de prova e fundamento legal.']\n    )),\n    fundamentos: 'Onus da prova do autor (art. 818 CLT / art. 373 CPC). Ausencia de prova do alegado.',\n    pedidos: 'Improcedencia total. Honorarios advocaticios.',\n    observacoes: `Fallback (${apiError || 'sem chave Anthropic'}). Revise antes de protocolar.`,\n    riscos: ['Revisar apos extracao manual dos dados', 'Confirmar jurisprudencia aplicavel']\n  };\n}\n\nreturn [{ json: {\n  status: 'ok',\n  dados_extraidos: dados,\n  minuta,\n  engine_ia: { provider, model: CLAUDE_MODEL, api_error: apiError },\n  recebido_em: envelope.recebido_em,\n  processado_em: new Date().toISOString()\n}}];\n"
+      }
+    },
+    {
+      "id": "node-responder-peticao",
+      "name": "Responder",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1340,
+        300
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $input.first().json }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Contestar por Peticao": {
+      "main": [
+        [
+          {
+            "node": "Validar Entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Entrada": {
+      "main": [
+        [
+          {
+            "node": "Claude Extrator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Extrator": {
+      "main": [
+        [
+          {
+            "node": "Buscar Defesas Anteriores Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Defesas Anteriores Supabase": {
+      "main": [
+        [
+          {
+            "node": "Claude Gerador de Contestacao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Gerador de Contestacao": {
+      "main": [
+        [
+          {
+            "node": "Responder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
