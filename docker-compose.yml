@@ -42,6 +42,7 @@ services:
       # n8n webhooks (backend chama o n8n internamente via rede Docker)
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook/contestacao-claude
       - N8N_EDICAO_WEBHOOK_URL=http://n8n:5678/webhook/editar-contestacao
+      - N8N_WEBHOOK_PETICAO=http://n8n:5678/webhook/contestar-por-peticao
       - N8N_TIMEOUT_SECONDS=${N8N_TIMEOUT_SECONDS:-180}
 
       # Sessao

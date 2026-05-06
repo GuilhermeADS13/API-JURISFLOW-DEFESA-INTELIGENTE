@@ -257,6 +257,11 @@ def init_db() -> None:
                     "ALTER TABLE contestacoes ADD COLUMN IF NOT EXISTS arquivo_base_tamanho_bytes BIGINT"
                 )
 
+                # Guia Tecnico v2: origem da contestacao ('formulario' | 'peticao')
+                cursor.execute(
+                    "ALTER TABLE contestacoes ADD COLUMN IF NOT EXISTS origem TEXT DEFAULT 'formulario'"
+                )
+
                 cursor.execute(
                     "CREATE INDEX IF NOT EXISTS idx_usuarios_sessoes_criado_em ON usuarios_sessoes (criado_em)"
                 )
@@ -548,8 +553,17 @@ def revoke_sessao(token: str) -> bool:
 
 
 
-def save_contestacao(payload: dict[str, Any], status: str, n8n_resposta: Any) -> int:
-    """Persiste envio de contestacao e metadados do arquivo base."""
+def save_contestacao(
+    payload: dict[str, Any],
+    status: str,
+    n8n_resposta: Any,
+    origem: str = "formulario",
+) -> int:
+    """Persiste envio de contestacao e metadados do arquivo base.
+
+    `origem` distingue o fluxo: 'formulario' (entrada manual) ou 'peticao'
+    (a partir de upload de peticao inicial via /contestar-por-peticao).
+    """
     _ensure_db_initialized()
 
     arquivo_nome = str(payload.get("arquivo_base_nome") or payload.get("arquivo_base") or "")
@@ -579,9 +593,10 @@ def save_contestacao(payload: dict[str, Any], status: str, n8n_resposta: Any) ->
                     arquivo_base_tamanho_bytes,
                     texto_editado_ao_vivo,
                     status,
-                    n8n_resposta
+                    n8n_resposta,
+                    origem
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
                 (
@@ -599,6 +614,7 @@ def save_contestacao(payload: dict[str, Any], status: str, n8n_resposta: Any) ->
                     str(payload.get("texto_editado_ao_vivo", "")),
                     status,
                     PGJsonAdapter(n8n_resposta) if PGJsonAdapter else n8n_resposta,
+                    origem,
                 ),
             )
             row = cursor.fetchone()
