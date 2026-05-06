@@ -3,6 +3,7 @@ import React, { useRef, useState } from "react";
 import {
   Alert,
   Button,
+  ButtonGroup,
   Card,
   Col,
   Container,
@@ -10,7 +11,7 @@ import {
   ProgressBar,
   Row,
 } from "react-bootstrap";
-import { CheckCircle, Paperclip, Upload, XCircle } from "react-bootstrap-icons";
+import { CheckCircle, FileEarmarkText, Paperclip, Upload, XCircle } from "react-bootstrap-icons";
 import { agentRules, legalBranches } from "../data/mockData";
 
 /**
@@ -45,9 +46,28 @@ export default function MainPanelSection({
   onSaveDraft,
   onLiveDraftChange,
   onResetLiveDraft,
+  // Guia Tecnico v2: modo "peticao" (props opcionais — fallback para "manual")
+  modo = "manual",
+  onModoChange,
+  peticaoFile,
+  peticaoError,
+  onPeticaoFileSelect,
+  onRemovePeticaoFile,
+  modeloBaseFile,
+  modeloBaseError,
+  onModeloBaseFileSelect,
+  onRemoveModeloBaseFile,
+  tipoAcaoHint,
+  onTipoAcaoHintChange,
+  pontosContestante,
+  onPontosContestanteChange,
 }) {
   const fileInputRef = useRef(null);
+  const peticaoInputRef = useRef(null);
+  const modeloBaseInputRef = useRef(null);
   const [dragging, setDragging] = useState(false);
+  const [draggingPeticao, setDraggingPeticao] = useState(false);
+  const [draggingModelo, setDraggingModelo] = useState(false);
 
   const openPicker = () => {
     fileInputRef.current?.click();
@@ -67,7 +87,36 @@ export default function MainPanelSection({
     if (file) onFileSelect(file);
   };
 
+  const openPeticaoPicker = () => peticaoInputRef.current?.click();
+  const handlePeticaoInput = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    onPeticaoFileSelect?.(file);
+    event.target.value = "";
+  };
+  const handlePeticaoDrop = (event) => {
+    event.preventDefault();
+    setDraggingPeticao(false);
+    const file = event.dataTransfer.files?.[0];
+    if (file) onPeticaoFileSelect?.(file);
+  };
+
+  const openModeloBasePicker = () => modeloBaseInputRef.current?.click();
+  const handleModeloBaseInput = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    onModeloBaseFileSelect?.(file);
+    event.target.value = "";
+  };
+  const handleModeloBaseDrop = (event) => {
+    event.preventDefault();
+    setDraggingModelo(false);
+    const file = event.dataTransfer.files?.[0];
+    if (file) onModeloBaseFileSelect?.(file);
+  };
+
   const uploadValidation = uploadError || formErrors.upload;
+  const peticaoValidation = peticaoError || formErrors.peticao;
 
   return (
     <section id="painel" className="py-5">
@@ -76,20 +125,44 @@ export default function MainPanelSection({
           <Col lg={7}>
             <Card className="panel-card panel-entry-primary border-0 h-100">
               <Card.Body className="p-4 p-lg-5">
-                <div className="mb-4">
-                  <h2 className="h3 mb-2">Formulario para envio ao agente de IA</h2>
+                <div className="mb-3">
+                  <ButtonGroup className="mb-3">
+                    <Button
+                      variant={modo === "manual" ? "dark" : "outline-dark"}
+                      onClick={() => onModoChange?.("manual")}
+                      disabled={loading}
+                    >
+                      Preencher manualmente
+                    </Button>
+                    <Button
+                      variant={modo === "peticao" ? "dark" : "outline-dark"}
+                      onClick={() => onModoChange?.("peticao")}
+                      disabled={loading}
+                    >
+                      Enviar peticao inicial
+                    </Button>
+                  </ButtonGroup>
+                  <h2 className="h3 mb-2">
+                    {modo === "peticao"
+                      ? "Geracao automatica a partir da peticao"
+                      : "Formulario para envio ao agente de IA"}
+                  </h2>
                   <p className="text-secondary mb-0">
-                    Preencha os dados do caso, anexe a peca base e envie para automacao.
+                    {modo === "peticao"
+                      ? "Anexe a peticao inicial — o sistema extrai os dados e gera a contestacao."
+                      : "Preencha os dados do caso, anexe a peca base e envie para automacao."}
                   </p>
                 </div>
 
-                <div className="mb-4">
-                  <div className="d-flex justify-content-between small text-secondary mb-2">
-                    <span>Preenchimento do caso</span>
-                    <span>{completion}%</span>
+                {modo === "manual" && (
+                  <div className="mb-4">
+                    <div className="d-flex justify-content-between small text-secondary mb-2">
+                      <span>Preenchimento do caso</span>
+                      <span>{completion}%</span>
+                    </div>
+                    <ProgressBar now={completion} />
                   </div>
-                  <ProgressBar now={completion} />
-                </div>
+                )}
 
                 {feedback && <Alert variant={feedback.variant}>{feedback.text}</Alert>}
 
@@ -99,6 +172,167 @@ export default function MainPanelSection({
                   </Alert>
                 )}
 
+                {modo === "peticao" && (
+                  <Form
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      onSubmit?.(event);
+                    }}
+                  >
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      className={`upload-box ${draggingPeticao ? "is-dragging" : ""} ${
+                        peticaoFile ? "has-file" : ""
+                      }`}
+                      onClick={openPeticaoPicker}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") openPeticaoPicker();
+                      }}
+                      onDragOver={(event) => {
+                        event.preventDefault();
+                        setDraggingPeticao(true);
+                      }}
+                      onDragLeave={(event) => {
+                        event.preventDefault();
+                        setDraggingPeticao(false);
+                      }}
+                      onDrop={handlePeticaoDrop}
+                    >
+                      <FileEarmarkText size={28} className="mb-2" />
+                      <div className="fw-semibold">Peticao inicial (obrigatorio)</div>
+                      <small className="text-secondary">
+                        Arraste ou clique para anexar PDF, DOC ou DOCX (ate 20 MB).
+                      </small>
+                    </div>
+                    <input
+                      ref={peticaoInputRef}
+                      type="file"
+                      accept=".pdf,.doc,.docx"
+                      className="d-none"
+                      onChange={handlePeticaoInput}
+                    />
+                    {peticaoFile && (
+                      <div className="upload-file-summary mt-2">
+                        <div className="d-flex align-items-center gap-2">
+                          <Paperclip />
+                          <div>
+                            <div className="fw-semibold">{peticaoFile.name}</div>
+                            <small className="text-secondary">{fileSizeLabel(peticaoFile)}</small>
+                          </div>
+                        </div>
+                        <Button
+                          variant="link"
+                          className="upload-remove p-0"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            onRemovePeticaoFile?.();
+                          }}
+                        >
+                          <XCircle /> Remover
+                        </Button>
+                      </div>
+                    )}
+                    {peticaoValidation && (
+                      <div className="upload-feedback-error">{peticaoValidation}</div>
+                    )}
+
+                    <Form.Group className="mt-4">
+                      <Form.Label>Modelo base do escritorio (opcional)</Form.Label>
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        className={`upload-box ${draggingModelo ? "is-dragging" : ""} ${
+                          modeloBaseFile ? "has-file" : ""
+                        }`}
+                        onClick={openModeloBasePicker}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") openModeloBasePicker();
+                        }}
+                        onDragOver={(event) => {
+                          event.preventDefault();
+                          setDraggingModelo(true);
+                        }}
+                        onDragLeave={(event) => {
+                          event.preventDefault();
+                          setDraggingModelo(false);
+                        }}
+                        onDrop={handleModeloBaseDrop}
+                      >
+                        <Upload size={28} className="mb-2" />
+                        <small className="text-secondary">
+                          Arraste ou clique para anexar um .docx com placeholders Jinja2.
+                        </small>
+                      </div>
+                      <input
+                        ref={modeloBaseInputRef}
+                        type="file"
+                        accept=".docx"
+                        className="d-none"
+                        onChange={handleModeloBaseInput}
+                      />
+                      {modeloBaseFile && (
+                        <div className="upload-file-summary mt-2">
+                          <div className="d-flex align-items-center gap-2">
+                            <Paperclip />
+                            <div>
+                              <div className="fw-semibold">{modeloBaseFile.name}</div>
+                              <small className="text-secondary">{fileSizeLabel(modeloBaseFile)}</small>
+                            </div>
+                          </div>
+                          <Button
+                            variant="link"
+                            className="upload-remove p-0"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              onRemoveModeloBaseFile?.();
+                            }}
+                          >
+                            <XCircle /> Remover
+                          </Button>
+                        </div>
+                      )}
+                      {modeloBaseError && (
+                        <div className="upload-feedback-error">{modeloBaseError}</div>
+                      )}
+                    </Form.Group>
+
+                    <Row className="g-3 mt-1">
+                      <Col md={6}>
+                        <Form.Group>
+                          <Form.Label>Tipo de acao (dica para a IA)</Form.Label>
+                          <Form.Control
+                            value={tipoAcaoHint || ""}
+                            onChange={onTipoAcaoHintChange}
+                            placeholder="Ex.: Trabalhista — Horas Extras"
+                          />
+                        </Form.Group>
+                      </Col>
+                      <Col xs={12}>
+                        <Form.Group>
+                          <Form.Label>Pontos especificos para atacar (opcional)</Form.Label>
+                          <Form.Control
+                            as="textarea"
+                            rows={4}
+                            value={pontosContestante || ""}
+                            onChange={onPontosContestanteChange}
+                            placeholder="Ex.: prescricao bienal, ausencia de prova testemunhal, valor da causa irreal"
+                          />
+                        </Form.Group>
+                      </Col>
+                    </Row>
+
+                    <div className="d-flex flex-wrap gap-2 mt-4">
+                      <Button type="submit" variant="dark" disabled={loading}>
+                        {loading ? "Processando..." : "Gerar contestacao automaticamente"}
+                      </Button>
+                    </div>
+                  </Form>
+                )}
+
+                {modo === "manual" && (
                 <Form onSubmit={onSubmit}>
                   <Row className="g-3">
                     <Col md={6}>
@@ -270,6 +504,7 @@ export default function MainPanelSection({
 
                   {draftInfo && <div className="draft-info mt-3">{draftInfo}</div>}
                 </Form>
+                )}
               </Card.Body>
             </Card>
           </Col>

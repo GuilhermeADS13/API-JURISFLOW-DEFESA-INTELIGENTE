@@ -1,8 +1,13 @@
 /**
  * Chave do rascunho local.
  * Mantem campos do formulario para recuperar trabalho nao enviado.
+ *
+ * v3 (Guia Tecnico v2): rascunho passa a guardar o modo de entrada
+ * ('manual' | 'peticao'). Migramos v2 silenciosamente para v3 mantendo
+ * modo='manual' (comportamento anterior).
  */
-export const DRAFT_STORAGE_KEY = "jurisflow:draft:v2";
+export const DRAFT_STORAGE_KEY = "jurisflow:draft:v3";
+const DRAFT_STORAGE_KEY_LEGACY_V2 = "jurisflow:draft:v2";
 
 /**
  * Chave da sessao local (somente dados de perfil, sem token sensivel).
@@ -17,7 +22,28 @@ export function readDraftFromStorage() {
   }
 
   try {
-    const saved = window.localStorage.getItem(DRAFT_STORAGE_KEY);
+    let saved = window.localStorage.getItem(DRAFT_STORAGE_KEY);
+
+    // Migracao v2 -> v3: se o usuario tinha rascunho na chave antiga, lemos
+    // dela e injetamos modo='manual' (comportamento padrao do v2).
+    if (!saved) {
+      const legacy = window.localStorage.getItem(DRAFT_STORAGE_KEY_LEGACY_V2);
+      if (legacy) {
+        try {
+          const parsedLegacy = JSON.parse(legacy);
+          const migrated = {
+            ...parsedLegacy,
+            form: { ...(parsedLegacy.form || {}), modo: "manual" },
+          };
+          window.localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(migrated));
+          window.localStorage.removeItem(DRAFT_STORAGE_KEY_LEGACY_V2);
+          saved = JSON.stringify(migrated);
+        } catch {
+          // Se v2 corrompido, ignora e segue com rascunho vazio.
+        }
+      }
+    }
+
     if (!saved) return { form: null, info: "" };
 
     const parsed = JSON.parse(saved);

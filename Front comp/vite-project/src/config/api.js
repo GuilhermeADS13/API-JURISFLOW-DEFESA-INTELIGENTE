@@ -8,3 +8,5 @@ export const SUPPORT_CONTACT_API_URL =
   import.meta.env.VITE_SUPPORT_CONTACT_ENDPOINT || `${API_BASE_URL}/suporte/contato`;
 export const DASHBOARD_SUMMARY_API_URL =
   import.meta.env.VITE_DASHBOARD_SUMMARY_ENDPOINT || `${API_BASE_URL}/contestacoes/resumo`;
+export const PETICAO_API_URL =
+  import.meta.env.VITE_PETICAO_ENDPOINT || `${API_BASE_URL}/contestar-por-peticao`;

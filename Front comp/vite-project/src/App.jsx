@@ -13,6 +13,7 @@ import AppFooter from "./components/AppFooter";
 import {
   AGENT_API_URL,
   DASHBOARD_SUMMARY_API_URL,
+  PETICAO_API_URL,
   SUPPORT_CONTACT_API_URL,
 } from "./config/api";
 import { getSupabaseClient, isSupabaseConfigured } from "./lib/supabaseClient";
@@ -150,6 +151,16 @@ export default function App() {
   // `uploadedFile`: arquivo base selecionado pelo usuario para envio ao backend.
   const [uploadedFile, setUploadedFile] = useState(null);
   const [uploadError, setUploadError] = useState("");
+  // Guia Tecnico v2: modo de entrada do painel.
+  // 'manual'  = formulario tradicional (envia para /gerar-contestacao)
+  // 'peticao' = upload da peticao inicial (envia para /contestar-por-peticao)
+  const [modo, setModo] = useState(draftSeed.form?.modo || "manual");
+  const [peticaoFile, setPeticaoFile] = useState(null);
+  const [peticaoError, setPeticaoError] = useState("");
+  const [modeloBaseFile, setModeloBaseFile] = useState(null);
+  const [modeloBaseError, setModeloBaseError] = useState("");
+  const [tipoAcaoHint, setTipoAcaoHint] = useState("");
+  const [pontosContestante, setPontosContestante] = useState("");
   const [formErrors, setFormErrors] = useState({});
   const [draftInfo, setDraftInfo] = useState(() => draftSeed.info);
   const [feedback, setFeedback] = useState(null);
@@ -634,8 +645,60 @@ export default function App() {
     setUploadError("");
   };
 
+  const handleModoChange = (novoModo) => {
+    setModo(novoModo);
+    setFeedback(null);
+    setFormErrors({});
+  };
+
+  const handlePeticaoFileSelect = (file) => {
+    const error = validateFile(file);
+    if (error) {
+      setPeticaoFile(null);
+      setPeticaoError(error);
+      return;
+    }
+    setPeticaoFile(file);
+    setPeticaoError("");
+  };
+
+  const handleRemovePeticaoFile = () => {
+    setPeticaoFile(null);
+    setPeticaoError("");
+  };
+
+  const handleModeloBaseFileSelect = (file) => {
+    // Modelo base aceita apenas .docx (mesma valida��o do backend).
+    const nome = (file?.name || "").toLowerCase();
+    if (!nome.endsWith(".docx")) {
+      setModeloBaseFile(null);
+      setModeloBaseError("Modelo base deve ser .docx.");
+      return;
+    }
+    const error = validateFile(file);
+    if (error) {
+      setModeloBaseFile(null);
+      setModeloBaseError(error);
+      return;
+    }
+    setModeloBaseFile(file);
+    setModeloBaseError("");
+  };
+
+  const handleRemoveModeloBaseFile = () => {
+    setModeloBaseFile(null);
+    setModeloBaseError("");
+  };
+
   const validateForm = () => {
     const errors = {};
+
+    // No modo "peticao" so exigimos a peticao inicial; campos do form sao
+    // preenchidos automaticamente apos a extracao do agente.
+    if (modo === "peticao") {
+      if (!peticaoFile) errors.peticao = "Anexe a peticao inicial em PDF ou DOCX.";
+      return errors;
+    }
 
     if (!form.processo.trim()) errors.processo = "Informe o numero do processo.";
     if (form.processo.trim() && !isValidNumeroProcesso(form.processo)) {
@@ -653,7 +716,7 @@ export default function App() {
   const handleSaveDraft = () => {
     const savedAt = new Date().toLocaleString("pt-BR");
     const payload = {
-      form,
+      form: { ...form, modo },
       fileName: uploadedFile ? uploadedFile.name : null,
       savedAt,
     };
@@ -933,12 +996,160 @@ export default function App() {
     }
   };
 
+  const handleSubmitPeticao = async () => {
+    if (!authUser) {
+      setFeedback({
+        variant: "warning",
+        text: "Faca login para enviar casos ao backend.",
+      });
+      openAuthModal("login");
+      return;
+    }
+
+    if (!peticaoFile) {
+      setFeedback({
+        variant: "danger",
+        text: "Anexe a peticao inicial em PDF ou DOCX antes de enviar.",
+      });
+      setFormErrors({ peticao: "Anexe a peticao inicial." });
+      return;
+    }
+
+    setLoading(true);
+    setSubmitted(false);
+    setFeedback(null);
+    setLastCaseId(null);
+    setAutomationStatus({ webhook: 100, ia: 32, validacao: 18 });
+
+    try {
+      const accessToken = await getSupabaseAccessToken();
+      if (isSupabaseConfigured && !accessToken) {
+        clearSession();
+        setAuthUser(null);
+        openAuthModal("login");
+        setFeedback({
+          variant: "warning",
+          text: "Sua sessao expirou. Faca login novamente para continuar.",
+        });
+        setLoading(false);
+        return;
+      }
+
+      const peticaoBase64 = await readFileAsBase64(peticaoFile);
+      const modeloBaseBase64 = modeloBaseFile
+        ? await readFileAsBase64(modeloBaseFile)
+        : null;
+
+      const payload = {
+        arquivo_peticao_base64: peticaoBase64,
+        arquivo_peticao_nome: peticaoFile.name,
+        arquivo_peticao_mime_type: peticaoFile.type || "application/octet-stream",
+        modelo_base_base64: modeloBaseBase64,
+        modelo_base_nome: modeloBaseFile?.name || null,
+        tipo_acao_hint: tipoAcaoHint.trim() || null,
+        pontos_contestante: pontosContestante.trim() || null,
+      };
+
+      const response = await fetch(PETICAO_API_URL, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorMessage = await getApiErrorMessage(
+          response,
+          `Falha HTTP ${response.status}.`,
+        );
+        if (response.status === 401) {
+          clearSession();
+          setAuthUser(null);
+          openAuthModal("login");
+          throw new Error("Sessao expirada ou token invalido. Faca login novamente.");
+        }
+        throw new Error(errorMessage);
+      }
+
+      const backendData = await response.json().catch(() => ({}));
+      const dadosExtraidos = backendData?.dados_extraidos || {};
+      const minuta = backendData?.minuta || {};
+      const engine = backendData?.engine_ia || {};
+      const arquivoB64 = backendData?.arquivo_editado_base64 || "";
+      const arquivoNome = backendData?.arquivo_editado_nome || "contestacao.docx";
+
+      // Preenche o formulario manual com os dados extraidos para facilitar
+      // edicao posterior do advogado.
+      setForm((prev) => ({
+        ...prev,
+        processo: dadosExtraidos.numero_processo || prev.processo,
+        cliente: dadosExtraidos.autor || prev.cliente,
+        tipoAcao: dadosExtraidos.tipo_acao || prev.tipoAcao,
+        tese: minuta.tese_central || prev.tese,
+        observacoes: dadosExtraidos.fatos_resumo || prev.observacoes,
+      }));
+
+      // Coloca o texto da minuta no editor ao vivo.
+      const partesMinuta = [
+        minuta.tese_central && `TESE CENTRAL\n${minuta.tese_central}`,
+        minuta.merito && `MERITO\n${minuta.merito}`,
+        minuta.fundamentos && `FUNDAMENTOS\n${minuta.fundamentos}`,
+        minuta.pedidos && `PEDIDOS\n${minuta.pedidos}`,
+      ].filter(Boolean);
+      if (partesMinuta.length > 0) {
+        setLiveDraft(partesMinuta.join("\n\n"));
+        setLiveDraftTouched(true);
+      }
+
+      const riscos = Array.isArray(minuta.riscos) ? minuta.riscos : [];
+      const defesasConsultadas = backendData?.defesas_anteriores?.consultadas ?? 0;
+      setIaResult({ engine, riscos, arquivoB64, arquivoNome, defesasConsultadas });
+
+      if (typeof backendData?.contestacao_id !== "undefined") {
+        setLastCaseId(String(backendData.contestacao_id));
+      }
+
+      setLoading(false);
+      setSubmitted(true);
+      setShowResultModal(true);
+      setAutomationStatus({ webhook: 100, ia: 86, validacao: 92 });
+
+      const providerLabel =
+        engine?.provider === "claude" ? "Claude (Anthropic)" : "Agente IA";
+      setFeedback({
+        variant: "success",
+        text: `Contestacao gerada por ${providerLabel} a partir da peticao inicial. Revise antes de protocolar.`,
+      });
+      await loadDashboardData({ silent: true });
+      setCurrentPage("dashboard");
+    } catch (error) {
+      setLoading(false);
+      setAutomationStatus({ webhook: 42, ia: 0, validacao: 0 });
+      await loadDashboardData({ silent: true });
+      setFeedback({
+        variant: "danger",
+        text:
+          error instanceof Error
+            ? error.message
+            : "Nao foi possivel gerar a contestacao a partir da peticao.",
+      });
+    }
+  };
+
   const handleSubmit = async (event) => {
     // Valida formulario, serializa arquivo em base64 e envia payload completo ao backend.
     event.preventDefault();
 
     // Guard contra double-submit: ignora cliques enquanto request anterior nao terminou.
     if (loading) return;
+
+    // Roteamento por modo: "peticao" usa pipeline diferente.
+    if (modo === "peticao") {
+      return handleSubmitPeticao();
+    }
 
     if (!authUser) {
       setFeedback({
@@ -1274,6 +1485,20 @@ export default function App() {
           onSaveDraft={handleSaveDraft}
           onLiveDraftChange={handleLiveDraftChange}
           onResetLiveDraft={handleResetLiveDraft}
+          modo={modo}
+          onModoChange={handleModoChange}
+          peticaoFile={peticaoFile}
+          peticaoError={peticaoError}
+          onPeticaoFileSelect={handlePeticaoFileSelect}
+          onRemovePeticaoFile={handleRemovePeticaoFile}
+          modeloBaseFile={modeloBaseFile}
+          modeloBaseError={modeloBaseError}
+          onModeloBaseFileSelect={handleModeloBaseFileSelect}
+          onRemoveModeloBaseFile={handleRemoveModeloBaseFile}
+          tipoAcaoHint={tipoAcaoHint}
+          onTipoAcaoHintChange={(e) => setTipoAcaoHint(e.target.value)}
+          pontosContestante={pontosContestante}
+          onPontosContestanteChange={(e) => setPontosContestante(e.target.value)}
         />
       )}
 
