@@ -1,0 +1,46 @@
+name: Frontend – Build e Lint
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  frontend:
+    name: Build e lint do React/Vite
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: Front comp/vite-project
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4.2.2
+
+      - name: Configurar Node.js 22
+        uses: actions/setup-node@v4.2.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: "Front comp/vite-project/package-lock.json"
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Verificar lint
+        run: npm run lint
+
+      - name: Build de produção
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'placeholder-key' }}
+
+      - name: Publicar artefato do build
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: frontend-dist
+          path: Front comp/vite-project/dist
+          retention-days: 7

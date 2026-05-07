@@ -1,0 +1,44 @@
+name: Security – Scan de Vulnerabilidades
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    - cron: "0 8 * * 1"
+
+jobs:
+  security:
+    name: Verificar vulnerabilidades nas dependências
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: Backend
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4.2.2
+
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5.3.0
+        with:
+          python-version: "3.12"
+
+      - name: Instalar pip-audit
+        run: pip install pip-audit==2.9.0
+
+      - name: Escanear vulnerabilidades
+        run: pip-audit -r requirements.txt --output-format json > relatorio-seguranca.json || true
+
+      - name: Exibir resultado do scan
+        run: pip-audit -r requirements.txt || true
+
+      - name: Publicar relatório de segurança
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: relatorio-seguranca
+          path: Backend/relatorio-seguranca.json
+          retention-days: 30
