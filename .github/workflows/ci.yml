@@ -23,8 +23,8 @@ jobs:
       DATABASE_USER: test
       DATABASE_PASSWORD: test
       DATABASE_SSLMODE: disable
-      SUPABASE_URL: https://fake.supabase.co
-      SUPABASE_PUBLISHABLE_KEY: fake-anon-key
+      SUPABASE_URL: ""
+      SUPABASE_PUBLISHABLE_KEY: ""
       SESSION_COOKIE_SECURE: "false"
       RATE_LIMIT_TRUST_FORWARDED: "false"
       LOG_LEVEL: WARNING

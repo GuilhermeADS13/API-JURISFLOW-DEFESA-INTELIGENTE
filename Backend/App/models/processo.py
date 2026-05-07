@@ -65,7 +65,9 @@ class Processo(BaseModel):
             return None
 
         # Sanitiza path traversal antes de qualquer outra validacao.
-        arquivo = os.path.basename(value.strip())
+        # Normaliza separadores Windows (\) para Unix (/) antes de basename,
+        # pois os.path.basename no Linux nao reconhece \ como separador.
+        arquivo = os.path.basename(value.strip().replace("\\", "/"))
         if not arquivo:
             raise ValueError("Nome de arquivo invalido.")
 

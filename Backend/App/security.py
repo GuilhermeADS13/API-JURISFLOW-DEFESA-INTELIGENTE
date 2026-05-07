@@ -214,7 +214,11 @@ async def get_authenticated_user(
     bearer_token = _extract_bearer_token(authorization)
     if bearer_token:
         # Compatibilidade: aceita token opaco legado ou JWT do Supabase no header.
-        session = get_sessao_ativa(bearer_token)
+        try:
+            session = get_sessao_ativa(bearer_token)
+        except Exception:
+            logger.warning("Sessao local indisponivel; tentando validacao Supabase.")
+            session = None
         if session:
             return session
 
