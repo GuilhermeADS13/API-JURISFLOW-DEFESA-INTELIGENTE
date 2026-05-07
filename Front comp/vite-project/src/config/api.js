@@ -10,3 +10,12 @@ export const DASHBOARD_SUMMARY_API_URL =
   import.meta.env.VITE_DASHBOARD_SUMMARY_ENDPOINT || `${API_BASE_URL}/contestacoes/resumo`;
 export const PETICAO_API_URL =
   import.meta.env.VITE_PETICAO_ENDPOINT || `${API_BASE_URL}/contestar-por-peticao`;
+
+// PR5 (Guia Tecnico v3) — HiL e Observabilidade
+export function confirmarExtracaoUrl(contestacaoId) {
+  return `${API_BASE_URL}/contestacoes/${encodeURIComponent(contestacaoId)}/confirmar-extracao`;
+}
+
+export function patchMinutaUrl(contestacaoId) {
+  return `${API_BASE_URL}/contestacoes/${encodeURIComponent(contestacaoId)}/minuta`;
+}

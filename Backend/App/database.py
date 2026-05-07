@@ -262,6 +262,22 @@ def init_db() -> None:
                     "ALTER TABLE contestacoes ADD COLUMN IF NOT EXISTS origem TEXT DEFAULT 'formulario'"
                 )
 
+                # Guia Tecnico v3 / PR5 - HiL: confianca e flag de revisao humana
+                cursor.execute(
+                    "ALTER TABLE contestacoes ADD COLUMN IF NOT EXISTS requer_revisao_humana BOOLEAN DEFAULT FALSE"
+                )
+                cursor.execute(
+                    "ALTER TABLE contestacoes ADD COLUMN IF NOT EXISTS dados_confianca REAL"
+                )
+
+                # PR5 - Observabilidade: golden dataset (minuta original IA vs editada humana)
+                cursor.execute(
+                    "ALTER TABLE contestacoes ADD COLUMN IF NOT EXISTS minuta_json_original JSONB"
+                )
+                cursor.execute(
+                    "ALTER TABLE contestacoes ADD COLUMN IF NOT EXISTS minuta_json_editada JSONB"
+                )
+
                 cursor.execute(
                     "CREATE INDEX IF NOT EXISTS idx_usuarios_sessoes_criado_em ON usuarios_sessoes (criado_em)"
                 )
@@ -558,11 +574,21 @@ def save_contestacao(
     status: str,
     n8n_resposta: Any,
     origem: str = "formulario",
+    requer_revisao_humana: bool = False,
+    dados_confianca: float | None = None,
+    minuta_json_original: dict | None = None,
 ) -> int:
     """Persiste envio de contestacao e metadados do arquivo base.
 
     `origem` distingue o fluxo: 'formulario' (entrada manual) ou 'peticao'
     (a partir de upload de peticao inicial via /contestar-por-peticao).
+
+    `requer_revisao_humana` + `dados_confianca` (PR5 HiL): marcam a
+    contestacao para revisao do advogado quando a IA teve baixa confianca
+    na extracao dos dados.
+
+    `minuta_json_original` (PR5 Observabilidade): JSON da minuta gerada
+    pela IA antes de qualquer edicao do humano, para futuro fine-tuning.
     """
     _ensure_db_initialized()
 
@@ -594,9 +620,12 @@ def save_contestacao(
                     texto_editado_ao_vivo,
                     status,
                     n8n_resposta,
-                    origem
+                    origem,
+                    requer_revisao_humana,
+                    dados_confianca,
+                    minuta_json_original
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
                 (
@@ -615,6 +644,9 @@ def save_contestacao(
                     status,
                     PGJsonAdapter(n8n_resposta) if PGJsonAdapter else n8n_resposta,
                     origem,
+                    bool(requer_revisao_humana),
+                    float(dados_confianca) if dados_confianca is not None else None,
+                    PGJsonAdapter(minuta_json_original) if (PGJsonAdapter and minuta_json_original) else minuta_json_original,
                 ),
             )
             row = cursor.fetchone()
@@ -786,6 +818,135 @@ def get_contestacoes_exemplares(tipo_acao: str) -> list[dict[str, Any]]:
         for row in rows
     ]
 
+
+
+def get_contestacao(contestacao_id: int, usuario_id: str) -> dict[str, Any] | None:
+    """Busca contestacao por id + usuario (defesa em profundidade contra IDOR).
+
+    Retorna dict com campos relevantes para HiL/Observabilidade ou None se nao
+    existe ou nao pertence ao usuario.
+    """
+    _ensure_db_initialized()
+
+    with _get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id, usuario_id, status, origem, n8n_resposta,
+                       requer_revisao_humana, dados_confianca,
+                       minuta_json_original, minuta_json_editada,
+                       numero_processo, autor, reu, tipo_acao
+                FROM contestacoes
+                WHERE id = %s AND usuario_id = %s
+                LIMIT 1
+                """,
+                (contestacao_id, usuario_id),
+            )
+            row = cursor.fetchone()
+
+    if row is None:
+        return None
+
+    return {
+        "id": int(row[0]),
+        "usuario_id": str(row[1]),
+        "status": str(row[2] or ""),
+        "origem": str(row[3] or "formulario"),
+        "n8n_resposta": row[4],
+        "requer_revisao_humana": bool(row[5]) if row[5] is not None else False,
+        "dados_confianca": float(row[6]) if row[6] is not None else None,
+        "minuta_json_original": row[7],
+        "minuta_json_editada": row[8],
+        "numero_processo": str(row[9] or ""),
+        "autor": str(row[10] or ""),
+        "reu": str(row[11] or ""),
+        "tipo_acao": str(row[12] or ""),
+    }
+
+
+def atualizar_contestacao_pos_revisao(
+    contestacao_id: int,
+    usuario_id: str,
+    minuta_nova: dict,
+    n8n_resposta_nova: Any,
+    dados_extraidos_corrigidos: dict,
+) -> bool:
+    """Atualiza contestacao apos confirmacao do humano (PR5 HiL).
+
+    Move status para 'ok', limpa flag de revisao, atualiza minuta_json_original
+    com a versao final (gerada com dados corrigidos pelo humano), e atualiza
+    o n8n_resposta com a nova execucao.
+
+    Tambem atualiza fatos/pedidos/autor/reu/tipo_acao caso o humano tenha
+    corrigido os dados extraidos pela IA.
+    """
+    _ensure_db_initialized()
+
+    with _get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE contestacoes
+                SET status = 'ok',
+                    requer_revisao_humana = FALSE,
+                    minuta_json_original = %s,
+                    n8n_resposta = %s,
+                    autor = %s,
+                    reu = %s,
+                    tipo_acao = %s,
+                    numero_processo = %s,
+                    fatos = %s
+                WHERE id = %s AND usuario_id = %s
+                """,
+                (
+                    PGJsonAdapter(minuta_nova) if PGJsonAdapter else minuta_nova,
+                    PGJsonAdapter(n8n_resposta_nova) if PGJsonAdapter else n8n_resposta_nova,
+                    str(dados_extraidos_corrigidos.get("autor", "")),
+                    str(dados_extraidos_corrigidos.get("reu", "")),
+                    str(dados_extraidos_corrigidos.get("tipo_acao", "")),
+                    str(dados_extraidos_corrigidos.get("numero_processo", "") or "a definir"),
+                    str(dados_extraidos_corrigidos.get("fatos_resumo", "")),
+                    contestacao_id,
+                    usuario_id,
+                ),
+            )
+            updated = cursor.rowcount
+        connection.commit()
+
+    return updated > 0
+
+
+def salvar_minuta_editada(
+    contestacao_id: int,
+    usuario_id: str,
+    minuta_editada: dict,
+) -> bool:
+    """Persiste minuta editada pelo advogado (PR5 Observabilidade).
+
+    Mantem `minuta_json_original` intacta para diff posterior e fine-tuning.
+    Retorna True se atualizou, False se a contestacao nao existe ou nao
+    pertence ao usuario.
+    """
+    _ensure_db_initialized()
+
+    with _get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE contestacoes
+                SET minuta_json_editada = %s
+                WHERE id = %s AND usuario_id = %s
+                """,
+                (
+                    PGJsonAdapter(minuta_editada) if PGJsonAdapter else minuta_editada,
+                    contestacao_id,
+                    usuario_id,
+                ),
+            )
+            updated = cursor.rowcount
+        connection.commit()
+
+    return updated > 0
 
 
 def salvar_exemplar(

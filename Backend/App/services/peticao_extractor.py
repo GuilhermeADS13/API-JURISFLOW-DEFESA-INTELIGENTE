@@ -61,6 +61,37 @@ def extrair_texto_peticao(conteudo: bytes, nome: str) -> str:
     return texto
 
 
+def extrair_e_consolidar_textos(
+    peticao_bytes: bytes,
+    peticao_nome: str,
+    anexos: list[tuple[bytes, str]] | None = None,
+) -> str:
+    """Extrai texto da peticao e dos anexos, consolida em uma unica string.
+
+    Cada anexo eh prefixado com cabecalho `=== ANEXO N (nome) ===` para que o
+    agente Claude consiga distinguir e relacionar os documentos. O total e
+    truncado em `MAX_TEXTO_PETICAO_CHARS` (priorizando a peticao no inicio).
+
+    Anexos que falham na extracao sao silenciosamente descartados — anexos sao
+    auxiliares, nao podem bloquear o fluxo da geracao.
+    """
+    texto_peticao = extrair_texto_peticao(peticao_bytes, peticao_nome)
+
+    if not anexos:
+        return texto_peticao
+
+    partes = [texto_peticao]
+    for idx, (conteudo, nome) in enumerate(anexos, start=1):
+        try:
+            texto_anexo = extrair_texto_peticao(conteudo, nome)
+        except ExtracaoError:
+            continue
+        partes.append(f"\n\n=== ANEXO {idx} ({nome}) ===\n\n{texto_anexo}")
+
+    consolidado = "".join(partes)
+    return consolidado[:MAX_TEXTO_PETICAO_CHARS]
+
+
 def extrair_texto_modelo_base(conteudo_b64: str | None) -> str:
     """Extrai texto do modelo base .docx (opcional).
 

@@ -10,11 +10,14 @@ import MainPanelSection from "./components/MainPanelSection";
 import DashboardSection from "./components/DashboardSection";
 import SupportSection from "./components/SupportSection";
 import AppFooter from "./components/AppFooter";
+import RevisaoHumanaModal from "./components/RevisaoHumanaModal";
 import {
   AGENT_API_URL,
   DASHBOARD_SUMMARY_API_URL,
   PETICAO_API_URL,
   SUPPORT_CONTACT_API_URL,
+  confirmarExtracaoUrl,
+  patchMinutaUrl,
 } from "./config/api";
 import { getSupabaseClient, isSupabaseConfigured } from "./lib/supabaseClient";
 import { normalizeFileName, readFileAsBase64, validateFile } from "./utils/files";
@@ -90,6 +93,46 @@ function getSupabaseAuthErrorMessage(error, fallbackMessage) {
   return fallbackMessage;
 }
 
+// PR5 Observabilidade: extrai as secoes da minuta editada no editor ao vivo.
+// O liveDraft tem cabecalhos do tipo "TESE CENTRAL", "MERITO", "FUNDAMENTOS",
+// "PEDIDOS" inseridos por handleSubmitPeticao. Este parser converte de volta
+// num dict que o backend grava em `minuta_json_editada`.
+function parseMinutaSecoes(texto) {
+  if (!texto || typeof texto !== "string") return {};
+  const mapaCabecalhos = {
+    "TESE CENTRAL": "tese_central",
+    PRELIMINARES: "preliminares",
+    "MERITO": "merito",
+    "MÉRITO": "merito",
+    FUNDAMENTOS: "fundamentos",
+    PEDIDOS: "pedidos",
+    OBSERVACOES: "observacoes",
+    "OBSERVAÇÕES": "observacoes",
+  };
+  const linhas = texto.split("\n");
+  const out = {};
+  let secaoAtual = null;
+  let buffer = [];
+  const flush = () => {
+    if (secaoAtual && buffer.length > 0) {
+      out[secaoAtual] = buffer.join("\n").trim();
+    }
+    buffer = [];
+  };
+  for (const linha of linhas) {
+    const trimmed = linha.trim();
+    const upper = trimmed.toUpperCase();
+    if (mapaCabecalhos[upper]) {
+      flush();
+      secaoAtual = mapaCabecalhos[upper];
+      continue;
+    }
+    if (secaoAtual) buffer.push(linha);
+  }
+  flush();
+  return out;
+}
+
 function buildEmptyDashboardCards() {
   return [
     { label: "Total de casos", value: "0" },
@@ -161,6 +204,14 @@ export default function App() {
   const [modeloBaseError, setModeloBaseError] = useState("");
   const [tipoAcaoHint, setTipoAcaoHint] = useState("");
   const [pontosContestante, setPontosContestante] = useState("");
+  // PR5 Multi-documentos: lista de anexos opcionais (alem da peticao principal).
+  const [anexosFiles, setAnexosFiles] = useState([]);
+  const [anexosError, setAnexosError] = useState("");
+  // PR5 HiL: modal de revisao humana quando confianca da IA < 0.7.
+  const [showRevisaoModal, setShowRevisaoModal] = useState(false);
+  const [revisaoData, setRevisaoData] = useState(null); // { contestacao_id, dados_extraidos, dados_confianca, modelo_base_base64 }
+  const [revisaoLoading, setRevisaoLoading] = useState(false);
+  const [revisaoError, setRevisaoError] = useState("");
   const [formErrors, setFormErrors] = useState({});
   const [draftInfo, setDraftInfo] = useState(() => draftSeed.info);
   const [feedback, setFeedback] = useState(null);
@@ -223,6 +274,34 @@ export default function App() {
       setLiveDraft(generatedDraftText);
     }
   }, [generatedDraftText, liveDraftTouched]);
+
+  // PR5 Observabilidade: auto-save da minuta editada (debounce 3s).
+  // Salvamos em `minuta_json_editada` para futuro fine-tuning vs minuta_original.
+  useEffect(() => {
+    if (!lastCaseId || !liveDraftTouched) return;
+    if (!liveDraft || liveDraft.trim().length < 50) return;
+    const timer = setTimeout(async () => {
+      try {
+        const accessToken = await getSupabaseAccessToken();
+        // Parse simples por secoes (TESE CENTRAL, MERITO, etc.) que o
+        // handleSubmitPeticao gerou ao popular o liveDraft.
+        const secoes = parseMinutaSecoes(liveDraft);
+        if (Object.keys(secoes).length === 0) return;
+        await fetch(patchMinutaUrl(lastCaseId), {
+          method: "PATCH",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          },
+          body: JSON.stringify(secoes),
+        });
+      } catch {
+        // Silent — auto-save nao deve quebrar a UX. Erros caem em logs do backend.
+      }
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [liveDraft, liveDraftTouched, lastCaseId]);
 
   useEffect(() => {
     setSupportForm((prev) => ({
@@ -690,6 +769,27 @@ export default function App() {
     setModeloBaseError("");
   };
 
+  // PR5 Multi-documentos
+  const handleAdicionarAnexo = (file) => {
+    if (!file) return;
+    const error = validateFile(file);
+    if (error) {
+      setAnexosError(error);
+      return;
+    }
+    if (anexosFiles.length >= 5) {
+      setAnexosError("Maximo de 5 anexos por peticao.");
+      return;
+    }
+    setAnexosFiles((prev) => [...prev, file]);
+    setAnexosError("");
+  };
+
+  const handleRemoverAnexo = (index) => {
+    setAnexosFiles((prev) => prev.filter((_, i) => i !== index));
+    setAnexosError("");
+  };
+
   const validateForm = () => {
     const errors = {};
 
@@ -1040,6 +1140,15 @@ export default function App() {
         ? await readFileAsBase64(modeloBaseFile)
         : null;
 
+      // PR5 Multi-documentos: serializa todos os anexos em paralelo.
+      const anexosSerializados = await Promise.all(
+        anexosFiles.map(async (f) => ({
+          base64: await readFileAsBase64(f),
+          nome: f.name,
+          mime_type: f.type || "application/octet-stream",
+        })),
+      );
+
       const payload = {
         arquivo_peticao_base64: peticaoBase64,
         arquivo_peticao_nome: peticaoFile.name,
@@ -1048,6 +1157,7 @@ export default function App() {
         modelo_base_nome: modeloBaseFile?.name || null,
         tipo_acao_hint: tipoAcaoHint.trim() || null,
         pontos_contestante: pontosContestante.trim() || null,
+        arquivos_anexos: anexosSerializados,
       };
 
       const response = await fetch(PETICAO_API_URL, {
@@ -1075,6 +1185,28 @@ export default function App() {
       }
 
       const backendData = await response.json().catch(() => ({}));
+
+      // PR5 HiL: confianca baixa -> abre modal de revisao em vez do resultado.
+      if (backendData?.requer_revisao_humana === true) {
+        setLoading(false);
+        setRevisaoData({
+          contestacao_id: backendData.contestacao_id,
+          dados_extraidos: backendData.dados_extraidos || {},
+          dados_confianca: backendData.dados_confianca,
+          modelo_base_base64: modeloBaseBase64,
+        });
+        setRevisaoError("");
+        setShowRevisaoModal(true);
+        setFeedback({
+          variant: "warning",
+          text:
+            backendData.mensagem ||
+            "Confianca baixa na extracao. Revise os dados antes de gerar a minuta.",
+        });
+        await loadDashboardData({ silent: true });
+        return;
+      }
+
       const dadosExtraidos = backendData?.dados_extraidos || {};
       const minuta = backendData?.minuta || {};
       const engine = backendData?.engine_ia || {};
@@ -1136,6 +1268,91 @@ export default function App() {
             ? error.message
             : "Nao foi possivel gerar a contestacao a partir da peticao.",
       });
+    }
+  };
+
+  // PR5 HiL: o usuario revisou os dados extraidos no modal e clicou Confirmar.
+  // Reenviamos para /confirmar-extracao com os dados corrigidos (workflow n8n
+  // pula o Claude Extrator graças à flag dados_extraidos_pre_validados).
+  const handleConfirmarExtracao = async (dadosCorrigidos) => {
+    if (!revisaoData?.contestacao_id) return;
+    setRevisaoLoading(true);
+    setRevisaoError("");
+
+    try {
+      const accessToken = await getSupabaseAccessToken();
+      const response = await fetch(confirmarExtracaoUrl(revisaoData.contestacao_id), {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({
+          dados_extraidos: dadosCorrigidos,
+          pontos_contestante: pontosContestante.trim() || null,
+          modelo_base_base64: revisaoData.modelo_base_base64 || null,
+        }),
+      });
+
+      if (!response.ok) {
+        const msg = await getApiErrorMessage(response, `Falha HTTP ${response.status}`);
+        throw new Error(msg);
+      }
+
+      const data = await response.json().catch(() => ({}));
+      const minuta = data?.minuta || {};
+      const engine = data?.engine_ia || {};
+      const arquivoB64 = data?.arquivo_editado_base64 || "";
+      const arquivoNome = data?.arquivo_editado_nome || "contestacao.docx";
+
+      // Atualiza form e draft com a minuta gerada com dados corrigidos.
+      setForm((prev) => ({
+        ...prev,
+        processo: dadosCorrigidos.numero_processo || prev.processo,
+        cliente: dadosCorrigidos.autor || prev.cliente,
+        tipoAcao: dadosCorrigidos.tipo_acao || prev.tipoAcao,
+        tese: minuta.tese_central || prev.tese,
+        observacoes: dadosCorrigidos.fatos_resumo || prev.observacoes,
+      }));
+
+      const partesMinuta = [
+        minuta.tese_central && `TESE CENTRAL\n${minuta.tese_central}`,
+        minuta.merito && `MERITO\n${minuta.merito}`,
+        minuta.fundamentos && `FUNDAMENTOS\n${minuta.fundamentos}`,
+        minuta.pedidos && `PEDIDOS\n${minuta.pedidos}`,
+      ].filter(Boolean);
+      if (partesMinuta.length > 0) {
+        setLiveDraft(partesMinuta.join("\n\n"));
+        setLiveDraftTouched(true);
+      }
+
+      setIaResult({
+        engine,
+        riscos: Array.isArray(minuta.riscos) ? minuta.riscos : [],
+        arquivoB64,
+        arquivoNome,
+        defesasConsultadas: 0,
+      });
+      setLastCaseId(String(data?.contestacao_id || revisaoData.contestacao_id));
+
+      setShowRevisaoModal(false);
+      setRevisaoData(null);
+      setSubmitted(true);
+      setShowResultModal(true);
+      setAutomationStatus({ webhook: 100, ia: 86, validacao: 92 });
+      setFeedback({
+        variant: "success",
+        text: "Contestacao gerada com os dados revisados. Pronta para download.",
+      });
+      await loadDashboardData({ silent: true });
+      setCurrentPage("dashboard");
+    } catch (error) {
+      setRevisaoError(
+        error instanceof Error ? error.message : "Falha ao confirmar revisao.",
+      );
+    } finally {
+      setRevisaoLoading(false);
     }
   };
 
@@ -1499,6 +1716,10 @@ export default function App() {
           onTipoAcaoHintChange={(e) => setTipoAcaoHint(e.target.value)}
           pontosContestante={pontosContestante}
           onPontosContestanteChange={(e) => setPontosContestante(e.target.value)}
+          anexosFiles={anexosFiles}
+          anexosError={anexosError}
+          onAdicionarAnexo={handleAdicionarAnexo}
+          onRemoverAnexo={handleRemoverAnexo}
         />
       )}
 
@@ -1540,6 +1761,20 @@ export default function App() {
       )}
 
       <AppFooter />
+
+      <RevisaoHumanaModal
+        show={showRevisaoModal}
+        onHide={() => {
+          setShowRevisaoModal(false);
+          setRevisaoData(null);
+          setRevisaoError("");
+        }}
+        onConfirm={handleConfirmarExtracao}
+        dadosExtraidos={revisaoData?.dados_extraidos}
+        confianca={revisaoData?.dados_confianca}
+        loading={revisaoLoading}
+        error={revisaoError}
+      />
 
       <AuthModal
         show={showAuthModal}

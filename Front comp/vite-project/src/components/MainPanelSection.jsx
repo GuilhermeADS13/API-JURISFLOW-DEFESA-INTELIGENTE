@@ -61,10 +61,16 @@ export default function MainPanelSection({
   onTipoAcaoHintChange,
   pontosContestante,
   onPontosContestanteChange,
+  // Guia Tecnico v3 / PR5 multi-docs: lista de anexos opcionais.
+  anexosFiles = [],
+  anexosError,
+  onAdicionarAnexo,
+  onRemoverAnexo,
 }) {
   const fileInputRef = useRef(null);
   const peticaoInputRef = useRef(null);
   const modeloBaseInputRef = useRef(null);
+  const anexosInputRef = useRef(null);
   const [dragging, setDragging] = useState(false);
   const [draggingPeticao, setDraggingPeticao] = useState(false);
   const [draggingModelo, setDraggingModelo] = useState(false);
@@ -323,6 +329,68 @@ export default function MainPanelSection({
                         </Form.Group>
                       </Col>
                     </Row>
+
+                    {/* PR5 multi-docs: anexos opcionais (max 5, total 50MB) */}
+                    <Form.Group className="mt-4">
+                      <Form.Label>
+                        Anexos da peticao (opcional — contratos, e-mails, laudos)
+                      </Form.Label>
+                      <div className="d-flex align-items-center gap-2 flex-wrap">
+                        <Button
+                          type="button"
+                          variant="outline-dark"
+                          size="sm"
+                          disabled={loading || anexosFiles.length >= 5}
+                          onClick={() => anexosInputRef.current?.click()}
+                        >
+                          <Paperclip className="me-1" /> Adicionar anexo
+                        </Button>
+                        <small className="text-secondary">
+                          {anexosFiles.length}/5 anexos · PDF, DOC ou DOCX (max 20MB cada)
+                        </small>
+                      </div>
+                      <input
+                        ref={anexosInputRef}
+                        type="file"
+                        accept=".pdf,.doc,.docx"
+                        className="d-none"
+                        multiple
+                        onChange={(event) => {
+                          const files = Array.from(event.target.files || []);
+                          for (const f of files) onAdicionarAnexo?.(f);
+                          event.target.value = "";
+                        }}
+                      />
+                      {anexosFiles.length > 0 && (
+                        <ul className="list-unstyled mt-2 mb-0">
+                          {anexosFiles.map((f, idx) => (
+                            <li
+                              key={`${f.name}-${idx}`}
+                              className="upload-file-summary mt-2"
+                            >
+                              <div className="d-flex align-items-center gap-2">
+                                <Paperclip />
+                                <div>
+                                  <div className="fw-semibold">{f.name}</div>
+                                  <small className="text-secondary">{fileSizeLabel(f)}</small>
+                                </div>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="link"
+                                className="upload-remove p-0"
+                                onClick={() => onRemoverAnexo?.(idx)}
+                              >
+                                <XCircle /> Remover
+                              </Button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {anexosError && (
+                        <div className="upload-feedback-error">{anexosError}</div>
+                      )}
+                    </Form.Group>
 
                     <div className="d-flex flex-wrap gap-2 mt-4">
                       <Button type="submit" variant="dark" disabled={loading}>
