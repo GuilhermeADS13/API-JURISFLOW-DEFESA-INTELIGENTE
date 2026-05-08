@@ -3,22 +3,62 @@
 Usado pela rota POST /api/contestar-por-peticao antes de enviar o conteudo ao
 agente IA. Mantem a logica de extracao no backend (nao no n8n) porque o
 container n8n base nao tem mammoth/pdfjs-dist, e Python ja tem libs maduras.
+
+PR6 #1 — Long Context (Guia v3 §2.2): em vez de Map-Reduce com Claude por
+chunk (caro), usamos estrategia hibrida:
+1. Limite expandido para 80k chars (~20-25k tokens; Claude Sonnet 4.6 aceita
+   ate 200k tokens com folga).
+2. Quando texto excede o limite, aplica `prefiltrar_secoes_juridicas` que
+   identifica e prioriza secoes-chave da peticao (DOS FATOS, DO DIREITO,
+   DOS PEDIDOS, DA LEGITIMIDADE, etc.) para nao perder pedidos no fim do
+   documento.
+3. Se mesmo apos pre-filtragem ainda passar do limite, usa `truncamento_inteligente`
+   que preserva inicio (cabecalho do processo) + fim (pedidos), com elipse no meio.
+
+Map-Reduce (chunking + Claude por parte) fica como PR7 se essa abordagem
+nao for suficiente em casos extremos.
 """
 
 from __future__ import annotations
 
 import base64
 import binascii
+import re
 from io import BytesIO
 
 from docx import Document
 from pypdf import PdfReader
 
-# Limite de caracteres entregues ao prompt do extrator. Peticoes grandes podem
-# ultrapassar facilmente o context window util do Claude — cortamos antes de
-# enviar para evitar custo e latencia desnecessarios.
-MAX_TEXTO_PETICAO_CHARS = 20_000
+# PR6: limite expandido. Claude Sonnet 4.6 tem 200k tokens de janela; 80k
+# chars ~ 20k tokens deixa folga confortavel para system prompt + few-shot
+# exemplares + RAG defesas anteriores na mesma chamada.
+MAX_TEXTO_PETICAO_CHARS = 80_000
 MAX_TEXTO_MODELO_BASE_CHARS = 15_000
+
+# Marcadores de secoes que aparecem em peticoes brasileiras. Casamento
+# case-insensitive, ancorado em inicio de linha apos whitespace, com
+# tolerancia a numeracao romana ou arabe (ex: "I - DOS FATOS", "1. DOS FATOS").
+# Ordenamos por importancia: PEDIDOS > FATOS > DIREITO > restantes.
+SECOES_PRIORIZADAS = (
+    # (regex, nome_legivel, peso_prioridade)
+    (re.compile(r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]s?\s+pedidos?\b", re.IGNORECASE | re.MULTILINE), "PEDIDOS", 100),
+    (re.compile(r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]s?\s+fatos\b", re.IGNORECASE | re.MULTILINE), "FATOS", 90),
+    (re.compile(r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]\s+direito\b", re.IGNORECASE | re.MULTILINE), "DIREITO", 80),
+    (re.compile(r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]s?\s+fundamentos?\s+jur[íi]dicos?\b", re.IGNORECASE | re.MULTILINE), "FUNDAMENTOS", 80),
+    (re.compile(r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]\s+m[ée]rito\b", re.IGNORECASE | re.MULTILINE), "MERITO", 75),
+    (re.compile(r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]\s+valor\s+d[oa]\s+causa\b", re.IGNORECASE | re.MULTILINE), "VALOR_CAUSA", 70),
+    (re.compile(r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]\s+legitimidade\b", re.IGNORECASE | re.MULTILINE), "LEGITIMIDADE", 60),
+    (re.compile(r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]s?\s+preliminares?\b", re.IGNORECASE | re.MULTILINE), "PRELIMINARES", 60),
+    (re.compile(r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]\s+t[ée]cnico-?jur[íi]dic", re.IGNORECASE | re.MULTILINE), "TECNICO_JURIDICO", 55),
+    (re.compile(r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]s?\s+provas?\b", re.IGNORECASE | re.MULTILINE), "PROVAS", 50),
+)
+
+# Marcador de "fim de secao" — outra secao numerada/titulada ou final do doc.
+# Usado para delimitar onde uma secao priorizada termina.
+RE_FIM_SECAO = re.compile(
+    r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]s?\s+\w+",
+    re.IGNORECASE | re.MULTILINE,
+)
 
 
 class ExtracaoError(Exception):
@@ -28,9 +68,9 @@ class ExtracaoError(Exception):
 def extrair_texto_peticao(conteudo: bytes, nome: str) -> str:
     """Extrai texto da peticao inicial. Detecta tipo pela extensao do nome.
 
-    Limita a saida a `MAX_TEXTO_PETICAO_CHARS` chars. Levanta `ExtracaoError`
-    se o conteudo estiver corrompido ou se nao for possivel obter texto util
-    (>=50 chars apos strip).
+    Aplica pre-filtragem por secoes juridicas se o texto exceder
+    `MAX_TEXTO_PETICAO_CHARS`. Levanta `ExtracaoError` se o conteudo estiver
+    corrompido ou se nao for possivel obter texto util (>=50 chars apos strip).
     """
     if not conteudo:
         raise ExtracaoError("Conteudo da peticao vazio.")
@@ -49,8 +89,7 @@ def extrair_texto_peticao(conteudo: bytes, nome: str) -> str:
     else:
         raise ExtracaoError(f"Extensao nao suportada para extracao: {nome!r}")
 
-    # Normaliza whitespace e limita tamanho.
-    texto = _limpar_texto(texto)[:MAX_TEXTO_PETICAO_CHARS]
+    texto = _limpar_texto(texto)
 
     if len(texto.strip()) < 50:
         raise ExtracaoError(
@@ -58,7 +97,12 @@ def extrair_texto_peticao(conteudo: bytes, nome: str) -> str:
             "Tente converter para DOCX e enviar novamente."
         )
 
-    return texto
+    # PR6: se texto cabe no limite, retorna direto. Se passa, pre-filtra +
+    # truncamento inteligente preservando comecho e fim.
+    if len(texto) <= MAX_TEXTO_PETICAO_CHARS:
+        return texto
+
+    return _aplicar_long_context(texto, MAX_TEXTO_PETICAO_CHARS)
 
 
 def extrair_e_consolidar_textos(
@@ -70,7 +114,8 @@ def extrair_e_consolidar_textos(
 
     Cada anexo eh prefixado com cabecalho `=== ANEXO N (nome) ===` para que o
     agente Claude consiga distinguir e relacionar os documentos. O total e
-    truncado em `MAX_TEXTO_PETICAO_CHARS` (priorizando a peticao no inicio).
+    truncado em `MAX_TEXTO_PETICAO_CHARS` (priorizando a peticao no inicio,
+    aplicando pre-filtragem se necessario).
 
     Anexos que falham na extracao sao silenciosamente descartados — anexos sao
     auxiliares, nao podem bloquear o fluxo da geracao.
@@ -89,7 +134,12 @@ def extrair_e_consolidar_textos(
         partes.append(f"\n\n=== ANEXO {idx} ({nome}) ===\n\n{texto_anexo}")
 
     consolidado = "".join(partes)
-    return consolidado[:MAX_TEXTO_PETICAO_CHARS]
+    if len(consolidado) <= MAX_TEXTO_PETICAO_CHARS:
+        return consolidado
+    # Mesmo com tudo truncado, peticao + anexos podem passar. Aplica
+    # long-context ao consolidado preservando peticao no inicio (que ja foi
+    # filtrada) + ultima parte (anexos com pedidos relacionados).
+    return _aplicar_long_context(consolidado, MAX_TEXTO_PETICAO_CHARS)
 
 
 def extrair_texto_modelo_base(conteudo_b64: str | None) -> str:
@@ -112,6 +162,96 @@ def extrair_texto_modelo_base(conteudo_b64: str | None) -> str:
         return ""
 
     return _limpar_texto(texto)[:MAX_TEXTO_MODELO_BASE_CHARS]
+
+
+# ── PR6 #1 — Long Context: pre-filtragem + truncamento inteligente ──────────
+
+
+def prefiltrar_secoes_juridicas(texto: str) -> dict[str, str]:
+    """Identifica secoes priorizadas em uma peticao e retorna por nome.
+
+    Para cada match em `SECOES_PRIORIZADAS`, captura do inicio da secao ate
+    o proximo cabecalho de secao OU final do documento. Se a mesma secao
+    aparecer mais de uma vez (ex: PEDIDOS de cada autor), concatena.
+
+    Retorna dict {nome: texto_da_secao}. Secoes nao encontradas ficam de fora.
+    """
+    if not texto:
+        return {}
+
+    secoes_encontradas: dict[str, list[str]] = {}
+
+    # Mapeia (start, end, nome) para todas as secoes priorizadas.
+    matches: list[tuple[int, int, str]] = []
+    for regex, nome, _peso in SECOES_PRIORIZADAS:
+        for m in regex.finditer(texto):
+            matches.append((m.start(), m.end(), nome))
+
+    if not matches:
+        return {}
+
+    # Ordena por posicao para conseguir delimitar fim de cada secao
+    # (proximo cabecalho de secao OU EOF).
+    matches.sort(key=lambda x: x[0])
+
+    # Coleta posicoes de TODOS cabecalhos de secao (priorizadas + outras)
+    # para saber onde uma secao termina.
+    todos_cabecalhos = sorted(set(m.start() for m in RE_FIM_SECAO.finditer(texto)))
+
+    for start, end, nome in matches:
+        # Encontra a proxima posicao de cabecalho apos `end` (fim da secao atual).
+        proximo = next((p for p in todos_cabecalhos if p > end), len(texto))
+        trecho = texto[start:proximo].strip()
+        if trecho:
+            secoes_encontradas.setdefault(nome, []).append(trecho)
+
+    return {nome: "\n\n".join(trechos) for nome, trechos in secoes_encontradas.items()}
+
+
+def _aplicar_long_context(texto: str, limite: int) -> str:
+    """Estrategia hibrida quando texto > limite.
+
+    Passo 1: tenta pre-filtragem por secoes priorizadas. Se a soma das secoes
+    couber em `limite * 0.9`, usa direto (deixa 10% para preambulo/cabecalho).
+
+    Passo 2: senao, faz truncamento inteligente preservando inicio (cabecalho)
+    + fim (pedidos), com elipse "[...trecho intermediario omitido...]" no meio.
+    """
+    secoes = prefiltrar_secoes_juridicas(texto)
+
+    if secoes:
+        # Monta texto pre-filtrado priorizando por peso decrescente.
+        pesos_por_nome = {nome: peso for _, nome, peso in SECOES_PRIORIZADAS}
+        secoes_ordenadas = sorted(
+            secoes.items(), key=lambda x: pesos_por_nome.get(x[0], 0), reverse=True
+        )
+
+        # Reserva ~10% do limite para o cabecalho original (partes/processo).
+        cabecalho_size = min(int(limite * 0.10), 4000)
+        cabecalho = texto[:cabecalho_size].strip()
+
+        partes_filtradas = [
+            f"=== {nome} ===\n{conteudo}" for nome, conteudo in secoes_ordenadas
+        ]
+        corpo_filtrado = "\n\n".join(partes_filtradas)
+
+        candidato = (
+            f"{cabecalho}\n\n[...preambulo omitido — ver secoes abaixo...]\n\n"
+            f"{corpo_filtrado}"
+        )
+
+        if len(candidato) <= limite:
+            return candidato
+
+        # Pre-filtragem nao foi suficiente; cai para truncamento inteligente.
+
+    # Truncamento inteligente: 60% do limite no inicio, 40% no fim, com elipse.
+    inicio_size = int(limite * 0.6)
+    fim_size = limite - inicio_size - 80  # 80 chars de folga para a elipse
+    inicio = texto[:inicio_size]
+    fim = texto[-fim_size:] if fim_size > 0 else ""
+    elipse = "\n\n[...trecho intermediario omitido por exceder o limite de contexto...]\n\n"
+    return inicio + elipse + fim
 
 
 def _extrair_docx(conteudo: bytes) -> str:
@@ -145,8 +285,9 @@ def _extrair_pdf(conteudo: bytes) -> str:
         ) from error
 
     paginas: list[str] = []
-    # Limita a 30 paginas para evitar PDFs gigantes esgotarem memoria/tempo.
-    for page in reader.pages[:30]:
+    # PR6: aumentamos o limite de 30 -> 100 paginas. Mesmo assim, _aplicar_long_context
+    # vai filtrar/truncar inteligentemente se o texto extraido exceder MAX_TEXTO_PETICAO_CHARS.
+    for page in reader.pages[:100]:
         try:
             paginas.append(page.extract_text() or "")
         except Exception:
