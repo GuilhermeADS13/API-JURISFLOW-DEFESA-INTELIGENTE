@@ -23,17 +23,44 @@ from __future__ import annotations
 
 import base64
 import binascii
+import logging
+import os
 import re
 from io import BytesIO
 
 from docx import Document
 from pypdf import PdfReader
 
+logger = logging.getLogger(__name__)
+
+# PR6 #3 — OCR opcional (Tesseract local) para PDFs digitalizados.
+# Importacoes lazy para nao quebrar a importacao do modulo se as libs nao
+# estiverem instaladas no ambiente (ex: testes em CI sem tesseract).
+try:
+    import pytesseract  # type: ignore
+    from pdf2image import convert_from_bytes  # type: ignore
+    _OCR_LIBS_DISPONIVEIS = True
+except ImportError:
+    pytesseract = None  # type: ignore
+    convert_from_bytes = None  # type: ignore
+    _OCR_LIBS_DISPONIVEIS = False
+
 # PR6: limite expandido. Claude Sonnet 4.6 tem 200k tokens de janela; 80k
 # chars ~ 20k tokens deixa folga confortavel para system prompt + few-shot
 # exemplares + RAG defesas anteriores na mesma chamada.
 MAX_TEXTO_PETICAO_CHARS = 80_000
 MAX_TEXTO_MODELO_BASE_CHARS = 15_000
+
+# PR6 #3 — OCR fallback (Tesseract). Configuravel via env para desligar em
+# emergencia ou para acelerar testes em CI.
+OCR_ENABLED = os.getenv("OCR_ENABLED", "true").lower() in ("1", "true", "yes")
+OCR_MAX_PAGES = int(os.getenv("OCR_MAX_PAGES", "15"))  # OCR e lento (~5-10s/pagina)
+OCR_DPI = int(os.getenv("OCR_DPI", "300"))  # Tesseract recomenda 300 DPI
+OCR_LANG = os.getenv("OCR_LANG", "por")  # tesseract-ocr-por instalado no Dockerfile
+
+# Limite de chars para considerar um PDF como "digitalizado" (texto curto =
+# pypdf nao conseguiu extrair, provavelmente eh imagem).
+PDF_OCR_FALLBACK_THRESHOLD = 200
 
 # Marcadores de secoes que aparecem em peticoes brasileiras. Casamento
 # case-insensitive, ancorado em inicio de linha apos whitespace, com
@@ -277,6 +304,14 @@ def _extrair_docx(conteudo: bytes) -> str:
 
 
 def _extrair_pdf(conteudo: bytes) -> str:
+    """Extrai texto de PDF com fallback OCR (PR6 #3) para PDFs digitalizados.
+
+    Tenta primeiro pypdf (rapido, funciona para PDFs nativos com camada de
+    texto). Se o resultado for muito curto (< PDF_OCR_FALLBACK_THRESHOLD),
+    presume que eh um PDF imagem (escaneado) e cai no Tesseract.
+
+    OCR e desligavel via OCR_ENABLED=false no env para emergencia.
+    """
     try:
         reader = PdfReader(BytesIO(conteudo))
     except Exception as error:
@@ -293,7 +328,98 @@ def _extrair_pdf(conteudo: bytes) -> str:
         except Exception:
             paginas.append("")
 
-    return "\n\n".join(p for p in paginas if p.strip())
+    texto_pypdf = "\n\n".join(p for p in paginas if p.strip())
+
+    # PR6 #3: se pypdf retornou pouco/nada, tenta OCR (PDF provavelmente
+    # eh imagem digitalizada).
+    if len(texto_pypdf.strip()) >= PDF_OCR_FALLBACK_THRESHOLD:
+        return texto_pypdf
+
+    if not OCR_ENABLED:
+        logger.info(
+            "PDF parece digitalizado (texto pypdf=%d chars) mas OCR_ENABLED=false; retornando vazio.",
+            len(texto_pypdf),
+        )
+        return texto_pypdf
+
+    if not _OCR_LIBS_DISPONIVEIS:
+        logger.warning(
+            "PDF parece digitalizado mas pytesseract/pdf2image nao instalados; retornando texto curto."
+        )
+        return texto_pypdf
+
+    logger.info(
+        "PDF com texto curto (%d chars) — disparando OCR Tesseract (lang=%s, dpi=%d, max_pages=%d).",
+        len(texto_pypdf),
+        OCR_LANG,
+        OCR_DPI,
+        OCR_MAX_PAGES,
+    )
+
+    try:
+        texto_ocr = _extrair_pdf_via_ocr(conteudo)
+    except Exception as error:
+        logger.error(
+            "Falha no OCR Tesseract: %s: %s. Retornando texto pypdf (curto).",
+            type(error).__name__,
+            error,
+        )
+        return texto_pypdf
+
+    # Combina pypdf + OCR caso pypdf tenha capturado algo (ex: cabeçalho com
+    # texto nativo + corpo escaneado). Se OCR for vazio, fica com pypdf.
+    if texto_ocr.strip():
+        if texto_pypdf.strip():
+            return texto_pypdf + "\n\n" + texto_ocr
+        return texto_ocr
+    return texto_pypdf
+
+
+def _extrair_pdf_via_ocr(conteudo: bytes) -> str:
+    """Converte paginas do PDF em imagens e roda Tesseract em cada uma.
+
+    Limita a `OCR_MAX_PAGES` paginas (OCR eh lento ~5-10s/pagina e o webhook
+    n8n tem timeout de 180s — passar disso quebra o pipeline). Processa uma
+    pagina de cada vez para nao explodir a memoria com PDFs grandes.
+    """
+    if not _OCR_LIBS_DISPONIVEIS:
+        return ""
+
+    # convert_from_bytes carrega TUDO em memoria; melhor passar last_page e
+    # processar em batches se PDF for gigante. Aqui limitamos no parametro.
+    try:
+        imagens = convert_from_bytes(
+            conteudo,
+            dpi=OCR_DPI,
+            first_page=1,
+            last_page=OCR_MAX_PAGES,
+            fmt="ppm",
+        )
+    except Exception as error:
+        # pdf2image precisa do poppler instalado (poppler-utils no Dockerfile).
+        # Em ambiente sem poppler, retorna vazio em vez de quebrar.
+        logger.error(
+            "pdf2image falhou: %s: %s (poppler-utils instalado?)",
+            type(error).__name__,
+            error,
+        )
+        return ""
+
+    paginas_texto: list[str] = []
+    for idx, img in enumerate(imagens, start=1):
+        try:
+            texto_pagina = pytesseract.image_to_string(img, lang=OCR_LANG)
+            if texto_pagina and texto_pagina.strip():
+                paginas_texto.append(texto_pagina)
+        except Exception as error:
+            logger.warning(
+                "OCR falhou na pagina %d: %s: %s",
+                idx,
+                type(error).__name__,
+                error,
+            )
+
+    return "\n\n".join(paginas_texto)
 
 
 def _limpar_texto(texto: str) -> str:

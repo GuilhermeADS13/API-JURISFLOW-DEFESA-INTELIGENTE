@@ -18,6 +18,17 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# Dependencias de runtime:
+# - libpq5: psycopg2-binary
+# - tesseract-ocr + tesseract-ocr-por: OCR para PDFs digitalizados (PR6 #3, Guia v3 §2.7)
+# - poppler-utils: pdf2image precisa do `pdftoppm`/`pdftocairo` para converter PDF -> imagem
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    tesseract-ocr \
+    tesseract-ocr-por \
+    poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copia pacotes instalados do builder
 COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin

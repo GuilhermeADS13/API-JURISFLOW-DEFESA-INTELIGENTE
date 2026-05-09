@@ -58,6 +58,12 @@ services:
       # Observabilidade
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
 
+      # PR6 #3 — OCR Tesseract para PDFs digitalizados
+      - OCR_ENABLED=${OCR_ENABLED:-true}
+      - OCR_MAX_PAGES=${OCR_MAX_PAGES:-15}
+      - OCR_DPI=${OCR_DPI:-300}
+      - OCR_LANG=${OCR_LANG:-por}
+
     depends_on:
       n8n:
         condition: service_healthy
