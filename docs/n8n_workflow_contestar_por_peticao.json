@@ -80,12 +80,26 @@
       }
     },
     {
+      "id": "node-self-correction-peticao",
+      "name": "Self-Correction Citacoes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// n8n 2.17.5 JS sandbox shims (process, AbortController, fetch). Tudo em const.\nconst __AC_INIT = (() => { if (typeof globalThis.AbortController === 'undefined') { globalThis.AbortController = class { constructor() { this.signal = undefined; } abort() {} }; } return true; })();\nconst __PROC = (() => { try { return process.env || {}; } catch (_) { return {}; } })();\nconst __HTTP = (() => { try { if ($helpers && $helpers.httpRequest) return $helpers; } catch (_) {} try { if (typeof helpers !== 'undefined' && helpers && helpers.httpRequest) return helpers; } catch (_) {} try { if (this && this.helpers && this.helpers.httpRequest) return this.helpers; } catch (_) {} return null; })();\nconst __FETCH = async (url, opts) => {\n  opts = opts || {};\n  const method = opts.method || 'GET';\n  const headers = opts.headers || {};\n  let body = opts.body;\n  if (typeof body === 'string') { try { body = JSON.parse(body); } catch (_) { /* mantem string */ } }\n  if (!__HTTP) {\n    try { const r = await fetch(url, opts); return r; } catch (_) {}\n    throw new Error('http_unavailable');\n  }\n  try {\n    const r = await __HTTP.httpRequest({ url, method, headers, body, json: true, returnFullResponse: true, ignoreHttpStatusErrors: true });\n    const status = r.statusCode || r.status || 200;\n    const data = (r.body !== undefined) ? r.body : r;\n    return { ok: status >= 200 && status < 300, status, json: async () => data, text: async () => (typeof data === 'string' ? data : JSON.stringify(data || {})) };\n  } catch (e) {\n    const status = e.statusCode || e.status || 500;\n    const msg = (e.message || '').slice(0, 500);\n    return { ok: false, status, json: async () => ({ error: msg }), text: async () => msg };\n  }\n};\n\n// PR6 #2 — Self-Correction (Guia v3 §2.4)\n// Apos o Gerador montar a minuta, esta etapa pede ao Claude para revisar\n// TODAS as citacoes juridicas (leis, sumulas, acordaos, jurisprudencia) e\n// classificar cada uma como `verificada` ou `incerta`. Permite ao advogado\n// no frontend ver avisos antes de protocolar a peca.\n//\n// Custo: ~1 chamada Claude extra (~1500 tokens out, T=0.0). Vale a pena\n// porque alucinacoes em contexto juridico sao deal-breaker.\n\nconst envelope = $input.first().json;\nif (envelope.status !== 'ok' || !envelope.minuta) {\n  // Pass-through se o pipeline ja chegou aqui em estado de erro/fallback.\n  return [{ json: envelope }];\n}\n\nconst readEnv = (key, fb = '') => {\n  try {\n    if (typeof $vars !== 'undefined' && $vars && $vars[key]) return String($vars[key]).trim();\n    if (typeof $env !== 'undefined' && $env && $env[key]) return String($env[key]).trim();\n  } catch (_) {}\n  return __PROC[key] || fb;\n};\n\nconst stripFences = s => {\n  const cleaned = String(s || '').trim().replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/i, '').trim();\n  const first = cleaned.indexOf('{');\n  const last = cleaned.lastIndexOf('}');\n  if (first === -1 || last === -1 || last < first) return cleaned;\n  return cleaned.slice(first, last + 1);\n};\n\nconst ANTHROPIC_KEY = readEnv('ANTHROPIC_API_KEY') || readEnv('CLAUDE_API_KEY');\nconst CLAUDE_MODEL = readEnv('CLAUDE_VERIFICACAO_MODEL') || readEnv('CLAUDE_MODEL') || 'claude-sonnet-4-6';\nconst BASE_URL = (readEnv('ANTHROPIC_BASE_URL') || 'https://api.anthropic.com').replace(/\\/$/, '');\nconst API_VERSION = readEnv('ANTHROPIC_VERSION') || '2023-06-01';\nconst TIMEOUT_MS = 60000;\n\n// Texto da minuta para o Claude inspecionar — concatena as secoes que\n// tipicamente carregam citacoes juridicas.\nconst m = envelope.minuta;\nconst textoMinuta = [\n  m.tese_central, m.preliminares, m.merito,\n  m.fundamentos, m.pedidos, m.observacoes,\n].filter(Boolean).join('\\n\\n');\n\nconst SYSTEM_VERIFICACAO = `Voce eh um revisor juridico criterioso que verifica citacoes em\nminutas de contestacao brasileiras. Sua unica funcao eh listar TODAS as\ncitacoes juridicas presentes (leis, artigos, sumulas, acordaos, decisoes\nde tribunais, doutrina, jurisprudencia) e classificar cada uma quanto a\nsua confianca de que existem e sao aplicaveis ao contexto.\n\nRetorne SOMENTE JSON valido (sem markdown, sem codeblock):\n{\n  \"citacoes\": [\n    {\"texto\": \"string EXATA como aparece na minuta\", \"tipo\": \"lei|sumula|acordao|jurisprudencia|doutrina\", \"classificacao\": \"verificada|incerta\", \"motivo\": \"string curto explicando — obrigatorio se incerta\"}\n  ]\n}\n\nREGRAS:\n- \"verificada\": alta confianca de que a citacao existe E foi corretamente atribuida.\n  Ex: \"art. 7, XVI, CF/88\", \"CLT, art. 73\", \"art. 818 da CLT\", \"art. 373, II, CPC\".\n- \"incerta\": qualquer duvida — numero de acordao especifico, sumula com numeracao\n  duvidosa, jurisprudencia atribuida sem fonte clara, doutrina paragrafrada.\n  Sempre marque como incerta acordaos com numero (ex: \"STJ, REsp 1.234.567/SP\")\n  porque numeros especificos sao a fonte mais comum de alucinacao.\n- Se nao houver citacoes na minuta, retorne {\"citacoes\": []}.\n- \"texto\" deve ser um snippet curto (max 200 chars) do que aparece na minuta.`;\n\nconst USER_VERIFICACAO = `MINUTA A REVISAR:\n\n${textoMinuta}`;\n\nlet resultado = { citacoes: [] };\nlet provider = 'fallback';\nlet apiError = null;\n\nif (ANTHROPIC_KEY) {\n  try {\n    const resp = await __FETCH(`${BASE_URL}/v1/messages`, {\n      method: 'POST',\n      headers: {\n        'x-api-key': ANTHROPIC_KEY,\n        'anthropic-version': API_VERSION,\n        'content-type': 'application/json',\n        'anthropic-beta': 'prompt-caching-2024-07-31',\n      },\n      body: {\n        model: CLAUDE_MODEL,\n        max_tokens: 1500,\n        temperature: 0,\n        system: [{ type: 'text', text: SYSTEM_VERIFICACAO, cache_control: { type: 'ephemeral' } }],\n        messages: [{ role: 'user', content: USER_VERIFICACAO }],\n      },\n    });\n\n    if (resp.ok) {\n      const payload = await resp.json();\n      const raw = (payload.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();\n      if (raw) {\n        try {\n          resultado = JSON.parse(stripFences(raw));\n          provider = 'claude';\n        } catch (e) {\n          apiError = `parse_error: ${e.message}`;\n        }\n      } else {\n        apiError = 'resposta_vazia';\n      }\n    } else {\n      apiError = `http_${resp.status}`;\n    }\n  } catch (e) {\n    apiError = e.message || 'erro_desconhecido';\n  }\n} else {\n  apiError = 'sem_chave_anthropic';\n}\n\n// Sanitiza estrutura de saida.\nconst citacoes = Array.isArray(resultado.citacoes) ? resultado.citacoes : [];\nconst verificadas = [];\nconst incertas = [];\n\nfor (const c of citacoes) {\n  if (!c || typeof c !== 'object') continue;\n  const item = {\n    texto: String(c.texto || '').slice(0, 200),\n    tipo: ['lei', 'sumula', 'acordao', 'jurisprudencia', 'doutrina'].includes(String(c.tipo))\n      ? String(c.tipo) : 'desconhecido',\n    motivo: String(c.motivo || '').slice(0, 300),\n  };\n  if (c.classificacao === 'incerta') {\n    incertas.push(item);\n  } else if (c.classificacao === 'verificada') {\n    delete item.motivo; // nao precisa motivo para verificadas\n    verificadas.push(item);\n  }\n}\n\nreturn [{\n  json: {\n    ...envelope,\n    citacoes_verificadas: verificadas,\n    citacoes_incertas: incertas,\n    self_correction: { provider, model: CLAUDE_MODEL, api_error: apiError },\n  },\n}];\n"
+      }
+    },
+    {
       "id": "node-responder-peticao",
       "name": "Responder",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        1340,
+        1500,
         300
       ],
       "parameters": {
@@ -143,6 +157,17 @@
       ]
     },
     "Claude Gerador de Contestacao": {
+      "main": [
+        [
+          {
+            "node": "Self-Correction Citacoes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Self-Correction Citacoes": {
       "main": [
         [
           {

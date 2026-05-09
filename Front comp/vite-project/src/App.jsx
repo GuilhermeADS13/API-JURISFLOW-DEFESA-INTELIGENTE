@@ -1238,7 +1238,15 @@ export default function App() {
 
       const riscos = Array.isArray(minuta.riscos) ? minuta.riscos : [];
       const defesasConsultadas = backendData?.defesas_anteriores?.consultadas ?? 0;
-      setIaResult({ engine, riscos, arquivoB64, arquivoNome, defesasConsultadas });
+      // PR6 #2 — Self-Correction: avisos de citacoes incertas para o advogado revisar.
+      const citacoesIncertas = Array.isArray(backendData?.citacoes_incertas)
+        ? backendData.citacoes_incertas : [];
+      const citacoesVerificadas = Array.isArray(backendData?.citacoes_verificadas)
+        ? backendData.citacoes_verificadas : [];
+      setIaResult({
+        engine, riscos, arquivoB64, arquivoNome, defesasConsultadas,
+        citacoesIncertas, citacoesVerificadas,
+      });
 
       if (typeof backendData?.contestacao_id !== "undefined") {
         setLastCaseId(String(backendData.contestacao_id));
@@ -1333,6 +1341,8 @@ export default function App() {
         arquivoB64,
         arquivoNome,
         defesasConsultadas: 0,
+        citacoesIncertas: Array.isArray(data?.citacoes_incertas) ? data.citacoes_incertas : [],
+        citacoesVerificadas: Array.isArray(data?.citacoes_verificadas) ? data.citacoes_verificadas : [],
       });
       setLastCaseId(String(data?.contestacao_id || revisaoData.contestacao_id));
 
@@ -1829,6 +1839,35 @@ export default function App() {
                 ))}
               </ul>
             </div>
+          )}
+          {iaResult?.citacoesIncertas?.length > 0 && (
+            <div className="mt-3 p-2 border border-warning rounded bg-warning bg-opacity-10">
+              <small className="text-warning fw-semibold d-block mb-1">
+                ⚠ Citacoes a revisar antes de protocolar (
+                {iaResult.citacoesIncertas.length})
+              </small>
+              <ul className="mb-0" style={{ fontSize: "0.82rem" }}>
+                {iaResult.citacoesIncertas.map((c, i) => (
+                  <li key={i} className="mb-1">
+                    <span className="badge bg-warning text-dark me-1">
+                      {c.tipo || "incerta"}
+                    </span>
+                    <strong>{c.texto}</strong>
+                    {c.motivo && (
+                      <div className="text-muted" style={{ fontSize: "0.78rem" }}>
+                        {c.motivo}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {iaResult?.citacoesVerificadas?.length > 0 && (
+            <p className="mt-2 mb-0 text-success" style={{ fontSize: "0.82rem" }}>
+              ✓ {iaResult.citacoesVerificadas.length} citacao(oes) verificada(s) pelo
+              revisor IA.
+            </p>
           )}
           <p className="mt-3 mb-0 text-muted" style={{ fontSize: "0.9rem" }}>
             O texto completo esta disponivel no dashboard para revisao e exportacao.
