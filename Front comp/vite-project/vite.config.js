@@ -7,14 +7,7 @@ export default defineConfig({
   plugins: [react()],
   test: {
     globals: true,
-    environment: 'node',
-    // Arquivos que dependem de DOM (FileReader, localStorage real) usam happy-dom.
-    environmentMatchGlobs: [
-      ['src/utils/files.test.js', 'happy-dom'],
-      ['src/utils/storage.test.js', 'happy-dom'],
-      ['src/components/**/*.test.{js,jsx}', 'happy-dom'],
-      ['src/lib/**/*.test.{js,jsx}', 'happy-dom'],
-    ],
+    environment: 'happy-dom',
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
