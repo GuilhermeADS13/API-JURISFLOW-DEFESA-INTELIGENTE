@@ -18,3 +18,8 @@ Front comp/vite-project/dist/
 # Runtime logs
 *.log
 Front comp/vite-project/coverage/
+
+# Coverage artifacts (backend)
+Backend/.coverage
+Backend/coverage.xml
+Backend/coverage_html/
