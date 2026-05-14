@@ -278,11 +278,34 @@ def init_db() -> None:
                     "ALTER TABLE contestacoes ADD COLUMN IF NOT EXISTS minuta_json_editada JSONB"
                 )
 
-                # PR6 #4 - RAG Semantico: pgvector + coluna de embedding 1024 dims
+                # PR6 #4 - RAG Semantico: pgvector + coluna de embedding 384 dims
+                # 384 dims = paraphrase-multilingual-MiniLM-L12-v2 (sentence-transformers, local).
                 # Supabase ja tem pgvector disponivel — a extensao e no-op se ja existir.
                 cursor.execute("CREATE EXTENSION IF NOT EXISTS vector")
                 cursor.execute(
-                    "ALTER TABLE contestacoes ADD COLUMN IF NOT EXISTS fatos_embedding vector(1024)"
+                    "ALTER TABLE contestacoes ADD COLUMN IF NOT EXISTS fatos_embedding vector(384)"
+                )
+                # Migracao defensiva: se a coluna existir com dimensao antiga (1024 dos
+                # providers pagos), troca para 384. Drop do indice e necessario antes
+                # do ALTER COLUMN TYPE em pgvector.
+                cursor.execute(
+                    """
+                    DO $$
+                    DECLARE
+                        atypmod integer;
+                    BEGIN
+                        SELECT atttypmod INTO atypmod
+                        FROM pg_attribute
+                        WHERE attrelid = 'contestacoes'::regclass
+                          AND attname = 'fatos_embedding';
+                        IF atypmod IS NOT NULL AND atypmod <> 384 THEN
+                            DROP INDEX IF EXISTS idx_contestacoes_embedding_hnsw;
+                            ALTER TABLE contestacoes
+                              ALTER COLUMN fatos_embedding TYPE vector(384)
+                              USING NULL;
+                        END IF;
+                    END $$;
+                    """
                 )
                 # HNSW e o indice recomendado pelo pgvector para busca aproximada por coseno.
                 cursor.execute(
@@ -964,7 +987,7 @@ def salvar_minuta_editada(
 
 
 def salvar_embedding(contestacao_id: int, embedding: list[float]) -> None:
-    """Persiste o embedding semantico de 1024 dims para uma contestacao.
+    """Persiste o embedding semantico (384 dims, sentence-transformers) para uma contestacao.
 
     Chamado em background (fire-and-forget) apos save_contestacao para nao
     adicionar latencia ao retorno da rota principal.

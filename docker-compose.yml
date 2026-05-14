@@ -69,6 +69,16 @@ services:
       - OCR_DPI=${OCR_DPI:-300}
       - OCR_LANG=${OCR_LANG:-por}
 
+      # PR6 #4 — RAG Semantico (sentence-transformers local)
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-local}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
+      - HF_HOME=/app/hf_cache
+      - TRANSFORMERS_OFFLINE=${TRANSFORMERS_OFFLINE:-0}
+
+    volumes:
+      # Cache dos pesos do modelo HuggingFace (~120MB) entre rebuilds.
+      - hf_cache:/app/hf_cache
+
     depends_on:
       n8n:
         condition: service_healthy
@@ -140,3 +150,5 @@ services:
 volumes:
   n8n_data:
     name: autojuri_n8n_data
+  hf_cache:
+    name: autojuri_hf_cache

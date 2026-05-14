@@ -10,7 +10,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
+# Pre-instala PyTorch CPU-only (~250MB em vez de ~2GB com CUDA), evitando estouro
+# de RAM em hosts pequenos (Docker Desktop default = 2GB). sentence-transformers
+# nao tentara reinstalar torch porque a constraint ja sera satisfeita.
 RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir torch==2.5.1+cpu \
+       --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -r requirements.txt
 
 # ── Imagem final (menor) ──────────────────────────────────────────────────────
@@ -36,12 +41,20 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copia codigo da aplicacao (sem .venv, __pycache__, .env local)
 COPY . .
 
+# Cria diretorio do cache HuggingFace. O modelo (~120MB) sera baixado na
+# primeira request e persistido no volume hf_cache (definido no compose).
+# NAO pre-baixamos no build para evitar:
+#   1) sensibilidade a flutuacoes de rede durante CI
+#   2) duplicacao com o volume nomeado em runtime
+ENV HF_HOME=/app/hf_cache
+RUN mkdir -p /app/hf_cache
+
 # Porta padrao do uvicorn
 EXPOSE 8000
 
 # Usuario nao-root para reducao de superficie de ataque
 RUN adduser --disabled-password --gecos "" appuser \
-    && chown -R appuser:appuser /app
+    && chown -R appuser:appuser /app /app/hf_cache
 USER appuser
 
 # Healthcheck interno — Railway e outros orquestradores usam isso

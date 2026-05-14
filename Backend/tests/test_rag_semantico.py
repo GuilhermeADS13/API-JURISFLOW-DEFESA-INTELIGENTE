@@ -1,7 +1,10 @@
 """Testes do RAG Semantico (PR6 #4 - Guia v3 §2.3).
 
+Default agora e provider 'local' (sentence-transformers, 384 dims).
+Providers pagos (cohere/openai) permanecem testados como caminhos opcionais.
+
 Cobre:
-- embedding_service: gerar_embedding / gerar_embedding_query com mocks
+- embedding_service: provider local + cohere/openai com mocks
 - database: salvar_embedding / buscar_defesas_semanticas com DB mockado
 - routes/rag: endpoint POST /api/rag/defesas-similares
 - contestacao_peticao: _disparar_embedding (fire-and-forget sem bloquear)
@@ -121,6 +124,70 @@ class TestEmbeddingService:
         mock_fn.assert_called_once_with("query teste")
         assert resultado == emb
 
+    # ── Provider 'local' (sentence-transformers, default) ────────────────────
+
+    def test_default_provider_e_local(self, monkeypatch):
+        monkeypatch.delenv("EMBEDDING_PROVIDER", raising=False)
+        from App.services import embedding_service
+        assert embedding_service._provider() == "local"
+
+    def test_local_provider_retorna_none_sem_lib(self, monkeypatch):
+        monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
+        from App.services import embedding_service
+
+        # Reseta cache do modelo
+        embedding_service._LOCAL_MODEL = None
+        with patch("App.services.embedding_service._carregar_modelo_local", return_value=None):
+            assert embedding_service.gerar_embedding("texto") is None
+
+    def test_local_provider_sucesso_com_mock(self, monkeypatch):
+        import numpy as np
+        monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
+        from App.services import embedding_service
+
+        fake_model = MagicMock()
+        # Vetor normalizado fake de 384 dims
+        fake_vec = np.array([0.05] * 384, dtype=np.float32)
+        fake_model.encode.return_value = fake_vec
+
+        embedding_service._LOCAL_MODEL = fake_model
+        resultado = embedding_service.gerar_embedding("texto juridico")
+
+        assert resultado is not None
+        assert len(resultado) == 384
+        assert all(isinstance(v, float) for v in resultado)
+        # Verifica que pediu normalizacao
+        fake_model.encode.assert_called_once()
+        assert fake_model.encode.call_args.kwargs.get("normalize_embeddings") is True
+
+    def test_local_provider_dim_incorreta_retorna_none(self, monkeypatch):
+        import numpy as np
+        monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
+        from App.services import embedding_service
+
+        fake_model = MagicMock()
+        # Vetor com dim errada (256 em vez de 384)
+        fake_model.encode.return_value = np.array([0.1] * 256, dtype=np.float32)
+
+        embedding_service._LOCAL_MODEL = fake_model
+        assert embedding_service.gerar_embedding("texto") is None
+
+    def test_local_provider_query_e_documento_simetrico(self, monkeypatch):
+        """Provider local nao distingue input_type — query e doc usam o mesmo modelo."""
+        import numpy as np
+        monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
+        from App.services import embedding_service
+
+        fake_vec = np.array([0.2] * 384, dtype=np.float32)
+        fake_model = MagicMock()
+        fake_model.encode.return_value = fake_vec
+        embedding_service._LOCAL_MODEL = fake_model
+
+        doc = embedding_service.gerar_embedding("documento longo")
+        qry = embedding_service.gerar_embedding_query("query curta")
+
+        assert doc == qry  # mesmo vetor mockado, simetria de provider
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # database: salvar_embedding / buscar_defesas_semanticas
@@ -149,7 +216,7 @@ class TestDatabaseEmbedding:
             mock_gc.return_value.__enter__ = lambda s: mock_conn
             mock_gc.return_value.__exit__ = MagicMock(return_value=False)
 
-            db.salvar_embedding(42, [0.5] * 1024)
+            db.salvar_embedding(42, [0.5] * 384)
 
         sql, params = mock_cur.execute.call_args.args
         assert "UPDATE contestacoes" in sql
@@ -166,7 +233,7 @@ class TestDatabaseEmbedding:
             mock_gc.return_value.__exit__ = MagicMock(return_value=False)
 
             resultado = db.buscar_defesas_semanticas(
-                embedding=[0.1] * 1024,
+                embedding=[0.1] * 384,
                 tipo_acao="Trabalhista",
                 excluir_numero="0001",
                 limit=5,
@@ -197,7 +264,7 @@ class TestDatabaseEmbedding:
             mock_gc.return_value.__exit__ = MagicMock(return_value=False)
 
             resultado = db.buscar_defesas_semanticas(
-                embedding=[0.1] * 1024,
+                embedding=[0.1] * 384,
                 tipo_acao="Trabalhista",
                 excluir_numero="0001",
             )
@@ -271,7 +338,7 @@ class TestRagRoute:
     def test_retorna_sem_resultados_quando_db_vazio(self):
         from App.routes import rag as rag_route
 
-        emb = [0.1] * 1024
+        emb = [0.1] * 384
         with patch("App.routes.rag.gerar_embedding_query", return_value=emb), \
              patch("App.routes.rag.buscar_defesas_semanticas", return_value=[]):
             resp = self._run(rag_route.buscar_defesas_similares(
@@ -286,7 +353,7 @@ class TestRagRoute:
     def test_retorna_top3_rerankeados(self):
         from App.routes import rag as rag_route
 
-        emb = [0.1] * 1024
+        emb = [0.1] * 384
 
         def _make_caso(n, sim, fb):
             return {
@@ -340,7 +407,7 @@ class TestRagRoute:
     def test_erro_na_busca_retorna_status_erro(self):
         from App.routes import rag as rag_route
 
-        emb = [0.1] * 1024
+        emb = [0.1] * 384
         with patch("App.routes.rag.gerar_embedding_query", return_value=emb), \
              patch("App.routes.rag.buscar_defesas_semanticas", side_effect=RuntimeError("pgvector down")):
             resp = self._run(rag_route.buscar_defesas_similares(
@@ -396,7 +463,7 @@ class TestDispararEmbedding:
     def test_background_chama_salvar_quando_embedding_ok(self):
         from App.routes.contestacao_peticao import _salvar_embedding_background
 
-        emb = [0.1] * 1024
+        emb = [0.1] * 384
         with patch("App.services.embedding_service.gerar_embedding", return_value=emb), \
              patch("App.routes.contestacao_peticao.salvar_embedding") as mock_salvar:
             _salvar_embedding_background(42, "texto")

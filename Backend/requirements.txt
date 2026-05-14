@@ -15,10 +15,13 @@ docxtpl==0.16.8
 pytesseract==0.3.13
 pdf2image==1.17.0
 Pillow==11.0.0
-# PR6 #4 - RAG Semantico (Guia v3 §2.3) — instale UM dos providers abaixo:
-# cohere>=5,<6    (recomendado — embed-multilingual-v3.0, melhor PT-BR)
-# openai>=1       (alternativa — text-embedding-3-small com dimensions=1024)
-# Ambos sao OPCIONAIS: sem chave configurada o sistema usa TF-IDF como fallback.
+# PR6 #4 - RAG Semantico (Guia v3 §2.3) - provider 'local' por padrao
+# sentence-transformers usa o modelo MiniLM-L12 (118MB, 384 dims).
+# Roda no proprio container, sem custo, sem chamada externa.
+sentence-transformers>=3,<4
+# Providers pagos alternativos (opcionais, exigem schema vector(1024)):
+# cohere>=5,<6    (embed-multilingual-v3.0)
+# openai>=1       (text-embedding-3-small com dimensions=1024)
 
 # Transitivas pinadas para reproducibilidade do build
 annotated-types==0.7.0
