@@ -10,6 +10,11 @@
 #   este repositorio. Railway detecta o docker-compose automaticamente.
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Trava o nome do projeto Docker para nao depender do nome do diretorio.
+# Necessario para preservar o owner do volume autojuri_n8n_data, que foi
+# criado quando o repo se chamava API-DE-AUTOMA-AO-DE-CONTESTACAO/.
+name: api-de-automa-ao-de-contestacao
+
 services:
 
   # ── Backend FastAPI ──────────────────────────────────────────────────────
