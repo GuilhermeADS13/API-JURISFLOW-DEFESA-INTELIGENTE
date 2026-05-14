@@ -7,7 +7,7 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
-OUT = r"c:\Users\lakil\Downloads\FRONTEND AUTOJURI\API-DE-AUTOMA-AO-DE-CONTESTACAO\docs\JurisFlow_Custos.xlsx"
+OUT = r"c:\Users\lakil\Downloads\PROJETO API-CONTESTACAO\API-CONTESTACAO\docs\JurisFlow_Custos.xlsx"
 
 AZUL_ESC   = "1E3A5F"
 AZUL_MED   = "2E6DA4"

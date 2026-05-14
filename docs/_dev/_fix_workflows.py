@@ -19,7 +19,7 @@ import json
 import re
 from pathlib import Path
 
-DOCS = Path(r"c:\Users\lakil\Downloads\FRONTEND AUTOJURI\API-DE-AUTOMA-AO-DE-CONTESTACAO\docs")
+DOCS = Path(r"c:\Users\lakil\Downloads\PROJETO API-CONTESTACAO\API-CONTESTACAO\docs")
 
 ARQUIVOS = [
     "n8n_workflow_contestar_por_peticao.json",

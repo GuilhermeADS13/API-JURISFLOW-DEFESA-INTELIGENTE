@@ -29,7 +29,7 @@ Sistema web fullstack para automacao de contestacoes juridicas. O usuario preenc
 ## Estrutura do Projeto
 
 ```
-API-DE-AUTOMA-AO-DE-CONTESTACAO/
+API-CONTESTACAO/
 ├── Backend/
 │   ├── main.py                    # Ponto de entrada FastAPI
 │   ├── App/

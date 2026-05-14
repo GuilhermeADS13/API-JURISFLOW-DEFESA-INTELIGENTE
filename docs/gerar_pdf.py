@@ -15,7 +15,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 pdfmetrics.registerFont(TTFont("Arial",      "C:/Windows/Fonts/arial.ttf"))
 pdfmetrics.registerFont(TTFont("Arial-Bold", "C:/Windows/Fonts/arialbd.ttf"))
 
-OUTPUT = r"c:\Users\lakil\Downloads\FRONTEND AUTOJURI\API-DE-AUTOMA-AO-DE-CONTESTACAO\docs\JurisFlow_IA.pdf"
+OUTPUT = r"c:\Users\lakil\Downloads\PROJETO API-CONTESTACAO\API-CONTESTACAO\docs\JurisFlow_IA.pdf"
 
 AZUL_ESCURO   = HexColor("#0D1F3C")
 AZUL          = HexColor("#1B4F8A")
