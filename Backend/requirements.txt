@@ -15,6 +15,10 @@ docxtpl==0.16.8
 pytesseract==0.3.13
 pdf2image==1.17.0
 Pillow==11.0.0
+# PR6 #4 - RAG Semantico (Guia v3 §2.3) — instale UM dos providers abaixo:
+# cohere>=5,<6    (recomendado — embed-multilingual-v3.0, melhor PT-BR)
+# openai>=1       (alternativa — text-embedding-3-small com dimensions=1024)
+# Ambos sao OPCIONAIS: sem chave configurada o sistema usa TF-IDF como fallback.
 
 # Transitivas pinadas para reproducibilidade do build
 annotated-types==0.7.0

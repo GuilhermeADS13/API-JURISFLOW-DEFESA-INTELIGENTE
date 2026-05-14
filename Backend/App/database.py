@@ -278,6 +278,20 @@ def init_db() -> None:
                     "ALTER TABLE contestacoes ADD COLUMN IF NOT EXISTS minuta_json_editada JSONB"
                 )
 
+                # PR6 #4 - RAG Semantico: pgvector + coluna de embedding 1024 dims
+                # Supabase ja tem pgvector disponivel — a extensao e no-op se ja existir.
+                cursor.execute("CREATE EXTENSION IF NOT EXISTS vector")
+                cursor.execute(
+                    "ALTER TABLE contestacoes ADD COLUMN IF NOT EXISTS fatos_embedding vector(1024)"
+                )
+                # HNSW e o indice recomendado pelo pgvector para busca aproximada por coseno.
+                cursor.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_contestacoes_embedding_hnsw
+                    ON contestacoes USING hnsw (fatos_embedding vector_cosine_ops)
+                    """
+                )
+
                 cursor.execute(
                     "CREATE INDEX IF NOT EXISTS idx_usuarios_sessoes_criado_em ON usuarios_sessoes (criado_em)"
                 )
@@ -947,6 +961,93 @@ def salvar_minuta_editada(
         connection.commit()
 
     return updated > 0
+
+
+def salvar_embedding(contestacao_id: int, embedding: list[float]) -> None:
+    """Persiste o embedding semantico de 1024 dims para uma contestacao.
+
+    Chamado em background (fire-and-forget) apos save_contestacao para nao
+    adicionar latencia ao retorno da rota principal.
+    """
+    _ensure_db_initialized()
+    vec_str = "[" + ",".join(f"{v:.10f}" for v in embedding) + "]"
+    with _get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE contestacoes SET fatos_embedding = %s::vector WHERE id = %s",
+                (vec_str, contestacao_id),
+            )
+        connection.commit()
+
+
+def buscar_defesas_semanticas(
+    embedding: list[float],
+    tipo_acao: str,
+    excluir_numero: str,
+    limit: int = 10,
+) -> list[dict[str, Any]]:
+    """Busca contestacoes anteriores similares via distancia coseno (pgvector <=>).
+
+    Retorna lista de dicts com metadados e score de similaridade [0, 1].
+    So considera contestacoes com status='ok' e fatos_embedding preenchido.
+    """
+    _ensure_db_initialized()
+    vec_str = "[" + ",".join(f"{v:.10f}" for v in embedding) + "]"
+    safe_limit = max(1, min(int(limit), 20))
+
+    with _get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    numero_processo,
+                    tipo_acao,
+                    fatos,
+                    pedido_autor,
+                    n8n_resposta,
+                    feedback_util,
+                    criado_em,
+                    1 - (fatos_embedding <=> %s::vector) AS similarity
+                FROM contestacoes
+                WHERE status = 'ok'
+                  AND tipo_acao = %s
+                  AND numero_processo != %s
+                  AND fatos_embedding IS NOT NULL
+                ORDER BY fatos_embedding <=> %s::vector ASC
+                LIMIT %s
+                """,
+                (vec_str, tipo_acao, excluir_numero, vec_str, safe_limit),
+            )
+            rows = cursor.fetchall()
+
+    result: list[dict[str, Any]] = []
+    for row in rows:
+        n8n_resp = row[4]
+        minuta: dict = {}
+        if isinstance(n8n_resp, dict):
+            minuta = n8n_resp.get("minuta") or {}
+
+        result.append(
+            {
+                "numero_processo": str(row[0] or ""),
+                "tipo_acao": str(row[1] or ""),
+                "fatos": str(row[2] or ""),
+                "pedido_autor": str(row[3] or ""),
+                "feedback_util": row[5],
+                "criado_em": (
+                    row[6].isoformat()
+                    if hasattr(row[6], "isoformat")
+                    else str(row[6] or "")
+                ),
+                "similarity": float(row[7] or 0.0),
+                "tese_central": str(minuta.get("tese_central") or ""),
+                "resumo_estrategico": str(minuta.get("resumo_estrategico") or ""),
+                "fundamentos_curtos": str(minuta.get("fundamentos") or "")[:1500],
+                "riscos": list((minuta.get("riscos") or [])[:3]),
+            }
+        )
+
+    return result
 
 
 def salvar_exemplar(

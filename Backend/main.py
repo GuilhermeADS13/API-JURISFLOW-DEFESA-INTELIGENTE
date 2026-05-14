@@ -42,7 +42,7 @@ from slowapi.errors import RateLimitExceeded
 
 from App.database import init_db, ping_database
 from App.limiter import limiter
-from App.routes import contestacao, contestacao_peticao, edicao, feedback, suporte, usuario
+from App.routes import contestacao, contestacao_peticao, edicao, feedback, rag, suporte, usuario
 
 
 def parse_frontend_origins() -> list[str]:
@@ -92,6 +92,7 @@ app.include_router(edicao.router, prefix="/api", tags=["Edicao"])
 app.include_router(usuario.router, prefix="/api", tags=["Usuarios"])
 app.include_router(suporte.router, prefix="/api", tags=["Suporte"])
 app.include_router(feedback.router, prefix="/api", tags=["Feedback"])
+app.include_router(rag.router, prefix="/api", tags=["RAG Semantico"])
 
 
 @app.get("/")

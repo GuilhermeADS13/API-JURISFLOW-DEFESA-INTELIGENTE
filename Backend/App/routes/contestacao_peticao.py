@@ -26,12 +26,14 @@ quando combinado com Body(...).
 
 import base64
 import logging
+import threading
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Request, status
 
 from App.database import (
     atualizar_contestacao_pos_revisao,
     get_contestacao,
+    salvar_embedding,
     salvar_minuta_editada,
     save_contestacao,
 )
@@ -60,6 +62,39 @@ router = APIRouter()
 # Limiar de confianca abaixo do qual a contestacao exige revisao humana antes
 # de gerar o DOCX final (PR5 HiL — Guia Tecnico v3 secao 2.1).
 CONFIANCA_THRESHOLD = 0.7
+
+
+def _salvar_embedding_background(contestacao_id: int, texto: str) -> None:
+    """Gera e persiste embedding em thread daemon (PR6 #4 RAG Semantico).
+
+    Fire-and-forget: nao bloqueia a resposta da rota principal.
+    Se a geracao falhar (chave ausente, erro API), apenas loga e ignora.
+    """
+    from App.services.embedding_service import gerar_embedding  # import lazy
+
+    try:
+        emb = gerar_embedding(texto)
+        if emb:
+            salvar_embedding(contestacao_id, emb)
+    except Exception as err:
+        logger.warning(
+            "Falha ao salvar embedding contestacao_id=%s: %s",
+            contestacao_id,
+            err,
+        )
+
+
+def _disparar_embedding(contestacao_id: int, fatos: str, pedidos: str) -> None:
+    """Lanca thread daemon para gerar embedding sem bloquear a resposta."""
+    texto = f"{fatos} {pedidos}".strip()
+    if not texto:
+        return
+    threading.Thread(
+        target=_salvar_embedding_background,
+        args=(contestacao_id, texto),
+        daemon=True,
+        name=f"embedding-{contestacao_id}",
+    ).start()
 
 
 @router.post("/contestar-por-peticao")
@@ -244,6 +279,13 @@ async def contestar_por_peticao(
             detail="Falha ao persistir a contestacao gerada.",
         ) from error
 
+    # PR6 #4: gera e salva embedding em background (nao bloqueia resposta)
+    _disparar_embedding(
+        contestacao_id,
+        save_payload_base.get("fatos", ""),
+        save_payload_base.get("pedido_autor", ""),
+    )
+
     arquivo_editado_base64 = base64.b64encode(docx_bytes).decode("ascii")
     arquivo_editado_nome = _montar_nome_saida(dados_extraidos)
 
@@ -353,6 +395,13 @@ async def confirmar_extracao(
             contestacao_id,
             usuario["id"],
         )
+
+    # PR6 #4: atualiza embedding com dados corrigidos pelo humano
+    _disparar_embedding(
+        contestacao_id,
+        str(dados_corrigidos.get("fatos_resumo") or ""),
+        str(dados_corrigidos.get("pedido_autor") or ""),
+    )
 
     return {
         "status": "ok",
