@@ -5,7 +5,7 @@ Interface do sistema de automacao de contestacao.
 ## Rodar localmente
 
 ```bash
-cd "Front comp/vite-project"
+cd "Front end/vite-project"
 npm install
 npm run dev
 ```

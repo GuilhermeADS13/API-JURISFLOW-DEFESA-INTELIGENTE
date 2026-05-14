@@ -6,12 +6,12 @@ Este diretorio contem o frontend React + Vite do projeto.
 
 Use sempre:
 
-`Front comp/vite-project`
+`Front end/vite-project`
 
 ## Comandos
 
 ```bash
-cd "Front comp/vite-project"
+cd "Front end/vite-project"
 npm install
 npm run dev
 ```

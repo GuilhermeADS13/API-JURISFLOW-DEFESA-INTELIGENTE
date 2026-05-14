@@ -45,7 +45,7 @@ Resultado: **220 testes passando** em 27.91s — **71% de cobertura global** (2.
 | `services/suporte_email_service.py` | 71 | 57 | **20%** |
 | **TOTAL** | **2.051** | **593** | **71%** |
 
-### 1.2 Frontend (`Front comp/vite-project/src`)
+### 1.2 Frontend (`Front end/vite-project/src`)
 
 Comando: `npm run test:coverage`
 Resultado: **149 testes passando** em 8.34s — **84,10% statements / 91,79% branches / 95,65% funcs**.
@@ -131,8 +131,8 @@ Todos os arquivos retornam rank **A**, mas alguns merecem atenção pelo valor a
 
 - `Backend/App/database.py` — **978 LOC** (módulo monolítico: conexão, sessões, usuários, contestações, dashboard, exemplares).
 - `Backend/App/routes/contestacao_peticao.py` — **521 LOC** (acumula validação, upload, orquestração n8n e edição).
-- `Front comp/vite-project/src/App.jsx` — **1.912 LOC** com **47 chamadas `useState`** em um único componente raiz (god component).
-- `Front comp/vite-project/src/components/MainPanelSection.jsx` — **630 LOC**.
+- `Front end/vite-project/src/App.jsx` — **1.912 LOC** com **47 chamadas `useState`** em um único componente raiz (god component).
+- `Front end/vite-project/src/components/MainPanelSection.jsx` — **630 LOC**.
 
 ### 3.2 Densidade de comentários
 
@@ -187,9 +187,9 @@ python -m radon mi App -s             # índice de manutenibilidade
 python -m radon raw App -s            # LOC/SLOC/comentários
 
 # Frontend
-cd "Front comp/vite-project"
+cd "Front end/vite-project"
 npm install
 npm run test:coverage                 # vitest + v8
 ```
 
-Relatórios HTML gerados localmente: `Backend/coverage_html/index.html` e `Front comp/vite-project/coverage/index.html`.
+Relatórios HTML gerados localmente: `Backend/coverage_html/index.html` e `Front end/vite-project/coverage/index.html`.

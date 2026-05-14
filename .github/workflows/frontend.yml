@@ -13,7 +13,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: Front comp/vite-project
+        working-directory: Front end/vite-project
 
     steps:
       - name: Checkout do repositório
@@ -24,7 +24,7 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: "Front comp/vite-project/package-lock.json"
+          cache-dependency-path: "Front end/vite-project/package-lock.json"
 
       - name: Instalar dependências
         run: npm ci
@@ -42,5 +42,5 @@ jobs:
         uses: actions/upload-artifact@v4.6.2
         with:
           name: frontend-dist
-          path: Front comp/vite-project/dist
+          path: Front end/vite-project/dist
           retention-days: 7

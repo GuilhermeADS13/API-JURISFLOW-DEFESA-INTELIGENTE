@@ -7,8 +7,8 @@ __pycache__/
 .venv/
 
 # Frontend
-Front comp/vite-project/node_modules/
-Front comp/vite-project/dist/
+Front end/vite-project/node_modules/
+Front end/vite-project/dist/
 
 # OS / Editor
 .DS_Store
@@ -17,7 +17,7 @@ Front comp/vite-project/dist/
 
 # Runtime logs
 *.log
-Front comp/vite-project/coverage/
+Front end/vite-project/coverage/
 
 # Coverage artifacts (backend)
 Backend/.coverage

@@ -60,7 +60,7 @@ API-DE-AUTOMA-AO-DE-CONTESTACAO/
 │   ├── requirements.txt           # Dependencias de producao
 │   └── requirements-dev.txt       # Dependencias de desenvolvimento (pytest, httpx)
 │
-├── Front comp/vite-project/
+├── Front end/vite-project/
 │   ├── src/
 │   │   ├── App.jsx                # Componente raiz (auth, envio, dashboard)
 │   │   ├── config/
@@ -183,7 +183,7 @@ Configure tambem os arquivos de ambiente antes da primeira execucao:
 
 - Copie `.env.example` da raiz para `.env` e preencha as variaveis (chave Anthropic, credenciais Supabase, banco PostgreSQL).
 - Copie `Backend/.env.example` para `Backend/.env` quando for rodar o backend fora do Docker.
-- Copie `Front comp/vite-project/.env.example` para `.env` quando for usar Supabase Auth no frontend.
+- Copie `Front end/vite-project/.env.example` para `.env` quando for usar Supabase Auth no frontend.
 
 ### 1. Subir tudo de uma vez (Backend + n8n via Docker)
 
@@ -204,7 +204,7 @@ docker compose down
 ### 2. Frontend (Vite)
 
 ```bash
-cd "Front comp/vite-project"
+cd "Front end/vite-project"
 npm install
 npm run dev
 ```
@@ -248,7 +248,7 @@ curl http://localhost:5678/healthz       # n8n
 | `SUPABASE_URL` | URL do projeto Supabase |
 | `SUPABASE_PUBLISHABLE_KEY` | Chave publica do Supabase |
 
-### Frontend (`Front comp/vite-project/.env`)
+### Frontend (`Front end/vite-project/.env`)
 | Variavel | Descricao |
 |---|---|
 | `VITE_API_BASE_URL` | URL base da API (default: http://localhost:8000/api) |
@@ -259,7 +259,7 @@ curl http://localhost:5678/healthz       # n8n
 
 ### Frontend (Vitest)
 ```bash
-cd "Front comp/vite-project"
+cd "Front end/vite-project"
 npm test                # executa 121 testes
 npm run test:coverage   # executa com relatorio de cobertura
 ```
