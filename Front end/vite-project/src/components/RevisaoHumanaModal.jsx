@@ -30,6 +30,10 @@ export default function RevisaoHumanaModal({
   error,
 }) {
   const [form, setForm] = useState(() => dadosToFormState(dadosExtraidos));
+  // `touched` esta declarado mas atualmente nao e lido pela UI — guardado
+  // como hook para uso futuro (ex: avisar usuario que ha alteracao nao salva
+  // ao fechar o modal). Eslint disable enquanto isso.
+  // eslint-disable-next-line no-unused-vars
   const [touched, setTouched] = useState(false);
 
   // Re-sync form quando dadosExtraidos mudar (caso o usuario abra outro caso).

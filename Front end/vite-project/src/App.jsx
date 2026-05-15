@@ -1565,23 +1565,6 @@ export default function App() {
     }
   };
 
-  const buildDocumentText = () => {
-    const lines = [
-      "DEFESA - MINUTA GERADA PELO SISTEMA",
-      "",
-      `Processo: ${form.processo || "-"}`,
-      `Autor: ${form.autor || "-"}`,
-      `Reu: ${form.reu || "-"}`,
-      `Ramo do direito: ${form.tipoAcao || "-"}`,
-      `Pedido do autor: ${form.pedidoAutor || "-"}`,
-      `Arquivo base: ${uploadedFile ? uploadedFile.name : "-"}`,
-      "",
-      "EDICAO AO VIVO",
-      liveDraft.trim() || generatedDraftText,
-    ];
-    return lines.join("\n");
-  };
-
   const triggerBlobDownload = (blob, filename) => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -1692,7 +1675,7 @@ export default function App() {
             <p><strong>Ramo do direito:</strong> ${safeTipoAcao || "-"}</p>
           </div>
           <div class="corpo">${safeDraft}</div>
-          <script>setTimeout(function(){ window.print(); }, 400);<\/script>
+          <script>setTimeout(function(){ window.print(); }, 400);</script>
         </body>
       </html>`;
 

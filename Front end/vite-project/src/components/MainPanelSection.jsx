@@ -75,9 +75,8 @@ export default function MainPanelSection({
   const [dragging, setDragging] = useState(false);
   const [draggingPeticao, setDraggingPeticao] = useState(false);
   const [draggingModelo, setDraggingModelo] = useState(false);
-  // Feedback visual do botao "Copiar" — guarda timestamp do ultimo clique
-  // para mostrar "Copiado!" por 2s antes de voltar ao label original. PR6 P3.3.
-  const [copiedAt, setCopiedAt] = useState(0);
+  // Feedback visual do botao "Copiar": mostra "Copiado!" por 2s apos clique. PR6 P3.3.
+  const [justCopied, setJustCopied] = useState(false);
 
   const openPicker = () => {
     fileInputRef.current?.click();
@@ -664,16 +663,14 @@ export default function MainPanelSection({
                         if (!liveDraft) return;
                         try {
                           await navigator.clipboard.writeText(liveDraft);
-                          setCopiedAt(Date.now());
-                          // Reseta o feedback apos 2s — disparado via setTimeout
-                          // para garantir re-render (Date.now() puro nao dispara).
-                          setTimeout(() => setCopiedAt(0), 2000);
+                          setJustCopied(true);
+                          setTimeout(() => setJustCopied(false), 2000);
                         } catch {
                           // Fallback silencioso: browsers antigos sem clipboard API
                         }
                       }}
                     >
-                      {copiedAt && Date.now() - copiedAt < 2000 ? "Copiado!" : "Copiar texto"}
+                      {justCopied ? "Copiado!" : "Copiar texto"}
                     </Button>
                   </div>
 
