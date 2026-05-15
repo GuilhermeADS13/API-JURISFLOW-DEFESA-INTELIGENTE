@@ -20,7 +20,7 @@ import {
   patchMinutaUrl,
 } from "./config/api";
 import { getSupabaseClient, isSupabaseConfigured } from "./lib/supabaseClient";
-import { normalizeFileName, readFileAsBase64, validateFile } from "./utils/files";
+import { base64ToBlob, normalizeFileName, readFileAsBase64, validateFile } from "./utils/files";
 import { escapeHtml } from "./utils/html";
 import {
   clearSession,
@@ -1096,6 +1096,32 @@ export default function App() {
     }
   };
 
+  /**
+   * Dispara download automatico do DOCX quando a API devolve base64 + nome.
+   * Chamado em todos os caminhos de submit (manual, peticao, confirmacao HiL).
+   * Como roda dentro de um callback iniciado por clique do usuario, o browser
+   * trata como user-gesture e nao aciona popup blocker.
+   */
+  const autoDownloadDocx = (arquivoB64, arquivoNome) => {
+    if (!arquivoB64 || !arquivoNome) return;
+    try {
+      const mime = arquivoNome.toLowerCase().endsWith(".docx")
+        ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        : "application/octet-stream";
+      const blob = base64ToBlob(arquivoB64, mime);
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = arquivoNome;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("[autoDownloadDocx] falhou:", err);
+    }
+  };
+
   const handleSubmitPeticao = async () => {
     if (!authUser) {
       setFeedback({
@@ -1247,6 +1273,7 @@ export default function App() {
         engine, riscos, arquivoB64, arquivoNome, defesasConsultadas,
         citacoesIncertas, citacoesVerificadas,
       });
+      autoDownloadDocx(arquivoB64, arquivoNome);
 
       if (typeof backendData?.contestacao_id !== "undefined") {
         setLastCaseId(String(backendData.contestacao_id));
@@ -1344,6 +1371,7 @@ export default function App() {
         citacoesIncertas: Array.isArray(data?.citacoes_incertas) ? data.citacoes_incertas : [],
         citacoesVerificadas: Array.isArray(data?.citacoes_verificadas) ? data.citacoes_verificadas : [],
       });
+      autoDownloadDocx(arquivoB64, arquivoNome);
       setLastCaseId(String(data?.contestacao_id || revisaoData.contestacao_id));
 
       setShowRevisaoModal(false);
@@ -1485,6 +1513,7 @@ export default function App() {
       const arquivoNome = workflowData?.arquivo_editado_nome || "contestacao.txt";
       const defesasConsultadas = workflowData?.defesas_anteriores?.consultadas ?? 0;
       setIaResult({ engine, riscos, arquivoB64, arquivoNome, defesasConsultadas });
+      autoDownloadDocx(arquivoB64, arquivoNome);
 
       setLoading(false);
       setSubmitted(true);
@@ -1883,16 +1912,19 @@ export default function App() {
             <Button
               variant="outline-light"
               onClick={() => {
-                const bytes = Uint8Array.from(atob(iaResult.arquivoB64), c => c.charCodeAt(0));
-                const blob = new Blob([bytes], { type: "text/plain;charset=utf-8" });
+                const nome = iaResult.arquivoNome || "contestacao.docx";
+                const mime = nome.endsWith(".docx")
+                  ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  : "text/plain;charset=utf-8";
+                const blob = base64ToBlob(iaResult.arquivoB64, mime);
                 const link = document.createElement("a");
                 link.href = URL.createObjectURL(blob);
-                link.download = iaResult.arquivoNome || "contestacao.txt";
+                link.download = nome;
                 link.click();
                 URL.revokeObjectURL(link.href);
               }}
             >
-              Baixar minuta (.txt)
+              Baixar minuta
             </Button>
           )}
 

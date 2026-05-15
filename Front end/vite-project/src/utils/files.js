@@ -55,6 +55,21 @@ export function validateFile(file) {
 }
 
 /**
+ * Decodifica uma string base64 em um Blob.
+ * Usado para gerar download de arquivos binarios (DOCX/PDF) retornados pela
+ * API como base64 dentro de JSON.
+ */
+export function base64ToBlob(base64, mimeType = "application/octet-stream") {
+  if (!base64) return new Blob([], { type: mimeType });
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: mimeType });
+}
+
+/**
  * Converte File do navegador para base64 puro (sem prefixo data:).
  */
 export async function readFileAsBase64(file) {
