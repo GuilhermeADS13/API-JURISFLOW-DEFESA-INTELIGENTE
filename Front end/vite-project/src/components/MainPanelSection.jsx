@@ -12,6 +12,7 @@ import {
   Row,
 } from "react-bootstrap";
 import { CheckCircle, FileEarmarkText, Paperclip, Upload, XCircle } from "react-bootstrap-icons";
+import { IMaskInput } from "react-imask";
 import { agentRules, legalBranchGroups, subtiposAcao } from "../data/mockData";
 
 /**
@@ -406,16 +407,22 @@ export default function MainPanelSection({
                     <Col md={6}>
                       <Form.Group>
                         <Form.Label>Numero do processo</Form.Label>
-                        <Form.Control
+                        <IMaskInput
+                          mask="0000000-00.0000.0.00.0000"
                           name="processo"
                           value={form.processo}
-                          onChange={onChange}
+                          onAccept={(value) =>
+                            onChange({ target: { name: "processo", value } })
+                          }
                           placeholder="0001234-56.2026.8.00.0000"
-                          isInvalid={Boolean(formErrors.processo)}
+                          className={`form-control ${formErrors.processo ? "is-invalid" : ""}`}
+                          inputMode="numeric"
                         />
-                        <Form.Control.Feedback type="invalid">
-                          {formErrors.processo}
-                        </Form.Control.Feedback>
+                        {formErrors.processo && (
+                          <div className="invalid-feedback d-block">
+                            {formErrors.processo}
+                          </div>
+                        )}
                       </Form.Group>
                     </Col>
 
