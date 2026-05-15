@@ -2,12 +2,51 @@
  * Chave do rascunho local.
  * Mantem campos do formulario para recuperar trabalho nao enviado.
  *
- * v3 (Guia Tecnico v2): rascunho passa a guardar o modo de entrada
- * ('manual' | 'peticao'). Migramos v2 silenciosamente para v3 mantendo
- * modo='manual' (comportamento anterior).
+ * v3 (Guia Tecnico v2): rascunho guarda o modo de entrada ('manual'|'peticao').
+ * v4 (PR6): campos renomeados — cliente->autor, tese->pedidoAutor,
+ *           observacoes->fatos, e novo campo reu. Migracao silenciosa preserva
+ *           os valores do usuario sem forcar repreenchimento.
  */
 export const DRAFT_STORAGE_KEY = "jurisflow:draft:v3";
 const DRAFT_STORAGE_KEY_LEGACY_V2 = "jurisflow:draft:v2";
+
+/**
+ * Migra um objeto `form` com nomes antigos (cliente/tese/observacoes) para o
+ * shape novo (autor/pedidoAutor/fatos + reu). Idempotente: se ja estiver no
+ * shape novo, retorna sem alteracao. Valores ausentes viram string vazia para
+ * evitar undefined.trim() em handlers.
+ */
+export function migrateFormFields(form) {
+  if (!form || typeof form !== "object") return form;
+
+  const next = { ...form };
+
+  if (next.autor === undefined && typeof next.cliente === "string") {
+    next.autor = next.cliente;
+  }
+  if (next.pedidoAutor === undefined && typeof next.tese === "string") {
+    next.pedidoAutor = next.tese;
+  }
+  if (next.fatos === undefined && typeof next.observacoes === "string") {
+    next.fatos = next.observacoes;
+  }
+
+  // Remove os nomes antigos depois de copiar, para nao confundir o state.
+  delete next.cliente;
+  delete next.tese;
+  delete next.observacoes;
+
+  // Garante que todos os campos esperados existem (sem undefined).
+  next.processo = typeof next.processo === "string" ? next.processo : "";
+  next.autor = typeof next.autor === "string" ? next.autor : "";
+  next.reu = typeof next.reu === "string" ? next.reu : "";
+  next.tipoAcao = typeof next.tipoAcao === "string" ? next.tipoAcao : "";
+  next.subtipoAcao = typeof next.subtipoAcao === "string" ? next.subtipoAcao : "";
+  next.fatos = typeof next.fatos === "string" ? next.fatos : "";
+  next.pedidoAutor = typeof next.pedidoAutor === "string" ? next.pedidoAutor : "";
+
+  return next;
+}
 
 /**
  * Chave da sessao local (somente dados de perfil, sem token sensivel).
@@ -47,8 +86,9 @@ export function readDraftFromStorage() {
     if (!saved) return { form: null, info: "" };
 
     const parsed = JSON.parse(saved);
+    const migratedForm = parsed.form ? migrateFormFields(parsed.form) : null;
     return {
-      form: parsed.form || null,
+      form: migratedForm,
       info: parsed.savedAt ? `Rascunho recuperado: ${parsed.savedAt}` : "",
     };
   } catch {

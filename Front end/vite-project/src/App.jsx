@@ -181,10 +181,12 @@ export default function App() {
 
   const [form, setForm] = useState(() => ({
     processo: "",
-    cliente: "",
+    autor: "",
+    reu: "",
     tipoAcao: "",
-    tese: "",
-    observacoes: "",
+    subtipoAcao: "",
+    fatos: "",
+    pedidoAutor: "",
     ...(draftSeed.form || {}),
   }));
 
@@ -250,14 +252,14 @@ export default function App() {
   const dashboardRefreshIntervalMs = useMemo(getDashboardRefreshIntervalMs, []);
 
   const generatedPreviewParagraphs = useMemo(() => {
-    const cliente = form.cliente.trim() || "a parte requerida";
+    const autor = form.autor.trim() || "a parte autora";
     const tipoAcao = form.tipoAcao.trim() || "ramo juridico ainda nao definido";
-    const tese = form.tese.trim() || "a tese principal definida";
-    const observacoes = form.observacoes.trim();
+    const pedidoAutor = form.pedidoAutor.trim() || "os pedidos formulados";
+    const observacoes = form.fatos.trim();
 
     return [
-      `No ambito de ${tipoAcao.toLowerCase()}, ${cliente} apresenta defesa e destaca ausencia de pressupostos para procedencia do pedido inicial.`,
-      `O agente recomenda reforco argumentativo com base em ${tese.toLowerCase()}, mantendo linguagem juridica formal e estrutura definida pelo escritorio.`,
+      `No ambito de ${tipoAcao.toLowerCase()}, defesa apresentada em face dos pedidos de ${autor} e destaca ausencia de pressupostos para procedencia do pedido inicial.`,
+      `O agente recomenda reforco argumentativo com base em ${pedidoAutor.toLowerCase()}, mantendo linguagem juridica formal e estrutura definida pelo escritorio.`,
       observacoes
         ? `Observacoes relevantes para a equipe: ${observacoes}`
         : "O documento segue para revisao humana antes da exportacao final.",
@@ -804,10 +806,11 @@ export default function App() {
     if (form.processo.trim() && !isValidNumeroProcesso(form.processo)) {
       errors.processo = "Use o formato 0001234-56.2026.8.00.0000.";
     }
-    if (!form.cliente.trim()) errors.cliente = "Informe o cliente ou parte.";
+    if (!form.autor.trim()) errors.autor = "Informe o autor da acao.";
+    if (!form.reu.trim()) errors.reu = "Informe o reu (parte que voce representa).";
     if (!form.tipoAcao.trim()) errors.tipoAcao = "Selecione o ramo do direito.";
-    if (!form.tese.trim()) errors.tese = "Informe a tese principal.";
-    if (!form.observacoes.trim()) errors.observacoes = "Adicione orientacoes para o agente.";
+    if (!form.fatos.trim()) errors.fatos = "Resuma os fatos narrados pelo autor.";
+    if (!form.pedidoAutor.trim()) errors.pedidoAutor = "Informe os pedidos do autor.";
     if (!uploadedFile) errors.upload = "Anexe a peca base para continuar.";
 
     return errors;
@@ -1244,10 +1247,11 @@ export default function App() {
       setForm((prev) => ({
         ...prev,
         processo: dadosExtraidos.numero_processo || prev.processo,
-        cliente: dadosExtraidos.autor || prev.cliente,
+        autor: dadosExtraidos.autor || prev.autor,
+        reu: dadosExtraidos.reu || prev.reu,
         tipoAcao: dadosExtraidos.tipo_acao || prev.tipoAcao,
-        tese: minuta.tese_central || prev.tese,
-        observacoes: dadosExtraidos.fatos_resumo || prev.observacoes,
+        pedidoAutor: minuta.tese_central || prev.pedidoAutor,
+        fatos: dadosExtraidos.fatos_resumo || prev.fatos,
       }));
 
       // Coloca o texto da minuta no editor ao vivo.
@@ -1345,10 +1349,11 @@ export default function App() {
       setForm((prev) => ({
         ...prev,
         processo: dadosCorrigidos.numero_processo || prev.processo,
-        cliente: dadosCorrigidos.autor || prev.cliente,
+        autor: dadosCorrigidos.autor || prev.autor,
+        reu: dadosCorrigidos.reu || prev.reu,
         tipoAcao: dadosCorrigidos.tipo_acao || prev.tipoAcao,
-        tese: minuta.tese_central || prev.tese,
-        observacoes: dadosCorrigidos.fatos_resumo || prev.observacoes,
+        pedidoAutor: minuta.tese_central || prev.pedidoAutor,
+        fatos: dadosCorrigidos.fatos_resumo || prev.fatos,
       }));
 
       const partesMinuta = [
@@ -1450,11 +1455,11 @@ export default function App() {
       const arquivoConteudoBase64 = await readFileAsBase64(uploadedFile);
       const payload = {
         numero_processo: form.processo.trim(),
-        autor: form.cliente.trim(),
-        reu: "Nao informado",
+        autor: form.autor.trim(),
+        reu: form.reu.trim(),
         tipo_acao: form.tipoAcao.trim(),
-        fatos: form.observacoes.trim(),
-        pedido_autor: form.tese.trim(),
+        fatos: form.fatos.trim(),
+        pedido_autor: form.pedidoAutor.trim(),
         arquivo_base: uploadedFile?.name || "",
         arquivo_base_nome: uploadedFile?.name || "",
         arquivo_base_mime_type: uploadedFile?.type || "application/octet-stream",
@@ -1548,9 +1553,10 @@ export default function App() {
       "DEFESA - MINUTA GERADA PELO SISTEMA",
       "",
       `Processo: ${form.processo || "-"}`,
-      `Cliente/Parte: ${form.cliente || "-"}`,
+      `Autor: ${form.autor || "-"}`,
+      `Reu: ${form.reu || "-"}`,
       `Ramo do direito: ${form.tipoAcao || "-"}`,
-      `Tese principal: ${form.tese || "-"}`,
+      `Pedido do autor: ${form.pedidoAutor || "-"}`,
       `Arquivo base: ${uploadedFile ? uploadedFile.name : "-"}`,
       "",
       "EDICAO AO VIVO",
@@ -1582,7 +1588,8 @@ export default function App() {
 
     const baseName = normalizeFileName(form.processo || lastCaseId || "defesa");
     const safeProcesso = escapeHtml(form.processo || "");
-    const safeCliente = escapeHtml(form.cliente || "");
+    const safeAutor = escapeHtml(form.autor || "");
+    const safeReu = escapeHtml(form.reu || "");
     const safeTipoAcao = escapeHtml(form.tipoAcao || "");
     const safeDraft = escapeHtml(liveDraft.trim() || generatedDraftText).replace(/\n/g, "<br/>");
 
@@ -1604,7 +1611,8 @@ export default function App() {
           <h1>DEFESA - MINUTA GERADA PELO SISTEMA</h1>
           <div class="meta">
             <p><strong>Processo:</strong> ${safeProcesso || "-"}</p>
-            <p><strong>Cliente/Parte:</strong> ${safeCliente || "-"}</p>
+            <p><strong>Autor:</strong> ${safeAutor || "-"}</p>
+            <p><strong>Reu:</strong> ${safeReu || "-"}</p>
             <p><strong>Ramo do direito:</strong> ${safeTipoAcao || "-"}</p>
           </div>
           <div class="corpo">${safeDraft}</div>
@@ -1633,7 +1641,8 @@ export default function App() {
     }
 
     const safeProcesso = escapeHtml(form.processo || "");
-    const safeCliente = escapeHtml(form.cliente || "");
+    const safeAutor = escapeHtml(form.autor || "");
+    const safeReu = escapeHtml(form.reu || "");
     const safeTipoAcao = escapeHtml(form.tipoAcao || "");
     const safeDraft = escapeHtml(liveDraft.trim() || generatedDraftText).replace(/\n/g, "<br/>");
     const printable = `<!doctype html>
@@ -1661,7 +1670,8 @@ export default function App() {
           <h1>DEFESA - MINUTA GERADA PELO SISTEMA</h1>
           <div class="meta">
             <p><strong>Processo:</strong> ${safeProcesso || "-"}</p>
-            <p><strong>Cliente/Parte:</strong> ${safeCliente || "-"}</p>
+            <p><strong>Autor:</strong> ${safeAutor || "-"}</p>
+            <p><strong>Reu:</strong> ${safeReu || "-"}</p>
             <p><strong>Ramo do direito:</strong> ${safeTipoAcao || "-"}</p>
           </div>
           <div class="corpo">${safeDraft}</div>

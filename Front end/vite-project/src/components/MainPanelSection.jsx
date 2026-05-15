@@ -421,16 +421,32 @@ export default function MainPanelSection({
 
                     <Col md={6}>
                       <Form.Group>
-                        <Form.Label>Cliente ou parte</Form.Label>
+                        <Form.Label>Autor da acao</Form.Label>
                         <Form.Control
-                          name="cliente"
-                          value={form.cliente}
+                          name="autor"
+                          value={form.autor}
                           onChange={onChange}
-                          placeholder="Nome da parte"
-                          isInvalid={Boolean(formErrors.cliente)}
+                          placeholder="Nome do reclamante / autor"
+                          isInvalid={Boolean(formErrors.autor)}
                         />
                         <Form.Control.Feedback type="invalid">
-                          {formErrors.cliente}
+                          {formErrors.autor}
+                        </Form.Control.Feedback>
+                      </Form.Group>
+                    </Col>
+
+                    <Col md={6}>
+                      <Form.Group>
+                        <Form.Label>Reu (parte que voce representa)</Form.Label>
+                        <Form.Control
+                          name="reu"
+                          value={form.reu}
+                          onChange={onChange}
+                          placeholder="Nome da empresa / reu"
+                          isInvalid={Boolean(formErrors.reu)}
+                        />
+                        <Form.Control.Feedback type="invalid">
+                          {formErrors.reu}
                         </Form.Control.Feedback>
                       </Form.Group>
                     </Col>
@@ -457,36 +473,38 @@ export default function MainPanelSection({
                       </Form.Group>
                     </Col>
 
-                    <Col md={6}>
+                    <Col xs={12}>
                       <Form.Group>
-                        <Form.Label>Tese principal</Form.Label>
+                        <Form.Label>Fatos narrados pelo autor</Form.Label>
                         <Form.Control
-                          name="tese"
-                          value={form.tese}
+                          as="textarea"
+                          rows={3}
+                          name="fatos"
+                          value={form.fatos}
                           onChange={onChange}
-                          placeholder="Ex.: ausencia de responsabilidade"
-                          isInvalid={Boolean(formErrors.tese)}
+                          placeholder="Resumo dos fatos conforme a peticao inicial..."
+                          isInvalid={Boolean(formErrors.fatos)}
                         />
                         <Form.Control.Feedback type="invalid">
-                          {formErrors.tese}
+                          {formErrors.fatos}
                         </Form.Control.Feedback>
                       </Form.Group>
                     </Col>
 
                     <Col xs={12}>
                       <Form.Group>
-                        <Form.Label>Observacoes para o agente</Form.Label>
+                        <Form.Label>Pedidos do autor</Form.Label>
                         <Form.Control
                           as="textarea"
-                          rows={4}
-                          name="observacoes"
-                          value={form.observacoes}
+                          rows={2}
+                          name="pedidoAutor"
+                          value={form.pedidoAutor}
                           onChange={onChange}
-                          placeholder="Contexto do caso e orientacoes para a defesa."
-                          isInvalid={Boolean(formErrors.observacoes)}
+                          placeholder="Ex.: Horas extras, FGTS, danos morais..."
+                          isInvalid={Boolean(formErrors.pedidoAutor)}
                         />
                         <Form.Control.Feedback type="invalid">
-                          {formErrors.observacoes}
+                          {formErrors.pedidoAutor}
                         </Form.Control.Feedback>
                       </Form.Group>
                     </Col>

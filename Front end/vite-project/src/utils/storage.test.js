@@ -7,6 +7,7 @@ import {
   readStoredSession,
   persistSession,
   clearSession,
+  migrateFormFields,
 } from "./storage";
 
 // Mock do localStorage usando um Map simples.
@@ -53,12 +54,21 @@ describe("storage", () => {
       expect(result.info).toBe("");
     });
 
-    it("recupera rascunho salvo com data", () => {
-      const draft = { form: { campo: "valor" }, savedAt: "2026-01-01 10:00" };
+    it("recupera rascunho salvo com data (form passa por migracao)", () => {
+      // form com campos modernos + um campo extra arbitrario para garantir
+      // que a migracao nao apaga propriedades nao reconhecidas
+      const draft = {
+        form: { campo: "valor", autor: "Joao", processo: "0001" },
+        savedAt: "2026-01-01 10:00",
+      };
       storageMock.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
 
       const result = readDraftFromStorage();
-      expect(result.form).toEqual({ campo: "valor" });
+      expect(result.form).toMatchObject({
+        campo: "valor",
+        autor: "Joao",
+        processo: "0001",
+      });
       expect(result.info).toContain("Rascunho recuperado");
       expect(result.info).toContain("2026-01-01");
     });
@@ -197,5 +207,72 @@ describe("storage - guardas SSR (sem window)", () => {
 
   it("clearSession nao lanca erro sem window", () => {
     expect(() => clearSession()).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// migrateFormFields (PR6 rename cliente/tese/observacoes -> autor/pedidoAutor/fatos)
+// ---------------------------------------------------------------------------
+describe("migrateFormFields", () => {
+  it("renomeia campos antigos preservando valores", () => {
+    const oldForm = {
+      processo: "0001",
+      cliente: "Maria Silva",
+      tipoAcao: "Direito do Trabalho",
+      tese: "Horas extras",
+      observacoes: "Fatos descritos pelo autor",
+    };
+    const result = migrateFormFields(oldForm);
+    expect(result.autor).toBe("Maria Silva");
+    expect(result.pedidoAutor).toBe("Horas extras");
+    expect(result.fatos).toBe("Fatos descritos pelo autor");
+    expect(result.cliente).toBeUndefined();
+    expect(result.tese).toBeUndefined();
+    expect(result.observacoes).toBeUndefined();
+  });
+
+  it("adiciona campo reu vazio quando ausente", () => {
+    const oldForm = { processo: "0001", cliente: "X" };
+    const result = migrateFormFields(oldForm);
+    expect(result.reu).toBe("");
+  });
+
+  it("e idempotente quando form ja esta no shape novo", () => {
+    const newForm = {
+      processo: "0002",
+      autor: "Joao",
+      reu: "Empresa X",
+      tipoAcao: "Direito Civil",
+      subtipoAcao: "",
+      fatos: "...",
+      pedidoAutor: "Reparacao",
+    };
+    const result = migrateFormFields(newForm);
+    expect(result).toMatchObject(newForm);
+  });
+
+  it("nao sobrescreve novos campos quando ambos existem", () => {
+    // edge case: form misto (autor novo + cliente velho)
+    const mixed = { autor: "Novo", cliente: "Velho" };
+    const result = migrateFormFields(mixed);
+    expect(result.autor).toBe("Novo");
+    expect(result.cliente).toBeUndefined();
+  });
+
+  it("garante strings vazias em vez de undefined nos campos esperados", () => {
+    const result = migrateFormFields({});
+    expect(result.processo).toBe("");
+    expect(result.autor).toBe("");
+    expect(result.reu).toBe("");
+    expect(result.tipoAcao).toBe("");
+    expect(result.subtipoAcao).toBe("");
+    expect(result.fatos).toBe("");
+    expect(result.pedidoAutor).toBe("");
+  });
+
+  it("retorna o proprio valor quando input nao e objeto", () => {
+    expect(migrateFormFields(null)).toBeNull();
+    expect(migrateFormFields(undefined)).toBeUndefined();
+    expect(migrateFormFields("string")).toBe("string");
   });
 });
