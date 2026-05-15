@@ -20,7 +20,7 @@ import {
   patchMinutaUrl,
 } from "./config/api";
 import { getSupabaseClient, isSupabaseConfigured } from "./lib/supabaseClient";
-import { normalizeFileName, readFileAsBase64, validateFile } from "./utils/files";
+import { base64ToBlob, normalizeFileName, readFileAsBase64, validateFile } from "./utils/files";
 import { escapeHtml } from "./utils/html";
 import {
   clearSession,
@@ -181,10 +181,12 @@ export default function App() {
 
   const [form, setForm] = useState(() => ({
     processo: "",
-    cliente: "",
+    autor: "",
+    reu: "",
     tipoAcao: "",
-    tese: "",
-    observacoes: "",
+    subtipoAcao: "",
+    fatos: "",
+    pedidoAutor: "",
     ...(draftSeed.form || {}),
   }));
 
@@ -237,10 +239,25 @@ export default function App() {
   const [supportFeedback, setSupportFeedback] = useState(null);
   const [supportLoading, setSupportLoading] = useState(false);
 
+  /**
+   * Porcentagem dos campos obrigatorios preenchidos (PR6 P3.2).
+   * Conta apenas processo, autor, reu, tipoAcao, fatos, pedidoAutor + arquivo
+   * base. Subtipo nao entra (e opcional). Antes contava todo Object.values do
+   * form, dando 100% mesmo sem preencher tudo que importa.
+   */
   const completion = useMemo(() => {
-    const fields = [...Object.values(form), uploadedFile ? "arquivo" : ""];
-    const filled = fields.filter(Boolean).length;
-    return Math.round((filled / fields.length) * 100);
+    const requiredTextFields = [
+      form.processo,
+      form.autor,
+      form.reu,
+      form.tipoAcao,
+      form.fatos,
+      form.pedidoAutor,
+    ];
+    const filled = requiredTextFields.filter((v) => (v || "").trim().length > 0).length;
+    const total = requiredTextFields.length + 1; // +1 para o arquivo base
+    const completedFile = uploadedFile ? 1 : 0;
+    return Math.round(((filled + completedFile) / total) * 100);
   }, [form, uploadedFile]);
 
   const authPasswordChecks = useMemo(
@@ -250,14 +267,14 @@ export default function App() {
   const dashboardRefreshIntervalMs = useMemo(getDashboardRefreshIntervalMs, []);
 
   const generatedPreviewParagraphs = useMemo(() => {
-    const cliente = form.cliente.trim() || "a parte requerida";
+    const autor = form.autor.trim() || "a parte autora";
     const tipoAcao = form.tipoAcao.trim() || "ramo juridico ainda nao definido";
-    const tese = form.tese.trim() || "a tese principal definida";
-    const observacoes = form.observacoes.trim();
+    const pedidoAutor = form.pedidoAutor.trim() || "os pedidos formulados";
+    const observacoes = form.fatos.trim();
 
     return [
-      `No ambito de ${tipoAcao.toLowerCase()}, ${cliente} apresenta defesa e destaca ausencia de pressupostos para procedencia do pedido inicial.`,
-      `O agente recomenda reforco argumentativo com base em ${tese.toLowerCase()}, mantendo linguagem juridica formal e estrutura definida pelo escritorio.`,
+      `No ambito de ${tipoAcao.toLowerCase()}, defesa apresentada em face dos pedidos de ${autor} e destaca ausencia de pressupostos para procedencia do pedido inicial.`,
+      `O agente recomenda reforco argumentativo com base em ${pedidoAutor.toLowerCase()}, mantendo linguagem juridica formal e estrutura definida pelo escritorio.`,
       observacoes
         ? `Observacoes relevantes para a equipe: ${observacoes}`
         : "O documento segue para revisao humana antes da exportacao final.",
@@ -804,10 +821,11 @@ export default function App() {
     if (form.processo.trim() && !isValidNumeroProcesso(form.processo)) {
       errors.processo = "Use o formato 0001234-56.2026.8.00.0000.";
     }
-    if (!form.cliente.trim()) errors.cliente = "Informe o cliente ou parte.";
+    if (!form.autor.trim()) errors.autor = "Informe o autor da acao.";
+    if (!form.reu.trim()) errors.reu = "Informe o reu (parte que voce representa).";
     if (!form.tipoAcao.trim()) errors.tipoAcao = "Selecione o ramo do direito.";
-    if (!form.tese.trim()) errors.tese = "Informe a tese principal.";
-    if (!form.observacoes.trim()) errors.observacoes = "Adicione orientacoes para o agente.";
+    if (!form.fatos.trim()) errors.fatos = "Resuma os fatos narrados pelo autor.";
+    if (!form.pedidoAutor.trim()) errors.pedidoAutor = "Informe os pedidos do autor.";
     if (!uploadedFile) errors.upload = "Anexe a peca base para continuar.";
 
     return errors;
@@ -1096,6 +1114,32 @@ export default function App() {
     }
   };
 
+  /**
+   * Dispara download automatico do DOCX quando a API devolve base64 + nome.
+   * Chamado em todos os caminhos de submit (manual, peticao, confirmacao HiL).
+   * Como roda dentro de um callback iniciado por clique do usuario, o browser
+   * trata como user-gesture e nao aciona popup blocker.
+   */
+  const autoDownloadDocx = (arquivoB64, arquivoNome) => {
+    if (!arquivoB64 || !arquivoNome) return;
+    try {
+      const mime = arquivoNome.toLowerCase().endsWith(".docx")
+        ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        : "application/octet-stream";
+      const blob = base64ToBlob(arquivoB64, mime);
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = arquivoNome;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("[autoDownloadDocx] falhou:", err);
+    }
+  };
+
   const handleSubmitPeticao = async () => {
     if (!authUser) {
       setFeedback({
@@ -1218,10 +1262,11 @@ export default function App() {
       setForm((prev) => ({
         ...prev,
         processo: dadosExtraidos.numero_processo || prev.processo,
-        cliente: dadosExtraidos.autor || prev.cliente,
+        autor: dadosExtraidos.autor || prev.autor,
+        reu: dadosExtraidos.reu || prev.reu,
         tipoAcao: dadosExtraidos.tipo_acao || prev.tipoAcao,
-        tese: minuta.tese_central || prev.tese,
-        observacoes: dadosExtraidos.fatos_resumo || prev.observacoes,
+        pedidoAutor: minuta.tese_central || prev.pedidoAutor,
+        fatos: dadosExtraidos.fatos_resumo || prev.fatos,
       }));
 
       // Coloca o texto da minuta no editor ao vivo.
@@ -1247,6 +1292,7 @@ export default function App() {
         engine, riscos, arquivoB64, arquivoNome, defesasConsultadas,
         citacoesIncertas, citacoesVerificadas,
       });
+      autoDownloadDocx(arquivoB64, arquivoNome);
 
       if (typeof backendData?.contestacao_id !== "undefined") {
         setLastCaseId(String(backendData.contestacao_id));
@@ -1318,10 +1364,11 @@ export default function App() {
       setForm((prev) => ({
         ...prev,
         processo: dadosCorrigidos.numero_processo || prev.processo,
-        cliente: dadosCorrigidos.autor || prev.cliente,
+        autor: dadosCorrigidos.autor || prev.autor,
+        reu: dadosCorrigidos.reu || prev.reu,
         tipoAcao: dadosCorrigidos.tipo_acao || prev.tipoAcao,
-        tese: minuta.tese_central || prev.tese,
-        observacoes: dadosCorrigidos.fatos_resumo || prev.observacoes,
+        pedidoAutor: minuta.tese_central || prev.pedidoAutor,
+        fatos: dadosCorrigidos.fatos_resumo || prev.fatos,
       }));
 
       const partesMinuta = [
@@ -1344,6 +1391,7 @@ export default function App() {
         citacoesIncertas: Array.isArray(data?.citacoes_incertas) ? data.citacoes_incertas : [],
         citacoesVerificadas: Array.isArray(data?.citacoes_verificadas) ? data.citacoes_verificadas : [],
       });
+      autoDownloadDocx(arquivoB64, arquivoNome);
       setLastCaseId(String(data?.contestacao_id || revisaoData.contestacao_id));
 
       setShowRevisaoModal(false);
@@ -1422,11 +1470,13 @@ export default function App() {
       const arquivoConteudoBase64 = await readFileAsBase64(uploadedFile);
       const payload = {
         numero_processo: form.processo.trim(),
-        autor: form.cliente.trim(),
-        reu: "Nao informado",
-        tipo_acao: form.tipoAcao.trim(),
-        fatos: form.observacoes.trim(),
-        pedido_autor: form.tese.trim(),
+        autor: form.autor.trim(),
+        reu: form.reu.trim(),
+        // PR6 P2.2: subtipo (quando preenchido) e mais especifico que o ramo
+        // generico — alimenta o RAG semantico para busca mais precisa.
+        tipo_acao: (form.subtipoAcao || form.tipoAcao || "").trim(),
+        fatos: form.fatos.trim(),
+        pedido_autor: form.pedidoAutor.trim(),
         arquivo_base: uploadedFile?.name || "",
         arquivo_base_nome: uploadedFile?.name || "",
         arquivo_base_mime_type: uploadedFile?.type || "application/octet-stream",
@@ -1485,6 +1535,7 @@ export default function App() {
       const arquivoNome = workflowData?.arquivo_editado_nome || "contestacao.txt";
       const defesasConsultadas = workflowData?.defesas_anteriores?.consultadas ?? 0;
       setIaResult({ engine, riscos, arquivoB64, arquivoNome, defesasConsultadas });
+      autoDownloadDocx(arquivoB64, arquivoNome);
 
       setLoading(false);
       setSubmitted(true);
@@ -1514,22 +1565,6 @@ export default function App() {
     }
   };
 
-  const buildDocumentText = () => {
-    const lines = [
-      "DEFESA - MINUTA GERADA PELO SISTEMA",
-      "",
-      `Processo: ${form.processo || "-"}`,
-      `Cliente/Parte: ${form.cliente || "-"}`,
-      `Ramo do direito: ${form.tipoAcao || "-"}`,
-      `Tese principal: ${form.tese || "-"}`,
-      `Arquivo base: ${uploadedFile ? uploadedFile.name : "-"}`,
-      "",
-      "EDICAO AO VIVO",
-      liveDraft.trim() || generatedDraftText,
-    ];
-    return lines.join("\n");
-  };
-
   const triggerBlobDownload = (blob, filename) => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -1553,7 +1588,8 @@ export default function App() {
 
     const baseName = normalizeFileName(form.processo || lastCaseId || "defesa");
     const safeProcesso = escapeHtml(form.processo || "");
-    const safeCliente = escapeHtml(form.cliente || "");
+    const safeAutor = escapeHtml(form.autor || "");
+    const safeReu = escapeHtml(form.reu || "");
     const safeTipoAcao = escapeHtml(form.tipoAcao || "");
     const safeDraft = escapeHtml(liveDraft.trim() || generatedDraftText).replace(/\n/g, "<br/>");
 
@@ -1575,7 +1611,8 @@ export default function App() {
           <h1>DEFESA - MINUTA GERADA PELO SISTEMA</h1>
           <div class="meta">
             <p><strong>Processo:</strong> ${safeProcesso || "-"}</p>
-            <p><strong>Cliente/Parte:</strong> ${safeCliente || "-"}</p>
+            <p><strong>Autor:</strong> ${safeAutor || "-"}</p>
+            <p><strong>Reu:</strong> ${safeReu || "-"}</p>
             <p><strong>Ramo do direito:</strong> ${safeTipoAcao || "-"}</p>
           </div>
           <div class="corpo">${safeDraft}</div>
@@ -1604,7 +1641,8 @@ export default function App() {
     }
 
     const safeProcesso = escapeHtml(form.processo || "");
-    const safeCliente = escapeHtml(form.cliente || "");
+    const safeAutor = escapeHtml(form.autor || "");
+    const safeReu = escapeHtml(form.reu || "");
     const safeTipoAcao = escapeHtml(form.tipoAcao || "");
     const safeDraft = escapeHtml(liveDraft.trim() || generatedDraftText).replace(/\n/g, "<br/>");
     const printable = `<!doctype html>
@@ -1632,11 +1670,12 @@ export default function App() {
           <h1>DEFESA - MINUTA GERADA PELO SISTEMA</h1>
           <div class="meta">
             <p><strong>Processo:</strong> ${safeProcesso || "-"}</p>
-            <p><strong>Cliente/Parte:</strong> ${safeCliente || "-"}</p>
+            <p><strong>Autor:</strong> ${safeAutor || "-"}</p>
+            <p><strong>Reu:</strong> ${safeReu || "-"}</p>
             <p><strong>Ramo do direito:</strong> ${safeTipoAcao || "-"}</p>
           </div>
           <div class="corpo">${safeDraft}</div>
-          <script>setTimeout(function(){ window.print(); }, 400);<\/script>
+          <script>setTimeout(function(){ window.print(); }, 400);</script>
         </body>
       </html>`;
 
@@ -1883,16 +1922,19 @@ export default function App() {
             <Button
               variant="outline-light"
               onClick={() => {
-                const bytes = Uint8Array.from(atob(iaResult.arquivoB64), c => c.charCodeAt(0));
-                const blob = new Blob([bytes], { type: "text/plain;charset=utf-8" });
+                const nome = iaResult.arquivoNome || "contestacao.docx";
+                const mime = nome.endsWith(".docx")
+                  ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  : "text/plain;charset=utf-8";
+                const blob = base64ToBlob(iaResult.arquivoB64, mime);
                 const link = document.createElement("a");
                 link.href = URL.createObjectURL(blob);
-                link.download = iaResult.arquivoNome || "contestacao.txt";
+                link.download = nome;
                 link.click();
                 URL.revokeObjectURL(link.href);
               }}
             >
-              Baixar minuta (.txt)
+              Baixar minuta
             </Button>
           )}
 

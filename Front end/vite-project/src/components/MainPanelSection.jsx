@@ -12,7 +12,8 @@ import {
   Row,
 } from "react-bootstrap";
 import { CheckCircle, FileEarmarkText, Paperclip, Upload, XCircle } from "react-bootstrap-icons";
-import { agentRules, legalBranches } from "../data/mockData";
+import { IMaskInput } from "react-imask";
+import { agentRules, legalBranchGroups, subtiposAcao } from "../data/mockData";
 
 /**
  * Formata tamanho do arquivo para exibicao amigavel ao usuario.
@@ -74,6 +75,8 @@ export default function MainPanelSection({
   const [dragging, setDragging] = useState(false);
   const [draggingPeticao, setDraggingPeticao] = useState(false);
   const [draggingModelo, setDraggingModelo] = useState(false);
+  // Feedback visual do botao "Copiar": mostra "Copiado!" por 2s apos clique. PR6 P3.3.
+  const [justCopied, setJustCopied] = useState(false);
 
   const openPicker = () => {
     fileInputRef.current?.click();
@@ -406,31 +409,53 @@ export default function MainPanelSection({
                     <Col md={6}>
                       <Form.Group>
                         <Form.Label>Numero do processo</Form.Label>
-                        <Form.Control
+                        <IMaskInput
+                          mask="0000000-00.0000.0.00.0000"
                           name="processo"
                           value={form.processo}
-                          onChange={onChange}
+                          onAccept={(value) =>
+                            onChange({ target: { name: "processo", value } })
+                          }
                           placeholder="0001234-56.2026.8.00.0000"
-                          isInvalid={Boolean(formErrors.processo)}
+                          className={`form-control ${formErrors.processo ? "is-invalid" : ""}`}
+                          inputMode="numeric"
+                        />
+                        {formErrors.processo && (
+                          <div className="invalid-feedback d-block">
+                            {formErrors.processo}
+                          </div>
+                        )}
+                      </Form.Group>
+                    </Col>
+
+                    <Col md={6}>
+                      <Form.Group>
+                        <Form.Label>Autor da acao</Form.Label>
+                        <Form.Control
+                          name="autor"
+                          value={form.autor}
+                          onChange={onChange}
+                          placeholder="Nome do reclamante / autor"
+                          isInvalid={Boolean(formErrors.autor)}
                         />
                         <Form.Control.Feedback type="invalid">
-                          {formErrors.processo}
+                          {formErrors.autor}
                         </Form.Control.Feedback>
                       </Form.Group>
                     </Col>
 
                     <Col md={6}>
                       <Form.Group>
-                        <Form.Label>Cliente ou parte</Form.Label>
+                        <Form.Label>Reu (parte que voce representa)</Form.Label>
                         <Form.Control
-                          name="cliente"
-                          value={form.cliente}
+                          name="reu"
+                          value={form.reu}
                           onChange={onChange}
-                          placeholder="Nome da parte"
-                          isInvalid={Boolean(formErrors.cliente)}
+                          placeholder="Nome da empresa / reu"
+                          isInvalid={Boolean(formErrors.reu)}
                         />
                         <Form.Control.Feedback type="invalid">
-                          {formErrors.cliente}
+                          {formErrors.reu}
                         </Form.Control.Feedback>
                       </Form.Group>
                     </Col>
@@ -445,10 +470,14 @@ export default function MainPanelSection({
                           isInvalid={Boolean(formErrors.tipoAcao)}
                         >
                           <option value="">Selecione o ramo</option>
-                          {legalBranches.map((branch) => (
-                            <option key={branch} value={branch}>
-                              {branch}
-                            </option>
+                          {Object.entries(legalBranchGroups).map(([grupo, ramos]) => (
+                            <optgroup key={grupo} label={grupo}>
+                              {ramos.map((branch) => (
+                                <option key={branch} value={branch}>
+                                  {branch}
+                                </option>
+                              ))}
+                            </optgroup>
                           ))}
                         </Form.Select>
                         <Form.Control.Feedback type="invalid">
@@ -457,36 +486,61 @@ export default function MainPanelSection({
                       </Form.Group>
                     </Col>
 
-                    <Col md={6}>
+                    {subtiposAcao[form.tipoAcao] && (
+                      <Col md={6}>
+                        <Form.Group>
+                          <Form.Label>Tipo especifico da acao</Form.Label>
+                          <Form.Select
+                            name="subtipoAcao"
+                            value={form.subtipoAcao || ""}
+                            onChange={onChange}
+                          >
+                            <option value="">Selecione o tipo (opcional)</option>
+                            {subtiposAcao[form.tipoAcao].map((s) => (
+                              <option key={s} value={s}>
+                                {s}
+                              </option>
+                            ))}
+                          </Form.Select>
+                          <Form.Text className="text-secondary">
+                            Subtipo melhora a busca de defesas similares (RAG).
+                          </Form.Text>
+                        </Form.Group>
+                      </Col>
+                    )}
+
+                    <Col xs={12}>
                       <Form.Group>
-                        <Form.Label>Tese principal</Form.Label>
+                        <Form.Label>Fatos narrados pelo autor</Form.Label>
                         <Form.Control
-                          name="tese"
-                          value={form.tese}
+                          as="textarea"
+                          rows={3}
+                          name="fatos"
+                          value={form.fatos}
                           onChange={onChange}
-                          placeholder="Ex.: ausencia de responsabilidade"
-                          isInvalid={Boolean(formErrors.tese)}
+                          placeholder="Resumo dos fatos conforme a peticao inicial..."
+                          isInvalid={Boolean(formErrors.fatos)}
                         />
                         <Form.Control.Feedback type="invalid">
-                          {formErrors.tese}
+                          {formErrors.fatos}
                         </Form.Control.Feedback>
                       </Form.Group>
                     </Col>
 
                     <Col xs={12}>
                       <Form.Group>
-                        <Form.Label>Observacoes para o agente</Form.Label>
+                        <Form.Label>Pedidos do autor</Form.Label>
                         <Form.Control
                           as="textarea"
-                          rows={4}
-                          name="observacoes"
-                          value={form.observacoes}
+                          rows={2}
+                          name="pedidoAutor"
+                          value={form.pedidoAutor}
                           onChange={onChange}
-                          placeholder="Contexto do caso e orientacoes para a defesa."
-                          isInvalid={Boolean(formErrors.observacoes)}
+                          placeholder="Ex.: Horas extras, FGTS, danos morais..."
+                          isInvalid={Boolean(formErrors.pedidoAutor)}
                         />
                         <Form.Control.Feedback type="invalid">
-                          {formErrors.observacoes}
+                          {formErrors.pedidoAutor}
                         </Form.Control.Feedback>
                       </Form.Group>
                     </Col>
@@ -596,6 +650,29 @@ export default function MainPanelSection({
                       placeholder="A defesa editada em tempo real sera exibida aqui."
                     />
                   </Form.Group>
+
+                  <div className="d-flex justify-content-between align-items-center mt-1">
+                    <small className="text-secondary">
+                      {liveDraft.length} caractere{liveDraft.length === 1 ? "" : "s"}
+                    </small>
+                    <Button
+                      size="sm"
+                      variant="outline-secondary"
+                      disabled={!liveDraft}
+                      onClick={async () => {
+                        if (!liveDraft) return;
+                        try {
+                          await navigator.clipboard.writeText(liveDraft);
+                          setJustCopied(true);
+                          setTimeout(() => setJustCopied(false), 2000);
+                        } catch {
+                          // Fallback silencioso: browsers antigos sem clipboard API
+                        }
+                      }}
+                    >
+                      {justCopied ? "Copiado!" : "Copiar texto"}
+                    </Button>
+                  </div>
 
                   <div className="d-flex justify-content-between align-items-center mt-3 gap-2 flex-wrap">
                     <Button variant="outline-dark" size="sm" onClick={onResetLiveDraft}>

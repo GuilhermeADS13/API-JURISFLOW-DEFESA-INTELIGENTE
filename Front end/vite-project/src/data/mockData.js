@@ -23,7 +23,7 @@ export const stats = [
   },
 ];
 
-// Lista de ramos juridicos exibida no select do formulario.
+// Lista plana de ramos juridicos (legado, ainda usada em outros lugares do app).
 export const legalBranches = [
   "Direito Civil",
   "Direito do Consumidor",
@@ -45,6 +45,102 @@ export const legalBranches = [
   "Direito Medico e da Saude",
   "Direito Maritimo e Aeronautico",
 ];
+
+/**
+ * Mesmos ramos agrupados por categoria para uso com <optgroup> no select do
+ * formulario principal. Ordem das categorias e dos itens dentro de cada
+ * categoria foi escolhida pra colocar ramos mais usados (Trabalhista, Civil,
+ * Consumidor) mais acessiveis. PR6 P3.4.
+ */
+export const legalBranchGroups = {
+  "Trabalhista e Previdenciario": [
+    "Direito do Trabalho",
+    "Direito Previdenciario",
+  ],
+  "Civil e Empresarial": [
+    "Direito Civil",
+    "Direito Empresarial",
+    "Direito Contratual",
+    "Direito Imobiliario",
+    "Direito de Familia e Sucessoes",
+  ],
+  "Publico e Regulatorio": [
+    "Direito Tributario",
+    "Direito Administrativo",
+    "Direito Constitucional",
+    "Direito Ambiental",
+    "Direito Eleitoral",
+  ],
+  Especializado: [
+    "Direito do Consumidor",
+    "Direito Penal",
+    "Direito Digital",
+    "Direito Bancario e Financeiro",
+    "Direito Agrario",
+    "Direito Medico e da Saude",
+    "Direito Maritimo e Aeronautico",
+  ],
+};
+
+/**
+ * Subtipos especificos por ramo. Quando o usuario escolhe um ramo no select
+ * principal, este dicionario alimenta um segundo select condicional com tipos
+ * mais granulares — o RAG semantico usa o subtipo (quando preenchido) em vez
+ * do ramo generico, melhorando a precisao da busca de defesas similares. PR6 P2.2.
+ *
+ * Cobertura inicial: ramos mais usados na pratica. Ramo sem entrada aqui
+ * mantem comportamento atual (envia somente o tipo_acao generico).
+ */
+export const subtiposAcao = {
+  "Direito do Trabalho": [
+    "Horas Extras",
+    "Rescisao Indireta",
+    "Danos Morais Trabalhistas",
+    "FGTS",
+    "Adicional de Insalubridade",
+    "Adicional de Periculosidade",
+    "Acidente de Trabalho",
+    "Equiparacao Salarial",
+    "Jornada de Trabalho",
+    "Vinculo Empregaticio",
+  ],
+  "Direito do Consumidor": [
+    "Cobranca Indevida",
+    "Dano Moral por Negativacao",
+    "Produto Defeituoso",
+    "Rescisao de Contrato",
+    "Propaganda Enganosa",
+    "Recusa de Atendimento",
+  ],
+  "Direito Civil": [
+    "Responsabilidade Civil",
+    "Inadimplemento Contratual",
+    "Reparacao de Danos",
+    "Posse e Propriedade",
+    "Indenizacao por Danos Morais",
+  ],
+  "Direito Previdenciario": [
+    "Aposentadoria por Idade",
+    "Aposentadoria por Invalidez",
+    "Auxilio-Doenca",
+    "Pensao por Morte",
+    "Beneficio de Prestacao Continuada (BPC)",
+  ],
+  "Direito Tributario": [
+    "Execucao Fiscal",
+    "Repeticao de Indebito",
+    "ICMS",
+    "ISS",
+    "Imposto de Renda",
+  ],
+  "Direito Bancario e Financeiro": [
+    "Revisao de Contrato Bancario",
+    "Juros Abusivos",
+    "Tarifas Indevidas",
+    "Cartao de Credito",
+    "Financiamento Veicular",
+  ],
+};
 
 // Historico inicial apresentado no dashboard.
 export const historyItems = [

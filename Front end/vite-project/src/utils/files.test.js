@@ -6,6 +6,7 @@ import {
   normalizeFileName,
   validateFile,
   readFileAsBase64,
+  base64ToBlob,
 } from "./files";
 
 // ---------------------------------------------------------------------------
@@ -211,7 +212,50 @@ describe("readFileAsBase64", () => {
     );
   });
 
-  it("retorna string vazia quando reader.result nao e string", async () => {
+});
+
+// ---------------------------------------------------------------------------
+// base64ToBlob
+// ---------------------------------------------------------------------------
+describe("base64ToBlob", () => {
+  it("decodifica base64 simples para Blob com o mimeType pedido", async () => {
+    // "Hello" em base64
+    const blob = base64ToBlob("SGVsbG8=", "text/plain");
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.type).toBe("text/plain");
+    const text = await blob.text();
+    expect(text).toBe("Hello");
+  });
+
+  it("retorna Blob vazio quando base64 esta vazio", () => {
+    const blob = base64ToBlob("", "application/pdf");
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.size).toBe(0);
+    expect(blob.type).toBe("application/pdf");
+  });
+
+  it("usa application/octet-stream como mimeType padrao", () => {
+    const blob = base64ToBlob("SGVsbG8=");
+    expect(blob.type).toBe("application/octet-stream");
+  });
+
+  it("preserva bytes binarios (round-trip)", async () => {
+    // bytes [0x00, 0xff, 0x10] -> base64 "AP8Q"
+    const blob = base64ToBlob("AP8Q", "application/octet-stream");
+    const buffer = await blob.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    expect(bytes.length).toBe(3);
+    expect(bytes[0]).toBe(0x00);
+    expect(bytes[1]).toBe(0xff);
+    expect(bytes[2]).toBe(0x10);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// readFileAsBase64 (continuacao)
+// ---------------------------------------------------------------------------
+describe("readFileAsBase64 - extras", () => {
+  it("retorna string vazia quando reader.result nao e string (caso real)", async () => {
     const MockFileReader = vi.fn(function () {
       this.readAsDataURL = vi.fn(() => {
         setTimeout(() => {
