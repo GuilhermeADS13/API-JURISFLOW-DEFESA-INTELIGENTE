@@ -12,7 +12,7 @@ import {
   Row,
 } from "react-bootstrap";
 import { CheckCircle, FileEarmarkText, Paperclip, Upload, XCircle } from "react-bootstrap-icons";
-import { agentRules, legalBranches } from "../data/mockData";
+import { agentRules, legalBranchGroups } from "../data/mockData";
 
 /**
  * Formata tamanho do arquivo para exibicao amigavel ao usuario.
@@ -461,10 +461,14 @@ export default function MainPanelSection({
                           isInvalid={Boolean(formErrors.tipoAcao)}
                         >
                           <option value="">Selecione o ramo</option>
-                          {legalBranches.map((branch) => (
-                            <option key={branch} value={branch}>
-                              {branch}
-                            </option>
+                          {Object.entries(legalBranchGroups).map(([grupo, ramos]) => (
+                            <optgroup key={grupo} label={grupo}>
+                              {ramos.map((branch) => (
+                                <option key={branch} value={branch}>
+                                  {branch}
+                                </option>
+                              ))}
+                            </optgroup>
                           ))}
                         </Form.Select>
                         <Form.Control.Feedback type="invalid">

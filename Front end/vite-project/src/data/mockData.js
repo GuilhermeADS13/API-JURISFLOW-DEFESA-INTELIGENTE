@@ -23,7 +23,7 @@ export const stats = [
   },
 ];
 
-// Lista de ramos juridicos exibida no select do formulario.
+// Lista plana de ramos juridicos (legado, ainda usada em outros lugares do app).
 export const legalBranches = [
   "Direito Civil",
   "Direito do Consumidor",
@@ -45,6 +45,42 @@ export const legalBranches = [
   "Direito Medico e da Saude",
   "Direito Maritimo e Aeronautico",
 ];
+
+/**
+ * Mesmos ramos agrupados por categoria para uso com <optgroup> no select do
+ * formulario principal. Ordem das categorias e dos itens dentro de cada
+ * categoria foi escolhida pra colocar ramos mais usados (Trabalhista, Civil,
+ * Consumidor) mais acessiveis. PR6 P3.4.
+ */
+export const legalBranchGroups = {
+  "Trabalhista e Previdenciario": [
+    "Direito do Trabalho",
+    "Direito Previdenciario",
+  ],
+  "Civil e Empresarial": [
+    "Direito Civil",
+    "Direito Empresarial",
+    "Direito Contratual",
+    "Direito Imobiliario",
+    "Direito de Familia e Sucessoes",
+  ],
+  "Publico e Regulatorio": [
+    "Direito Tributario",
+    "Direito Administrativo",
+    "Direito Constitucional",
+    "Direito Ambiental",
+    "Direito Eleitoral",
+  ],
+  Especializado: [
+    "Direito do Consumidor",
+    "Direito Penal",
+    "Direito Digital",
+    "Direito Bancario e Financeiro",
+    "Direito Agrario",
+    "Direito Medico e da Saude",
+    "Direito Maritimo e Aeronautico",
+  ],
+};
 
 // Historico inicial apresentado no dashboard.
 export const historyItems = [
