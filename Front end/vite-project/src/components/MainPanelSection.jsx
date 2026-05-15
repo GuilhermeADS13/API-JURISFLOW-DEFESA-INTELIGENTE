@@ -75,6 +75,9 @@ export default function MainPanelSection({
   const [dragging, setDragging] = useState(false);
   const [draggingPeticao, setDraggingPeticao] = useState(false);
   const [draggingModelo, setDraggingModelo] = useState(false);
+  // Feedback visual do botao "Copiar" — guarda timestamp do ultimo clique
+  // para mostrar "Copiado!" por 2s antes de voltar ao label original. PR6 P3.3.
+  const [copiedAt, setCopiedAt] = useState(0);
 
   const openPicker = () => {
     fileInputRef.current?.click();
@@ -648,6 +651,31 @@ export default function MainPanelSection({
                       placeholder="A defesa editada em tempo real sera exibida aqui."
                     />
                   </Form.Group>
+
+                  <div className="d-flex justify-content-between align-items-center mt-1">
+                    <small className="text-secondary">
+                      {liveDraft.length} caractere{liveDraft.length === 1 ? "" : "s"}
+                    </small>
+                    <Button
+                      size="sm"
+                      variant="outline-secondary"
+                      disabled={!liveDraft}
+                      onClick={async () => {
+                        if (!liveDraft) return;
+                        try {
+                          await navigator.clipboard.writeText(liveDraft);
+                          setCopiedAt(Date.now());
+                          // Reseta o feedback apos 2s — disparado via setTimeout
+                          // para garantir re-render (Date.now() puro nao dispara).
+                          setTimeout(() => setCopiedAt(0), 2000);
+                        } catch {
+                          // Fallback silencioso: browsers antigos sem clipboard API
+                        }
+                      }}
+                    >
+                      {copiedAt && Date.now() - copiedAt < 2000 ? "Copiado!" : "Copiar texto"}
+                    </Button>
+                  </div>
 
                   <div className="d-flex justify-content-between align-items-center mt-3 gap-2 flex-wrap">
                     <Button variant="outline-dark" size="sm" onClick={onResetLiveDraft}>
