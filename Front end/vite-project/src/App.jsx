@@ -1457,7 +1457,9 @@ export default function App() {
         numero_processo: form.processo.trim(),
         autor: form.autor.trim(),
         reu: form.reu.trim(),
-        tipo_acao: form.tipoAcao.trim(),
+        // PR6 P2.2: subtipo (quando preenchido) e mais especifico que o ramo
+        // generico — alimenta o RAG semantico para busca mais precisa.
+        tipo_acao: (form.subtipoAcao || form.tipoAcao || "").trim(),
         fatos: form.fatos.trim(),
         pedido_autor: form.pedidoAutor.trim(),
         arquivo_base: uploadedFile?.name || "",

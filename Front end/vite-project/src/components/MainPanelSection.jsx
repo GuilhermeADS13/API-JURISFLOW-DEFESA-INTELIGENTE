@@ -12,7 +12,7 @@ import {
   Row,
 } from "react-bootstrap";
 import { CheckCircle, FileEarmarkText, Paperclip, Upload, XCircle } from "react-bootstrap-icons";
-import { agentRules, legalBranchGroups } from "../data/mockData";
+import { agentRules, legalBranchGroups, subtiposAcao } from "../data/mockData";
 
 /**
  * Formata tamanho do arquivo para exibicao amigavel ao usuario.
@@ -476,6 +476,29 @@ export default function MainPanelSection({
                         </Form.Control.Feedback>
                       </Form.Group>
                     </Col>
+
+                    {subtiposAcao[form.tipoAcao] && (
+                      <Col md={6}>
+                        <Form.Group>
+                          <Form.Label>Tipo especifico da acao</Form.Label>
+                          <Form.Select
+                            name="subtipoAcao"
+                            value={form.subtipoAcao || ""}
+                            onChange={onChange}
+                          >
+                            <option value="">Selecione o tipo (opcional)</option>
+                            {subtiposAcao[form.tipoAcao].map((s) => (
+                              <option key={s} value={s}>
+                                {s}
+                              </option>
+                            ))}
+                          </Form.Select>
+                          <Form.Text className="text-secondary">
+                            Subtipo melhora a busca de defesas similares (RAG).
+                          </Form.Text>
+                        </Form.Group>
+                      </Col>
+                    )}
 
                     <Col xs={12}>
                       <Form.Group>

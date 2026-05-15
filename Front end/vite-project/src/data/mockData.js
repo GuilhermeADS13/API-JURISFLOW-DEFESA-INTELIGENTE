@@ -82,6 +82,66 @@ export const legalBranchGroups = {
   ],
 };
 
+/**
+ * Subtipos especificos por ramo. Quando o usuario escolhe um ramo no select
+ * principal, este dicionario alimenta um segundo select condicional com tipos
+ * mais granulares — o RAG semantico usa o subtipo (quando preenchido) em vez
+ * do ramo generico, melhorando a precisao da busca de defesas similares. PR6 P2.2.
+ *
+ * Cobertura inicial: ramos mais usados na pratica. Ramo sem entrada aqui
+ * mantem comportamento atual (envia somente o tipo_acao generico).
+ */
+export const subtiposAcao = {
+  "Direito do Trabalho": [
+    "Horas Extras",
+    "Rescisao Indireta",
+    "Danos Morais Trabalhistas",
+    "FGTS",
+    "Adicional de Insalubridade",
+    "Adicional de Periculosidade",
+    "Acidente de Trabalho",
+    "Equiparacao Salarial",
+    "Jornada de Trabalho",
+    "Vinculo Empregaticio",
+  ],
+  "Direito do Consumidor": [
+    "Cobranca Indevida",
+    "Dano Moral por Negativacao",
+    "Produto Defeituoso",
+    "Rescisao de Contrato",
+    "Propaganda Enganosa",
+    "Recusa de Atendimento",
+  ],
+  "Direito Civil": [
+    "Responsabilidade Civil",
+    "Inadimplemento Contratual",
+    "Reparacao de Danos",
+    "Posse e Propriedade",
+    "Indenizacao por Danos Morais",
+  ],
+  "Direito Previdenciario": [
+    "Aposentadoria por Idade",
+    "Aposentadoria por Invalidez",
+    "Auxilio-Doenca",
+    "Pensao por Morte",
+    "Beneficio de Prestacao Continuada (BPC)",
+  ],
+  "Direito Tributario": [
+    "Execucao Fiscal",
+    "Repeticao de Indebito",
+    "ICMS",
+    "ISS",
+    "Imposto de Renda",
+  ],
+  "Direito Bancario e Financeiro": [
+    "Revisao de Contrato Bancario",
+    "Juros Abusivos",
+    "Tarifas Indevidas",
+    "Cartao de Credito",
+    "Financiamento Veicular",
+  ],
+};
+
 // Historico inicial apresentado no dashboard.
 export const historyItems = [
   {
