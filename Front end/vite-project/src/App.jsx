@@ -239,10 +239,25 @@ export default function App() {
   const [supportFeedback, setSupportFeedback] = useState(null);
   const [supportLoading, setSupportLoading] = useState(false);
 
+  /**
+   * Porcentagem dos campos obrigatorios preenchidos (PR6 P3.2).
+   * Conta apenas processo, autor, reu, tipoAcao, fatos, pedidoAutor + arquivo
+   * base. Subtipo nao entra (e opcional). Antes contava todo Object.values do
+   * form, dando 100% mesmo sem preencher tudo que importa.
+   */
   const completion = useMemo(() => {
-    const fields = [...Object.values(form), uploadedFile ? "arquivo" : ""];
-    const filled = fields.filter(Boolean).length;
-    return Math.round((filled / fields.length) * 100);
+    const requiredTextFields = [
+      form.processo,
+      form.autor,
+      form.reu,
+      form.tipoAcao,
+      form.fatos,
+      form.pedidoAutor,
+    ];
+    const filled = requiredTextFields.filter((v) => (v || "").trim().length > 0).length;
+    const total = requiredTextFields.length + 1; // +1 para o arquivo base
+    const completedFile = uploadedFile ? 1 : 0;
+    return Math.round(((filled + completedFile) / total) * 100);
   }, [form, uploadedFile]);
 
   const authPasswordChecks = useMemo(
