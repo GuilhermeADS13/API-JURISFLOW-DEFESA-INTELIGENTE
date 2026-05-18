@@ -249,3 +249,102 @@ def test_obter_contestacao_de_outro_usuario_retorna_404(monkeypatch):
 
     assert exc_info.value.status_code == 404
     assert "nao encontrada" in exc_info.value.detail.lower()
+
+
+# ── PR8 P3.4 — teste regressivo: arquivo base64 + elevacao de campos ─────────
+
+
+def _docx_minimo_base64() -> str:
+    """Gera um .docx minimo valido (ZIP com [Content_Types].xml + word/document.xml).
+
+    Suficiente para validar que o backend nao falha em parse e que o conteudo
+    base64 chega corretamente em save_contestacao.
+    """
+    import base64
+    from io import BytesIO
+    from zipfile import ZIP_DEFLATED, ZipFile
+
+    buf = BytesIO()
+    with ZipFile(buf, "w", ZIP_DEFLATED) as z:
+        z.writestr(
+            "[Content_Types].xml",
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            '<Default Extension="xml" ContentType="application/xml"/>'
+            "</Types>",
+        )
+        z.writestr(
+            "word/document.xml",
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            "<w:body/></w:document>",
+        )
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+def test_gerar_contestacao_com_arquivo_base64_eleva_campos_e_persiste_correto(
+    monkeypatch,
+):
+    """PR8 P3.4 — protege contra regressao de P1.3 (arquivo_base salvar nome em
+    coluna errada) e P2.5 (campos do DOCX nao chegavam ao topo da resposta).
+    """
+    arquivo_b64 = _docx_minimo_base64()
+    payload_persistido = {}
+
+    async def fake_enviar(payload, *_args, **_kwargs):
+        return {
+            "status": "processando",
+            "arquivo_editado_base64": "ZWRpdGFkbw==",
+            "arquivo_editado_nome": "contestacao_editada.docx",
+            "minuta": {"tese_central": "Improcedencia."},
+            "engine_ia": {"provider": "claude"},
+        }
+
+    def fake_save(payload, status, n8n_resposta):
+        payload_persistido.update(payload)
+        return 99
+
+    monkeypatch.setattr(contestacao, "enviar_para_n8n", fake_enviar)
+    monkeypatch.setattr(contestacao, "save_contestacao", fake_save)
+
+    processo = Processo(
+        numero_processo="0001234-56.2026.8.00.0000",
+        autor="Maria Silva",
+        reu="Empresa Y",
+        tipo_acao="Direito do Trabalho",
+        fatos="Fatos do caso.",
+        pedido_autor="Pagamento de horas extras.",
+        arquivo_base_nome="peticao.docx",
+        arquivo_base_conteudo_base64=arquivo_b64,
+        arquivo_base_mime_type=(
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ),
+        arquivo_base_tamanho_bytes=1024,
+    )
+
+    response = asyncio.run(
+        contestacao.gerar_contestacao(
+            request=_fake_request(),
+            processo=processo,
+            usuario={"id": "USR-Z", "nome": "Z", "email": "z@x.com"},
+        )
+    )
+
+    # P2.5 — campos do DOCX no topo
+    assert response["arquivo_editado_base64"] == "ZWRpdGFkbw=="
+    assert response["arquivo_editado_nome"] == "contestacao_editada.docx"
+    assert response["minuta"] == {"tese_central": "Improcedencia."}
+    assert response["engine_ia"] == {"provider": "claude"}
+    # P3.1 — tempo_processamento_ms presente e numerico
+    assert isinstance(response["tempo_processamento_ms"], int)
+    assert response["tempo_processamento_ms"] >= 0
+
+    # P1.3 — payload persistido separa conteudo de nome corretamente
+    assert payload_persistido["arquivo_base_nome"] == "peticao.docx"
+    assert payload_persistido["arquivo_base_conteudo_base64"] == arquivo_b64
+    assert payload_persistido["arquivo_base_mime_type"].endswith(
+        "wordprocessingml.document"
+    )
+    assert payload_persistido["arquivo_base_tamanho_bytes"] == 1024
+    # Garante que o nome NAO entrou no campo de conteudo (regressao P1.3)
+    assert payload_persistido["arquivo_base_conteudo_base64"] != "peticao.docx"
