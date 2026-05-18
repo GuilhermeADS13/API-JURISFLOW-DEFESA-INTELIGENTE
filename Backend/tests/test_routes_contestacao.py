@@ -194,3 +194,58 @@ def test_obter_resumo_contestacoes_retorna_cards_e_historico(monkeypatch):
     assert calls["cards_usuario_id"] == "USR-DASH"
     assert calls["history_usuario_id"] == "USR-DASH"
     assert calls["history_limit"] == 50
+
+
+# ── PR8 P3.3 — GET /api/contestacoes/{id} ────────────────────────────────────
+
+
+def test_obter_contestacao_retorna_registro_do_proprio_usuario(monkeypatch):
+    """Usuario A consulta sua propria contestacao -> 200 OK com dados."""
+
+    def fake_get_contestacao(contestacao_id, usuario_id):
+        assert contestacao_id == 42
+        assert usuario_id == "USR-A"
+        return {
+            "id": 42,
+            "usuario_id": "USR-A",
+            "numero_processo": "0001234-56.2026.8.00.0000",
+            "autor": "Maria",
+            "reu": "Empresa X",
+            "tipo_acao": "Trabalhista",
+            "status": "ok",
+        }
+
+    monkeypatch.setattr(contestacao, "get_contestacao", fake_get_contestacao)
+
+    response = asyncio.run(
+        contestacao.obter_contestacao(
+            request=_fake_request("GET", "/api/contestacoes/42"),
+            contestacao_id=42,
+            usuario={"id": "USR-A", "nome": "A", "email": "a@x.com"},
+        )
+    )
+
+    assert response["id"] == 42
+    assert response["autor"] == "Maria"
+
+
+def test_obter_contestacao_de_outro_usuario_retorna_404(monkeypatch):
+    """RLS — usuario B consulta id de A -> get_contestacao retorna None -> 404."""
+
+    def fake_get_contestacao(contestacao_id, usuario_id):
+        # Simula filtro WHERE usuario_id = %s — nao encontrou para usuario B
+        return None
+
+    monkeypatch.setattr(contestacao, "get_contestacao", fake_get_contestacao)
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            contestacao.obter_contestacao(
+                request=_fake_request("GET", "/api/contestacoes/42"),
+                contestacao_id=42,
+                usuario={"id": "USR-B", "nome": "B", "email": "b@x.com"},
+            )
+        )
+
+    assert exc_info.value.status_code == 404
+    assert "nao encontrada" in exc_info.value.detail.lower()

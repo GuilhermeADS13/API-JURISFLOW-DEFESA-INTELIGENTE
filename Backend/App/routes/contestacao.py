@@ -7,6 +7,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from App.database import (
+    get_contestacao,
     get_dashboard_cards_por_usuario,
     list_contestacoes_por_usuario,
     save_contestacao,
@@ -113,3 +114,24 @@ async def obter_resumo_contestacoes(
         "cards": get_dashboard_cards_por_usuario(usuario_id),
         "history": list_contestacoes_por_usuario(usuario_id, limit=limit),
     }
+
+
+@router.get("/contestacoes/{contestacao_id}")
+@limiter.limit(RATE_LIMIT_DASHBOARD)
+async def obter_contestacao(
+    request: Request,
+    contestacao_id: int,
+    usuario: dict[str, str] = Depends(get_authenticated_user),
+) -> dict:
+    """Retorna detalhes de uma contestacao especifica do usuario autenticado (PR8 P3.3).
+
+    A funcao `get_contestacao` ja filtra por `usuario_id` (defesa em profundidade
+    contra IDOR) — usuario A consultando id de contestacao do usuario B recebe 404.
+    """
+    registro = get_contestacao(contestacao_id, str(usuario["id"]))
+    if registro is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Contestacao nao encontrada.",
+        )
+    return registro
