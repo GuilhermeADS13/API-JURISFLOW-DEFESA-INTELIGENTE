@@ -9,7 +9,9 @@ from starlette.requests import Request
 # Lista de proxies confiaveis (CIDR/host) cujo X-Forwarded-For deve ser respeitado.
 # Em producao atras de nginx/cloudflare, configurar via env. Se vazia, ignoramos
 # o header para nao permitir spoofing trivial em ambientes expostos diretamente.
-TRUST_FORWARDED_HEADER = os.getenv("RATE_LIMIT_TRUST_FORWARDED", "false").strip().lower() == "true"
+TRUST_FORWARDED_HEADER = (
+    os.getenv("RATE_LIMIT_TRUST_FORWARDED", "false").strip().lower() == "true"
+)
 
 
 def _client_ip(request: Request) -> str:

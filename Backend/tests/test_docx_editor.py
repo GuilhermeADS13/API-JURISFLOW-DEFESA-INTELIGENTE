@@ -60,15 +60,17 @@ def _ler_paragrafos(docx_bytes: bytes) -> list[str]:
 
 def _ler_tabela(docx_bytes: bytes) -> list[list[str]]:
     doc = Document(BytesIO(docx_bytes))
-    return [
-        [cell.text for cell in row.cells]
-        for row in doc.tables[0].rows
-    ]
+    return [[cell.text for cell in row.cells] for row in doc.tables[0].rows]
 
 
 def test_substituicao_simples_em_run_unico():
     docx = _docx_simples("Reu: Janaina Pereira da Silva Matos.")
-    pares = [{"antigo": "Janaina Pereira da Silva Matos", "novo": "Erica Cavalcante de Oliveira"}]
+    pares = [
+        {
+            "antigo": "Janaina Pereira da Silva Matos",
+            "novo": "Erica Cavalcante de Oliveira",
+        }
+    ]
 
     novo_bytes, ocorrencias = aplicar_substituicoes(docx, pares)
 
@@ -77,8 +79,12 @@ def test_substituicao_simples_em_run_unico():
 
 
 def test_multiplas_ocorrencias_no_mesmo_paragrafo():
-    docx = _docx_simples("Processo 0000091-39.2026.5.06.0341 vinculado ao caso 0000091-39.2026.5.06.0341.")
-    pares = [{"antigo": "0000091-39.2026.5.06.0341", "novo": "0000057-64.2026.5.06.0341"}]
+    docx = _docx_simples(
+        "Processo 0000091-39.2026.5.06.0341 vinculado ao caso 0000091-39.2026.5.06.0341."
+    )
+    pares = [
+        {"antigo": "0000091-39.2026.5.06.0341", "novo": "0000057-64.2026.5.06.0341"}
+    ]
 
     novo_bytes, ocorrencias = aplicar_substituicoes(docx, pares)
 
@@ -90,8 +96,15 @@ def test_multiplas_ocorrencias_no_mesmo_paragrafo():
 
 def test_substituicao_em_runs_fragmentados():
     """Texto que cruza <w:r> (ex: parte do nome em negrito) deve ser substituido."""
-    docx = _docx_com_runs_fragmentados("Reu: Janaina ", "Pereira ", "da Silva ", "Matos.")
-    pares = [{"antigo": "Janaina Pereira da Silva Matos", "novo": "Erica Cavalcante de Oliveira"}]
+    docx = _docx_com_runs_fragmentados(
+        "Reu: Janaina ", "Pereira ", "da Silva ", "Matos."
+    )
+    pares = [
+        {
+            "antigo": "Janaina Pereira da Silva Matos",
+            "novo": "Erica Cavalcante de Oliveira",
+        }
+    ]
 
     novo_bytes, ocorrencias = aplicar_substituicoes(docx, pares)
 
@@ -110,11 +123,13 @@ def test_ocorrencia_inexistente_retorna_zero():
 
 
 def test_substituicao_dentro_de_tabela():
-    docx = _docx_com_tabela([
-        ["Campo", "Valor"],
-        ["Reclamado", "Janaina Pereira"],
-        ["Valor da causa", "R$ 10.000,00"],
-    ])
+    docx = _docx_com_tabela(
+        [
+            ["Campo", "Valor"],
+            ["Reclamado", "Janaina Pereira"],
+            ["Valor da causa", "R$ 10.000,00"],
+        ]
+    )
     pares = [
         {"antigo": "Janaina Pereira", "novo": "Erica Cavalcante"},
         {"antigo": "R$ 10.000,00", "novo": "R$ 27.598,41"},
@@ -232,10 +247,12 @@ def test_extrair_texto_de_multiplos_paragrafos_preserva_ordem():
 
 
 def test_extrair_texto_inclui_celulas_de_tabela():
-    docx = _docx_com_tabela([
-        ["Campo", "Valor"],
-        ["Reclamado", "Janaina Pereira"],
-    ])
+    docx = _docx_com_tabela(
+        [
+            ["Campo", "Valor"],
+            ["Reclamado", "Janaina Pereira"],
+        ]
+    )
     texto = extrair_texto(docx)
 
     assert "Campo" in texto

@@ -86,15 +86,21 @@ def _enviar_para_n8n_sync(dados: dict[str, Any]) -> Any:
             webhook_url,
             type(error).__name__,
         )
-        return {"status": "processando", "raw_response": response_body.decode("utf-8", errors="replace")}
+        return {
+            "status": "processando",
+            "raw_response": response_body.decode("utf-8", errors="replace"),
+        }
 
     # Valida e filtra campos desconhecidos para prevenir injecao de dados arbitrarios.
     if isinstance(raw, dict):
         from App.models.n8n_response import N8NResponse
+
         try:
             return N8NResponse(**raw).model_dump(exclude_none=True)
         except Exception:
-            logger.warning("Resposta n8n nao passou na validacao de schema — retornando status padrao")
+            logger.warning(
+                "Resposta n8n nao passou na validacao de schema — retornando status padrao"
+            )
             return {"status": "processando"}
 
     return raw
@@ -199,7 +205,9 @@ def _enviar_para_n8n_peticao_sync(dados: dict[str, Any]) -> Any:
 
     if not response_body:
         logger.warning("n8n (peticao) respondeu sem corpo em %s", webhook_url)
-        raise N8NServiceError("Workflow de contestacao-por-peticao retornou resposta vazia.")
+        raise N8NServiceError(
+            "Workflow de contestacao-por-peticao retornou resposta vazia."
+        )
 
     try:
         return json.loads(response_body.decode("utf-8"))

@@ -13,9 +13,9 @@ MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
 
 # Magic bytes dos formatos permitidos para deteccao de MIME real (sem lib externa).
 _MAGIC_BYTES: list[bytes] = [
-    b"%PDF",           # PDF
+    b"%PDF",  # PDF
     b"\xd0\xcf\x11\xe0",  # DOC (OLE2 Compound)
-    b"PK\x03\x04",    # DOCX (ZIP/OpenXML)
+    b"PK\x03\x04",  # DOCX (ZIP/OpenXML)
 ]
 
 
@@ -130,7 +130,9 @@ class Processo(BaseModel):
         conteudo = (self.arquivo_base_conteudo_base64 or "").strip()
 
         if nome and not conteudo:
-            raise ValueError("Envie o conteudo base64 do arquivo base junto com o nome.")
+            raise ValueError(
+                "Envie o conteudo base64 do arquivo base junto com o nome."
+            )
         if conteudo and not nome:
             raise ValueError("Informe o nome do arquivo base quando houver conteudo.")
 

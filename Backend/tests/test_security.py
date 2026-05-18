@@ -77,7 +77,12 @@ def test_get_authenticated_user_sessao_invalida(monkeypatch):
 
 def test_get_authenticated_user_fluxo_feliz(monkeypatch):
     request = _request_com_headers([])
-    fake_session = {"id": "USR-001", "nome": "Ana", "email": "ana@teste.com", "token": "abc"}
+    fake_session = {
+        "id": "USR-001",
+        "nome": "Ana",
+        "email": "ana@teste.com",
+        "token": "abc",
+    }
 
     monkeypatch.setattr(security, "extract_session_token", lambda req, auth: "token-ok")
     monkeypatch.setattr(security, "get_sessao_ativa", lambda token: fake_session)
@@ -96,7 +101,9 @@ def test_get_authenticated_user_valida_bearer_supabase(monkeypatch):
     }
 
     monkeypatch.setattr(security, "get_sessao_ativa", lambda token: None)
-    monkeypatch.setattr(security, "validate_supabase_bearer_token", lambda token: supabase_user)
+    monkeypatch.setattr(
+        security, "validate_supabase_bearer_token", lambda token: supabase_user
+    )
 
     result = asyncio.run(
         security.get_authenticated_user(

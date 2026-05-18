@@ -1,4 +1,5 @@
 """Quest 2 — Verifica presenca dos security headers em todas as responses."""
+
 from fastapi.testclient import TestClient
 
 from main import app

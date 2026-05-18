@@ -13,6 +13,7 @@ Fluxo:
 Se embedding_service retornar None (provider sem chave), responde com
 status='embedding_indisponivel' e o n8n cai no fallback TF-IDF local.
 """
+
 from __future__ import annotations
 
 import logging

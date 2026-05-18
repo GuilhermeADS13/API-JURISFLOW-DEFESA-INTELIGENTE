@@ -1,6 +1,4 @@
 """Quest 2 — Testa validacao do schema da resposta n8n."""
-import pytest
-from pydantic import ValidationError
 
 from App.models.n8n_response import N8NResponse
 

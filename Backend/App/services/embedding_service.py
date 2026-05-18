@@ -17,6 +17,7 @@ Configuracao via env:
 Se a lib nao estiver instalada ou houver erro, gerar_embedding() retorna None
 silenciosamente e o n8n cai para o fallback TF-IDF.
 """
+
 from __future__ import annotations
 
 import logging
@@ -59,7 +60,9 @@ def gerar_embedding(texto: str) -> Optional[list[float]]:
     if provider == "openai":
         return _gerar_openai(texto_limpo)
 
-    logger.debug("EMBEDDING_PROVIDER '%s' nao reconhecido. RAG semantico desativado.", provider)
+    logger.debug(
+        "EMBEDDING_PROVIDER '%s' nao reconhecido. RAG semantico desativado.", provider
+    )
     return None
 
 
@@ -81,6 +84,7 @@ def gerar_embedding_query(texto: str) -> Optional[list[float]]:
 
 
 # ── Local (sentence-transformers) ─────────────────────────────────────────────
+
 
 def _carregar_modelo_local() -> Optional[Any]:
     """Carrega o modelo sentence-transformers 1x e mantem em memoria."""
@@ -105,7 +109,10 @@ def _carregar_modelo_local() -> Optional[Any]:
         try:
             logger.info("Carregando modelo de embedding local: %s", model_name)
             _LOCAL_MODEL = SentenceTransformer(model_name)
-            logger.info("Modelo de embedding carregado (dim=%d).", _LOCAL_MODEL.get_sentence_embedding_dimension())
+            logger.info(
+                "Modelo de embedding carregado (dim=%d).",
+                _LOCAL_MODEL.get_sentence_embedding_dimension(),
+            )
         except Exception as err:
             logger.error("Falha ao carregar modelo local '%s': %s", model_name, err)
             return None
@@ -135,6 +142,7 @@ def _gerar_local(texto: str) -> Optional[list[float]]:
 
 
 # ── Cohere (legacy — 1024 dims, incompativel com schema atual) ────────────────
+
 
 def _gerar_cohere(texto: str) -> Optional[list[float]]:
     api_key = os.getenv("COHERE_API_KEY", "").strip()
@@ -171,6 +179,7 @@ def _gerar_cohere_query(texto: str) -> Optional[list[float]]:
 
     try:
         import cohere  # type: ignore[import]
+
         client = cohere.Client(api_key)
         resp = client.embed(
             texts=[texto[:_MAX_CHARS]],
@@ -185,6 +194,7 @@ def _gerar_cohere_query(texto: str) -> Optional[list[float]]:
 
 
 # ── OpenAI (legacy — 1024 dims, incompativel com schema atual) ────────────────
+
 
 def _gerar_openai(texto: str) -> Optional[list[float]]:
     api_key = os.getenv("OPENAI_API_KEY", "").strip()

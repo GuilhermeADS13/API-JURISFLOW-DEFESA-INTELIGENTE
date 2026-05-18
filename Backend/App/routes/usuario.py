@@ -37,7 +37,9 @@ def _client_ip(request: Request) -> str:
 
 @router.post("/usuarios/cadastro", status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/minute")
-async def cadastrar_usuario(request: Request, payload: UsuarioCadastro, response: Response) -> dict:
+async def cadastrar_usuario(
+    request: Request, payload: UsuarioCadastro, response: Response
+) -> dict:
     client_ip = _client_ip(request)
     existente = get_usuario_por_email(payload.email)
     if existente:
@@ -82,7 +84,9 @@ async def cadastrar_usuario(request: Request, payload: UsuarioCadastro, response
 
 @router.post("/usuarios/login")
 @limiter.limit("10/minute")
-async def login_usuario(request: Request, payload: UsuarioLogin, response: Response) -> dict:
+async def login_usuario(
+    request: Request, payload: UsuarioLogin, response: Response
+) -> dict:
     client_ip = _client_ip(request)
     usuario = get_usuario_por_email(payload.email)
     if not usuario:
@@ -151,7 +155,9 @@ async def logout_usuario(
 
 
 @router.get("/usuarios/sessao")
-async def obter_sessao(usuario: dict[str, str] = Depends(get_authenticated_user)) -> dict:
+async def obter_sessao(
+    usuario: dict[str, str] = Depends(get_authenticated_user),
+) -> dict:
     """Retorna dados basicos da sessao autenticada."""
     return {
         "status": "sucesso",

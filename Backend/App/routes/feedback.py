@@ -7,10 +7,8 @@ O feedback e usado pelo RAG do agente para ponderar ranking das defesas anterior
 import logging
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Request, status
-from pydantic import ValidationError
 
 from App.database import (
-    DatabaseIntegrityError,
     get_contestacoes_exemplares,
     salvar_exemplar,
     salvar_feedback,
@@ -64,9 +62,11 @@ async def registrar_feedback(
 
 # ---------- endpoints admin exemplares ----------
 
+
 def _is_admin(usuario: dict[str, str]) -> bool:
     """Verifica se o email do usuario esta na lista de admins do .env."""
     import os
+
     admins_raw = os.getenv("ADMIN_EMAILS", "")
     admins = {e.strip().lower() for e in admins_raw.split(",") if e.strip()}
     email = str(usuario.get("email", "")).lower()

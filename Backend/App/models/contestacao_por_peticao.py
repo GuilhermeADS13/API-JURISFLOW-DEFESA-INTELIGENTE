@@ -71,7 +71,9 @@ class ArquivoAnexo(BaseModel):
         if len(raw) > MAX_FILE_SIZE_BYTES:
             raise ValueError("Anexo excede 20MB.")
         if not any(raw.startswith(m) for m in _MAGIC_BYTES_PETICAO):
-            raise ValueError("Conteudo do anexo nao corresponde a PDF, DOC ou DOCX valido.")
+            raise ValueError(
+                "Conteudo do anexo nao corresponde a PDF, DOC ou DOCX valido."
+            )
         return conteudo
 
 
@@ -169,7 +171,9 @@ class ContestacaoPorPeticao(BaseModel):
         if len(raw) > MAX_FILE_SIZE_BYTES:
             raise ValueError("Modelo base excede o tamanho maximo de 20MB.")
         if not raw.startswith(_MAGIC_BYTES_DOCX):
-            raise ValueError("Modelo base deve ser um .docx valido (assinatura ZIP ausente).")
+            raise ValueError(
+                "Modelo base deve ser um .docx valido (assinatura ZIP ausente)."
+            )
         return conteudo
 
     @field_validator("tipo_acao_hint", "pontos_contestante")
@@ -241,8 +245,13 @@ class MinutaEditada(BaseModel):
     @model_validator(mode="after")
     def pelo_menos_um_campo(self):
         campos = [
-            self.tese_central, self.preliminares, self.merito, self.fundamentos,
-            self.pedidos, self.observacoes, self.impugnacao_pedidos,
+            self.tese_central,
+            self.preliminares,
+            self.merito,
+            self.fundamentos,
+            self.pedidos,
+            self.observacoes,
+            self.impugnacao_pedidos,
         ]
         if not any(c is not None and c != "" for c in campos):
             raise ValueError("Informe ao menos um campo da minuta para editar.")

@@ -1,4 +1,5 @@
 """Quest 2 — Testa rate limiting nos endpoints que antes nao tinham protecao."""
+
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -29,11 +30,16 @@ def auth_override():
 
 # ── /gerar-contestacao: 2/minute ────────────────────────────────────────────
 
-def test_gerar_contestacao_rate_limit(auth_override):
-    with patch("App.routes.contestacao.enviar_para_n8n", new_callable=AsyncMock,
-               return_value={"status": "processando"}), \
-         patch("App.routes.contestacao.save_contestacao", return_value=1):
 
+def test_gerar_contestacao_rate_limit(auth_override):
+    with (
+        patch(
+            "App.routes.contestacao.enviar_para_n8n",
+            new_callable=AsyncMock,
+            return_value={"status": "processando"},
+        ),
+        patch("App.routes.contestacao.save_contestacao", return_value=1),
+    ):
         # Primeiras 2 devem passar (status != 429)
         for _ in range(2):
             r = client.post("/api/gerar-contestacao", json=PROCESSO_VALIDO)
@@ -46,10 +52,14 @@ def test_gerar_contestacao_rate_limit(auth_override):
 
 # ── /contestacoes/resumo: 10/minute ─────────────────────────────────────────
 
-def test_resumo_rate_limit(auth_override):
-    with patch("App.routes.contestacao.get_dashboard_cards_por_usuario", return_value=[]), \
-         patch("App.routes.contestacao.list_contestacoes_por_usuario", return_value=[]):
 
+def test_resumo_rate_limit(auth_override):
+    with (
+        patch(
+            "App.routes.contestacao.get_dashboard_cards_por_usuario", return_value=[]
+        ),
+        patch("App.routes.contestacao.list_contestacoes_por_usuario", return_value=[]),
+    ):
         for _ in range(10):
             r = client.get("/api/contestacoes/resumo")
             assert r.status_code != 429

@@ -23,7 +23,9 @@ def _request_sem_headers() -> Request:
 
 
 def test_cadastrar_usuario_sucesso(monkeypatch):
-    payload = UsuarioCadastro(name="Ana Silva", email="ana@teste.com", password="Senha@123")
+    payload = UsuarioCadastro(
+        name="Ana Silva", email="ana@teste.com", password="Senha@123"
+    )
     response = Response()
     calls: dict = {}
 
@@ -48,7 +50,9 @@ def test_cadastrar_usuario_sucesso(monkeypatch):
 
     monkeypatch.setattr(usuario, "apply_session_cookie", fake_apply_session_cookie)
 
-    result = asyncio.run(usuario.cadastrar_usuario(_request_sem_headers(), payload, response))
+    result = asyncio.run(
+        usuario.cadastrar_usuario(_request_sem_headers(), payload, response)
+    )
 
     assert result["status"] == "sucesso"
     assert result["usuario"]["id"] == "USR-001"
@@ -58,7 +62,9 @@ def test_cadastrar_usuario_sucesso(monkeypatch):
 
 
 def test_cadastrar_usuario_rejeita_email_duplicado(monkeypatch):
-    payload = UsuarioCadastro(name="Ana Silva", email="ana@teste.com", password="Senha@123")
+    payload = UsuarioCadastro(
+        name="Ana Silva", email="ana@teste.com", password="Senha@123"
+    )
     response = Response()
 
     monkeypatch.setattr(
@@ -68,13 +74,17 @@ def test_cadastrar_usuario_rejeita_email_duplicado(monkeypatch):
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        asyncio.run(usuario.cadastrar_usuario(_request_sem_headers(), payload, response))
+        asyncio.run(
+            usuario.cadastrar_usuario(_request_sem_headers(), payload, response)
+        )
 
     assert exc_info.value.status_code == 409
 
 
 def test_cadastrar_usuario_trata_integridade(monkeypatch):
-    payload = UsuarioCadastro(name="Ana Silva", email="ana@teste.com", password="Senha@123")
+    payload = UsuarioCadastro(
+        name="Ana Silva", email="ana@teste.com", password="Senha@123"
+    )
     response = Response()
 
     monkeypatch.setattr(usuario, "get_usuario_por_email", lambda email: None)
@@ -86,7 +96,9 @@ def test_cadastrar_usuario_trata_integridade(monkeypatch):
     monkeypatch.setattr(usuario, "create_usuario", fake_create_usuario)
 
     with pytest.raises(HTTPException) as exc_info:
-        asyncio.run(usuario.cadastrar_usuario(_request_sem_headers(), payload, response))
+        asyncio.run(
+            usuario.cadastrar_usuario(_request_sem_headers(), payload, response)
+        )
 
     assert exc_info.value.status_code == 409
 
@@ -108,7 +120,12 @@ def test_login_rejeita_senha_incorreta(monkeypatch):
     monkeypatch.setattr(
         usuario,
         "get_usuario_por_email",
-        lambda email: {"id": "USR-001", "nome": "Ana", "email": email, "senha_hash": "hash"},
+        lambda email: {
+            "id": "USR-001",
+            "nome": "Ana",
+            "email": email,
+            "senha_hash": "hash",
+        },
     )
     monkeypatch.setattr(usuario, "verify_password", lambda senha, hash_: False)
 
@@ -126,7 +143,12 @@ def test_login_fluxo_feliz(monkeypatch):
     monkeypatch.setattr(
         usuario,
         "get_usuario_por_email",
-        lambda email: {"id": "USR-001", "nome": "Ana", "email": email, "senha_hash": "hash"},
+        lambda email: {
+            "id": "USR-001",
+            "nome": "Ana",
+            "email": email,
+            "senha_hash": "hash",
+        },
     )
     monkeypatch.setattr(usuario, "verify_password", lambda senha, hash_: True)
     monkeypatch.setattr(usuario, "create_sessao_usuario", lambda user_id: "token-login")
@@ -137,7 +159,9 @@ def test_login_fluxo_feliz(monkeypatch):
 
     monkeypatch.setattr(usuario, "apply_session_cookie", fake_apply_session_cookie)
 
-    result = asyncio.run(usuario.login_usuario(_request_sem_headers(), payload, response))
+    result = asyncio.run(
+        usuario.login_usuario(_request_sem_headers(), payload, response)
+    )
 
     assert result["status"] == "sucesso"
     assert result["token"] == "token-login"
@@ -151,8 +175,12 @@ def test_logout_revoga_token_do_payload(monkeypatch):
     payload = UsuarioLogout(token="token-explicito")
     calls: dict = {"revoked": None, "cookie_cleared": False}
 
-    monkeypatch.setattr(usuario, "extract_session_token", lambda req, auth: "token-header")
-    monkeypatch.setattr(usuario, "revoke_sessao", lambda token: calls.update({"revoked": token}) or True)
+    monkeypatch.setattr(
+        usuario, "extract_session_token", lambda req, auth: "token-header"
+    )
+    monkeypatch.setattr(
+        usuario, "revoke_sessao", lambda token: calls.update({"revoked": token}) or True
+    )
     monkeypatch.setattr(
         usuario,
         "clear_session_cookie",
@@ -194,7 +222,12 @@ def test_logout_sem_token_ainda_limpa_cookie(monkeypatch):
 def test_obter_sessao_retorna_usuario_basico():
     result = asyncio.run(
         usuario.obter_sessao(
-            usuario={"id": "USR-001", "nome": "Ana", "email": "ana@teste.com", "token": "abc"}
+            usuario={
+                "id": "USR-001",
+                "nome": "Ana",
+                "email": "ana@teste.com",
+                "token": "abc",
+            }
         )
     )
 

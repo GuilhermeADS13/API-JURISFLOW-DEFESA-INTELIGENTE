@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 try:
     import pytesseract  # type: ignore
     from pdf2image import convert_from_bytes  # type: ignore
+
     _OCR_LIBS_DISPONIVEIS = True
 except ImportError:
     pytesseract = None  # type: ignore
@@ -68,16 +69,86 @@ PDF_OCR_FALLBACK_THRESHOLD = 200
 # Ordenamos por importancia: PEDIDOS > FATOS > DIREITO > restantes.
 SECOES_PRIORIZADAS = (
     # (regex, nome_legivel, peso_prioridade)
-    (re.compile(r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]s?\s+pedidos?\b", re.IGNORECASE | re.MULTILINE), "PEDIDOS", 100),
-    (re.compile(r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]s?\s+fatos\b", re.IGNORECASE | re.MULTILINE), "FATOS", 90),
-    (re.compile(r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]\s+direito\b", re.IGNORECASE | re.MULTILINE), "DIREITO", 80),
-    (re.compile(r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]s?\s+fundamentos?\s+jur[íi]dicos?\b", re.IGNORECASE | re.MULTILINE), "FUNDAMENTOS", 80),
-    (re.compile(r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]\s+m[ée]rito\b", re.IGNORECASE | re.MULTILINE), "MERITO", 75),
-    (re.compile(r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]\s+valor\s+d[oa]\s+causa\b", re.IGNORECASE | re.MULTILINE), "VALOR_CAUSA", 70),
-    (re.compile(r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]\s+legitimidade\b", re.IGNORECASE | re.MULTILINE), "LEGITIMIDADE", 60),
-    (re.compile(r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]s?\s+preliminares?\b", re.IGNORECASE | re.MULTILINE), "PRELIMINARES", 60),
-    (re.compile(r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]\s+t[ée]cnico-?jur[íi]dic", re.IGNORECASE | re.MULTILINE), "TECNICO_JURIDICO", 55),
-    (re.compile(r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]s?\s+provas?\b", re.IGNORECASE | re.MULTILINE), "PROVAS", 50),
+    (
+        re.compile(
+            r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]s?\s+pedidos?\b",
+            re.IGNORECASE | re.MULTILINE,
+        ),
+        "PEDIDOS",
+        100,
+    ),
+    (
+        re.compile(
+            r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]s?\s+fatos\b",
+            re.IGNORECASE | re.MULTILINE,
+        ),
+        "FATOS",
+        90,
+    ),
+    (
+        re.compile(
+            r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]\s+direito\b",
+            re.IGNORECASE | re.MULTILINE,
+        ),
+        "DIREITO",
+        80,
+    ),
+    (
+        re.compile(
+            r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]s?\s+fundamentos?\s+jur[íi]dicos?\b",
+            re.IGNORECASE | re.MULTILINE,
+        ),
+        "FUNDAMENTOS",
+        80,
+    ),
+    (
+        re.compile(
+            r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]\s+m[ée]rito\b",
+            re.IGNORECASE | re.MULTILINE,
+        ),
+        "MERITO",
+        75,
+    ),
+    (
+        re.compile(
+            r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]\s+valor\s+d[oa]\s+causa\b",
+            re.IGNORECASE | re.MULTILINE,
+        ),
+        "VALOR_CAUSA",
+        70,
+    ),
+    (
+        re.compile(
+            r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]\s+legitimidade\b",
+            re.IGNORECASE | re.MULTILINE,
+        ),
+        "LEGITIMIDADE",
+        60,
+    ),
+    (
+        re.compile(
+            r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]s?\s+preliminares?\b",
+            re.IGNORECASE | re.MULTILINE,
+        ),
+        "PRELIMINARES",
+        60,
+    ),
+    (
+        re.compile(
+            r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]\s+t[ée]cnico-?jur[íi]dic",
+            re.IGNORECASE | re.MULTILINE,
+        ),
+        "TECNICO_JURIDICO",
+        55,
+    ),
+    (
+        re.compile(
+            r"^(?:[IVX]+\.?\s*[-–—)]?\s*|\d+[.)]\s*)?d[oa]s?\s+provas?\b",
+            re.IGNORECASE | re.MULTILINE,
+        ),
+        "PROVAS",
+        50,
+    ),
 )
 
 # Marcador de "fim de secao" — outra secao numerada/titulada ou final do doc.
@@ -112,7 +183,11 @@ def extrair_texto_peticao(conteudo: bytes, nome: str) -> str:
         # .doc legado — extracao basica de texto legivel ASCII/Latin-1.
         texto = conteudo.decode("latin1", errors="ignore")
         # Remove caracteres de controle nao-imprimiveis exceto quebras de linha.
-        texto = "".join(c for c in texto if c == "\n" or c == "\r" or c == "\t" or 0x20 <= ord(c) <= 0xFFFF)
+        texto = "".join(
+            c
+            for c in texto
+            if c == "\n" or c == "\r" or c == "\t" or 0x20 <= ord(c) <= 0xFFFF
+        )
     else:
         raise ExtracaoError(f"Extensao nao suportada para extracao: {nome!r}")
 
@@ -277,7 +352,9 @@ def _aplicar_long_context(texto: str, limite: int) -> str:
     fim_size = limite - inicio_size - 80  # 80 chars de folga para a elipse
     inicio = texto[:inicio_size]
     fim = texto[-fim_size:] if fim_size > 0 else ""
-    elipse = "\n\n[...trecho intermediario omitido por exceder o limite de contexto...]\n\n"
+    elipse = (
+        "\n\n[...trecho intermediario omitido por exceder o limite de contexto...]\n\n"
+    )
     return inicio + elipse + fim
 
 

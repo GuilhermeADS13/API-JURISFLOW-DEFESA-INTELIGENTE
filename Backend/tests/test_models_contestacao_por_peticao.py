@@ -58,9 +58,7 @@ def test_arquivo_muito_grande():
     grande = b"%PDF-1.4\n" + b"a" * (MAX_FILE_SIZE_BYTES + 100)
     b64 = base64.b64encode(grande).decode("ascii")
     with pytest.raises(ValidationError) as exc:
-        ContestacaoPorPeticao.model_validate(
-            _payload(arquivo_peticao_base64=b64)
-        )
+        ContestacaoPorPeticao.model_validate(_payload(arquivo_peticao_base64=b64))
     assert "20MB" in str(exc.value)
 
 
@@ -84,9 +82,7 @@ def test_magic_bytes_invalidos():
     """Base64 valido, mas conteudo nao tem header de PDF/DOC/DOCX."""
     fake = base64.b64encode(b"texto cru sem magic bytes" * 10).decode("ascii")
     with pytest.raises(ValidationError) as exc:
-        ContestacaoPorPeticao.model_validate(
-            _payload(arquivo_peticao_base64=fake)
-        )
+        ContestacaoPorPeticao.model_validate(_payload(arquivo_peticao_base64=fake))
     assert "PDF, DOC ou DOCX" in str(exc.value)
 
 

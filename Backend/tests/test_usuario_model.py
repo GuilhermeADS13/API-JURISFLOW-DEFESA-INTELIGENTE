@@ -32,7 +32,9 @@ def test_senha_forte_regras_minimas(senha, esperado):
 
 
 def test_usuario_cadastro_valido():
-    model = UsuarioCadastro(name="Ana Silva", email="ana@teste.com", password="Senha@123")
+    model = UsuarioCadastro(
+        name="Ana Silva", email="ana@teste.com", password="Senha@123"
+    )
     assert model.nome == "Ana Silva"
     assert model.email == "ana@teste.com"
 

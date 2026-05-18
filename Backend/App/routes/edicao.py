@@ -168,12 +168,14 @@ async def editar_contestacao(
     for sub in resposta.substituicoes:
         ocorrencias_reais = texto_documento.count(sub.antigo)
         if ocorrencias_reais != sub.ocorrencias_esperadas:
-            divergencias.append({
-                "campo": sub.campo,
-                "antigo": sub.antigo,
-                "ocorrencias_esperadas": sub.ocorrencias_esperadas,
-                "ocorrencias_reais": ocorrencias_reais,
-            })
+            divergencias.append(
+                {
+                    "campo": sub.campo,
+                    "antigo": sub.antigo,
+                    "ocorrencias_esperadas": sub.ocorrencias_esperadas,
+                    "ocorrencias_reais": ocorrencias_reais,
+                }
+            )
 
     if divergencias:
         logger.warning(
@@ -189,10 +191,7 @@ async def editar_contestacao(
             ),
         )
 
-    pares = [
-        {"antigo": sub.antigo, "novo": sub.novo}
-        for sub in resposta.substituicoes
-    ]
+    pares = [{"antigo": sub.antigo, "novo": sub.novo} for sub in resposta.substituicoes]
 
     if pares:
         try:

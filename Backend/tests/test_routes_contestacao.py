@@ -11,7 +11,9 @@ from App.routes import contestacao
 from App.services.n8n_service import N8NServiceError
 
 
-def _fake_request(method: str = "POST", path: str = "/api/gerar-contestacao") -> Request:
+def _fake_request(
+    method: str = "POST", path: str = "/api/gerar-contestacao"
+) -> Request:
     """Request minimo para satisfazer o decorator @limiter.limit do slowapi."""
     return Request(
         scope={
@@ -143,7 +145,10 @@ def test_gerar_contestacao_retorna_422_em_erro_validacao(monkeypatch, processo_v
     assert "revise" in detail
     assert calls["save"]["status"] == "erro_validacao"
     # Mensagem original do n8n permanece persistida para auditoria.
-    assert calls["save"]["n8n_resposta"]["mensagem"] == "Numero de processo invalido no workflow."
+    assert (
+        calls["save"]["n8n_resposta"]["mensagem"]
+        == "Numero de processo invalido no workflow."
+    )
 
 
 def test_obter_resumo_contestacoes_retorna_cards_e_historico(monkeypatch):
@@ -167,8 +172,14 @@ def test_obter_resumo_contestacoes_retorna_cards_e_historico(monkeypatch):
             }
         ]
 
-    monkeypatch.setattr(contestacao, "get_dashboard_cards_por_usuario", fake_get_dashboard_cards_por_usuario)
-    monkeypatch.setattr(contestacao, "list_contestacoes_por_usuario", fake_list_contestacoes_por_usuario)
+    monkeypatch.setattr(
+        contestacao,
+        "get_dashboard_cards_por_usuario",
+        fake_get_dashboard_cards_por_usuario,
+    )
+    monkeypatch.setattr(
+        contestacao, "list_contestacoes_por_usuario", fake_list_contestacoes_por_usuario
+    )
 
     response = asyncio.run(
         contestacao.obter_resumo_contestacoes(

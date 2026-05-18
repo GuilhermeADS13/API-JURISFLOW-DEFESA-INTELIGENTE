@@ -37,7 +37,9 @@ async def gerar_contestacao(
         resposta = await enviar_para_n8n(payload)
         workflow_status = "processando"
         if isinstance(resposta, dict):
-            workflow_status = str(resposta.get("status") or "processando").strip() or "processando"
+            workflow_status = (
+                str(resposta.get("status") or "processando").strip() or "processando"
+            )
 
         if workflow_status in {"erro_validacao", "rejeitado"}:
             save_contestacao(payload, status=workflow_status, n8n_resposta=resposta)
@@ -53,7 +55,9 @@ async def gerar_contestacao(
                 detail="Nao foi possivel gerar a contestacao com os dados informados. Revise os campos e tente novamente.",
             )
 
-        registro_id = save_contestacao(payload, status=workflow_status, n8n_resposta=resposta)
+        registro_id = save_contestacao(
+            payload, status=workflow_status, n8n_resposta=resposta
+        )
     except N8NServiceError as error:
         save_contestacao(
             payload,

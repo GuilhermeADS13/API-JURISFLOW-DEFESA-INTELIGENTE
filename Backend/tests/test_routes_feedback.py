@@ -1,4 +1,5 @@
 """Testes para POST /api/contestacoes/{id}/feedback e endpoints admin de exemplares."""
+
 import os
 from unittest.mock import patch
 
@@ -10,8 +11,18 @@ from main import app
 
 client = TestClient(app)
 
-USUARIO_MOCK = {"id": "user-123", "nome": "Advogado Teste", "email": "adv@escritorio.com", "auth_provider": "legacy"}
-ADMIN_MOCK   = {"id": "admin-1",  "nome": "Admin",          "email": "admin@jurisflow.com", "auth_provider": "legacy"}
+USUARIO_MOCK = {
+    "id": "user-123",
+    "nome": "Advogado Teste",
+    "email": "adv@escritorio.com",
+    "auth_provider": "legacy",
+}
+ADMIN_MOCK = {
+    "id": "admin-1",
+    "nome": "Admin",
+    "email": "admin@jurisflow.com",
+    "auth_provider": "legacy",
+}
 
 
 @pytest.fixture
@@ -35,6 +46,7 @@ def auth_como_admin():
 
 
 # ---------- feedback ----------
+
 
 def test_feedback_util_verdadeiro(auth_como_usuario):
     """Happy path: advogado avalia minuta como util."""
@@ -104,10 +116,13 @@ def test_feedback_id_invalido(auth_como_usuario):
 
 # ---------- admin exemplares ----------
 
+
 def test_criar_exemplar_admin(auth_como_admin):
     """Admin pode criar exemplar via POST /api/admin/exemplares."""
-    with patch.dict(os.environ, {"ADMIN_EMAILS": "admin@jurisflow.com"}), \
-         patch("App.routes.feedback.salvar_exemplar", return_value=1):
+    with (
+        patch.dict(os.environ, {"ADMIN_EMAILS": "admin@jurisflow.com"}),
+        patch("App.routes.feedback.salvar_exemplar", return_value=1),
+    ):
         resp = client.post(
             "/api/admin/exemplares",
             json={
@@ -145,8 +160,13 @@ def test_listar_exemplares_admin(auth_como_admin):
             "nota_qualidade": 9,
         }
     ]
-    with patch.dict(os.environ, {"ADMIN_EMAILS": "admin@jurisflow.com"}), \
-         patch("App.routes.feedback.get_contestacoes_exemplares", return_value=exemplares_mock):
+    with (
+        patch.dict(os.environ, {"ADMIN_EMAILS": "admin@jurisflow.com"}),
+        patch(
+            "App.routes.feedback.get_contestacoes_exemplares",
+            return_value=exemplares_mock,
+        ),
+    ):
         resp = client.get("/api/admin/exemplares?tipo_acao=Direito do Consumidor")
     assert resp.status_code == 200
     data = resp.json()

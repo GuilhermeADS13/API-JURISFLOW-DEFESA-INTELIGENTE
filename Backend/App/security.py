@@ -21,12 +21,12 @@ SESSION_COOKIE_NAME = os.getenv("SESSION_COOKIE_NAME", "contestacao_session")
 
 # Configuracoes para endurecer sessao em producao sem quebrar ambiente local.
 SESSION_COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "lax").lower()
-SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "false").strip().lower() == "true"
+SESSION_COOKIE_SECURE = (
+    os.getenv("SESSION_COOKIE_SECURE", "false").strip().lower() == "true"
+)
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
 SUPABASE_PUBLISHABLE_KEY = (
-    os.getenv("SUPABASE_PUBLISHABLE_KEY")
-    or os.getenv("SUPABASE_ANON_KEY")
-    or ""
+    os.getenv("SUPABASE_PUBLISHABLE_KEY") or os.getenv("SUPABASE_ANON_KEY") or ""
 ).strip()
 
 try:
@@ -115,7 +115,9 @@ def _build_supabase_user(user_data: dict[str, Any]) -> dict[str, str] | None:
     metadata = user_data.get("user_metadata")
     metadata_name = ""
     if isinstance(metadata, dict):
-        metadata_name = str(metadata.get("name") or metadata.get("full_name") or "").strip()
+        metadata_name = str(
+            metadata.get("name") or metadata.get("full_name") or ""
+        ).strip()
 
     nome = metadata_name or email.split("@", 1)[0] or "Conta"
     return {
@@ -191,7 +193,9 @@ def validate_supabase_bearer_token(token: str) -> dict[str, str] | None:
         return None
 
     if not isinstance(payload, dict):
-        logger.warning("Resposta inesperada do Supabase Auth (tipo=%s)", type(payload).__name__)
+        logger.warning(
+            "Resposta inesperada do Supabase Auth (tipo=%s)", type(payload).__name__
+        )
         return None
 
     user = _build_supabase_user(payload)
