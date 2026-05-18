@@ -17,9 +17,12 @@ def load_env_file() -> None:
         key, value = stripped.split("=", 1)
         key = key.strip()
         value = value.strip().strip('"').strip("'")
-        # Em desenvolvimento, garantimos que o .env do projeto tenha prioridade
-        # para evitar variaveis antigas do sistema operacional.
-        if key:
+        # PR8 P1.4: NAO sobrescrever variaveis ja presentes no ambiente.
+        # Em producao (Docker, Railway, Kubernetes) as envs vem injetadas e o
+        # .env local (se acidentalmente presente na imagem) nao pode vazar
+        # config de dev sobre prod. Em dev, basta nao ter a var setada no
+        # sistema antes de rodar o backend.
+        if key and key not in os.environ:
             os.environ[key] = value
 
 
