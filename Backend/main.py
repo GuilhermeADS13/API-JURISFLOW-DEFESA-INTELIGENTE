@@ -101,6 +101,17 @@ async def security_headers(request: Request, call_next) -> Response:
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin"
+    # PR8 P2.6 — CSP restritivo: backend e API JSON, nao serve script proprio
+    # nem incorpora HTML de terceiros. frame-ancestors 'none' complementa o
+    # X-Frame-Options para browsers modernos.
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'none'; "
+        "object-src 'none'; "
+        "frame-ancestors 'none'"
+    )
+    # Bloqueia APIs sensiveis do browser que o backend nao precisa.
+    response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
     return response
 
 
