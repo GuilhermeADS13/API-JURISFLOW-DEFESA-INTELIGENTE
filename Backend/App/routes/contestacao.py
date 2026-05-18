@@ -1,6 +1,7 @@
 # Rotas HTTP de contestacoes: envio ao n8n e consulta de resumo do dashboard.
 import logging
 import os
+import time
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -41,7 +42,10 @@ async def gerar_contestacao(
     payload["auth_provider"] = usuario.get("auth_provider", "legacy")
 
     try:
+        # PR8 P3.1 — mede o tempo end-to-end da chamada ao n8n para observabilidade.
+        t_inicio = time.monotonic()
         resposta = await enviar_para_n8n(payload)
+        tempo_processamento_ms = int((time.monotonic() - t_inicio) * 1000)
         workflow_status = "processando"
         if isinstance(resposta, dict):
             workflow_status = (
@@ -79,10 +83,19 @@ async def gerar_contestacao(
     case_year = datetime.now().year
     case_id = f"CTR-{case_year}-{int(registro_id):06d}"
 
+    # PR8 P2.5 — eleva campos do DOCX/minuta/engine_ia para o topo da resposta.
+    # Antes ficavam soterrados em `workflow` e o frontend nao sabia como acessar.
+    # Mantem `workflow` para compatibilidade com integracao antiga.
+    resposta_dict = resposta if isinstance(resposta, dict) else {}
     return {
         "status": "processando",
         "id_registro": registro_id,
         "id_caso": case_id,
+        "arquivo_editado_base64": resposta_dict.get("arquivo_editado_base64"),
+        "arquivo_editado_nome": resposta_dict.get("arquivo_editado_nome"),
+        "minuta": resposta_dict.get("minuta"),
+        "engine_ia": resposta_dict.get("engine_ia"),
+        "tempo_processamento_ms": tempo_processamento_ms,
         "workflow": resposta,
     }
 
