@@ -83,9 +83,13 @@ def get_n8n_webhook_auth_token() -> str:
     return os.getenv("N8N_WEBHOOK_AUTH_TOKEN", "").strip()
 
 
-def _enviar_para_n8n_sync(dados: dict[str, Any]) -> Any:
-    """Execucao sincrona do POST para n8n (usada em thread dedicada)."""
-    webhook_url = get_n8n_webhook_url()
+def _enviar_para_n8n_sync(dados: dict[str, Any], webhook_url: str | None = None) -> Any:
+    """Execucao sincrona do POST para n8n (usada em thread dedicada).
+
+    `webhook_url` opcional permite override do default `N8N_WEBHOOK_URL` —
+    util para roteamento dinamico entre fluxos (PR8 P1.2).
+    """
+    webhook_url = webhook_url or get_n8n_webhook_url()
     body = json.dumps(dados).encode("utf-8")
     request_headers = {"Content-Type": "application/json"}
     auth_token = get_n8n_webhook_auth_token()
@@ -138,9 +142,17 @@ def _enviar_para_n8n_sync(dados: dict[str, Any]) -> Any:
     return raw
 
 
-async def enviar_para_n8n(dados: dict[str, Any]) -> Any:
-    """Envia payload sem bloquear o loop principal da API."""
-    return await asyncio.to_thread(_enviar_para_n8n_sync, dados)
+async def enviar_para_n8n(
+    dados: dict[str, Any],
+    webhook_url: str | None = None,
+) -> Any:
+    """Envia payload sem bloquear o loop principal da API.
+
+    `webhook_url` opcional sobrescreve a env var `N8N_WEBHOOK_URL` (PR8 P1.2).
+    Util para o futuro fluxo /api/contestar-por-peticao que aponta para um
+    webhook diferente sem precisar duplicar a funcao.
+    """
+    return await asyncio.to_thread(_enviar_para_n8n_sync, dados, webhook_url)
 
 
 def _enviar_para_n8n_edicao_sync(dados: dict[str, Any]) -> Any:
