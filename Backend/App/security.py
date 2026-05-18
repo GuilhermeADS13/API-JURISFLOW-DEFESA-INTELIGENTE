@@ -38,6 +38,9 @@ except ValueError:
 # Evita HTTP round-trip ao Supabase a cada request autenticada.
 # TTL curto (30s) garante que revogacoes sao refletidas rapidamente.
 _SUPABASE_CACHE_TTL = 30.0
+# PR8 P2.2 — cap no tamanho do cache para evitar crescimento ilimitado com
+# muitos tokens unicos. Sem isso, processo de longa duracao consome RAM crescente.
+_SUPABASE_CACHE_MAX_ENTRIES = int(os.getenv("SUPABASE_CACHE_MAX_ENTRIES", "500"))
 _supabase_token_cache: dict[str, tuple[float, dict[str, str] | None]] = {}
 _supabase_token_cache_lock = threading.Lock()
 
@@ -61,6 +64,16 @@ def _set_cached_supabase_user(token: str, user: dict[str, str] | None) -> None:
     key = _supabase_cache_key(token)
     expires = time.monotonic() + _SUPABASE_CACHE_TTL
     with _supabase_token_cache_lock:
+        # PR8 P2.2 — eviction: se cache no limite, remove entradas expiradas
+        # antes de inserir. Sem deslocar para LRU completo — simples e suficiente
+        # com TTL de 30s (entradas tendem a expirar rapido).
+        if len(_supabase_token_cache) >= _SUPABASE_CACHE_MAX_ENTRIES:
+            agora = time.monotonic()
+            expiradas = [
+                k for k, (exp, _) in _supabase_token_cache.items() if exp <= agora
+            ]
+            for k in expiradas:
+                del _supabase_token_cache[k]
         _supabase_token_cache[key] = (expires, user)
 
 
@@ -87,7 +100,13 @@ def extract_session_token(request: Request, authorization: str | None) -> str | 
 
 
 def apply_session_cookie(response: Response, token: str) -> None:
-    """Aplica cookie de sessao no response de login/cadastro."""
+    """Aplica cookie de sessao no response de login/cadastro.
+
+    PR8 P2.3: usa `max_age` baseado em SESSION_TTL_HOURS. Sem isso, o cookie
+    e de sessao (expira ao fechar o browser) mesmo que a sessao no banco
+    dure 12h — usuario perdia sessao desnecessariamente ao fechar laptop.
+    """
+    ttl_segundos = int(os.getenv("SESSION_TTL_HOURS", "12")) * 3600
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=token,
@@ -95,6 +114,7 @@ def apply_session_cookie(response: Response, token: str) -> None:
         secure=SESSION_COOKIE_SECURE,
         samesite=SESSION_COOKIE_SAMESITE,
         path="/",
+        max_age=ttl_segundos,
     )
 
 
