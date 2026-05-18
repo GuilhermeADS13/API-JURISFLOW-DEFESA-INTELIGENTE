@@ -153,6 +153,20 @@ async def editar_contestacao(
             detail="Resposta invalida do servico de edicao.",
         )
 
+    # PR9 P3.2 — workflow sinaliza falha da IA com status='erro_ia'.
+    # Antes de validar schema, checar se foi fallback do n8n.
+    if isinstance(resposta_bruta, dict) and resposta_bruta.get("status") == "erro_ia":
+        motivo = resposta_bruta.get("_debug", {}).get("fallback_motivo")
+        logger.error(
+            "n8n edicao retornou erro_ia usuario_id=%s motivo=%s",
+            usuario["id"],
+            motivo,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Servico de IA temporariamente indisponivel para edicao. Tente novamente em alguns minutos.",
+        )
+
     try:
         resposta = RespostaAgenteEdicao.model_validate(resposta_bruta)
     except ValidationError as error:
