@@ -386,7 +386,16 @@ def init_db() -> None:
                     ON contestacoes_exemplares (tipo_acao, nota_qualidade DESC)
                     """
                 )
-            connection.commit()
+            # PR8 P2.4 — commit + rollback explicito em volta das migrations.
+            # Captura tanto falha em commit() quanto falha em algum execute()
+            # acima (ja propagada antes daqui pela maquina de excecoes do with).
+            # O rollback explicito documenta intencao e cobre o caso de psycopg
+            # manter transacao aberta apos erro de DDL.
+            try:
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
 
         _db_initialized = True
 
