@@ -8,7 +8,10 @@ from starlette.requests import Request
 
 from App.models.suporte import SuporteContato
 from App.routes import suporte
-from App.services.suporte_email_service import SupportEmailConfigError, SupportEmailServiceError
+from App.services.suporte_email_service import (
+    SupportEmailConfigError,
+    SupportEmailServiceError,
+)
 
 
 def _fake_request() -> Request:
@@ -43,7 +46,9 @@ def test_enviar_contato_fluxo_feliz(monkeypatch):
     def fake_enviar_reclamacao_por_email(dados):
         calls["dados"] = dados.copy()
 
-    monkeypatch.setattr(suporte, "enviar_reclamacao_por_email", fake_enviar_reclamacao_por_email)
+    monkeypatch.setattr(
+        suporte, "enviar_reclamacao_por_email", fake_enviar_reclamacao_por_email
+    )
 
     response = asyncio.run(suporte.enviar_contato(_fake_request(), payload))
 
@@ -59,7 +64,9 @@ def test_enviar_contato_trata_erro_de_configuracao(monkeypatch):
     def fake_enviar_reclamacao_por_email(_dados):
         raise SupportEmailConfigError("SUPPORT_SMTP_HOST nao configurado.")
 
-    monkeypatch.setattr(suporte, "enviar_reclamacao_por_email", fake_enviar_reclamacao_por_email)
+    monkeypatch.setattr(
+        suporte, "enviar_reclamacao_por_email", fake_enviar_reclamacao_por_email
+    )
 
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(suporte.enviar_contato(_fake_request(), payload))
@@ -74,7 +81,9 @@ def test_enviar_contato_trata_erro_de_envio(monkeypatch):
     def fake_enviar_reclamacao_por_email(_dados):
         raise SupportEmailServiceError("Falha ao enviar reclamacao por e-mail.")
 
-    monkeypatch.setattr(suporte, "enviar_reclamacao_por_email", fake_enviar_reclamacao_por_email)
+    monkeypatch.setattr(
+        suporte, "enviar_reclamacao_por_email", fake_enviar_reclamacao_por_email
+    )
 
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(suporte.enviar_contato(_fake_request(), payload))

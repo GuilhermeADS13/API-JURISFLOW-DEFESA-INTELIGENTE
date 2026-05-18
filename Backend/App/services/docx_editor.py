@@ -12,11 +12,17 @@ Estrategia:
 
 from __future__ import annotations
 
+import os
 from io import BytesIO
 from typing import Iterable
 
 from docx import Document
 from docx.text.paragraph import Paragraph
+
+# PR8 P3.2 — limite no numero de substituicoes para previnir DoS via payload
+# malicioso (ex: 10000 substituicoes que travariam o python-docx). 50 cobre
+# casos legitimos com folga (typical: 5-15 campos do template).
+MAX_SUBSTITUICOES_DOCX = int(os.getenv("MAX_SUBSTITUICOES_DOCX", "50"))
 
 
 class SubstituicaoError(Exception):
@@ -64,6 +70,13 @@ def aplicar_substituicoes(
     """
     if not docx_bytes:
         raise SubstituicaoError("Conteudo do documento vazio.")
+
+    # PR8 P3.2 — cap em len(pares) antes de processar para previnir DoS.
+    if len(pares) > MAX_SUBSTITUICOES_DOCX:
+        raise SubstituicaoError(
+            f"Numero de substituicoes ({len(pares)}) excede o limite de "
+            f"{MAX_SUBSTITUICOES_DOCX}. Refine o conjunto de campos a editar."
+        )
 
     try:
         doc = Document(BytesIO(docx_bytes))

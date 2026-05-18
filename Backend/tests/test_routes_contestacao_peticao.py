@@ -17,9 +17,7 @@ from App.services.n8n_service import N8NServiceError
 def _docx_peticao_bytes() -> bytes:
     doc = Document()
     doc.add_paragraph("PETICAO INICIAL")
-    doc.add_paragraph(
-        "Reclamante: Joao da Silva, brasileiro, residente em Recife/PE."
-    )
+    doc.add_paragraph("Reclamante: Joao da Silva, brasileiro, residente em Recife/PE.")
     doc.add_paragraph(
         "Reclamada: Empresa XYZ LTDA. Pleiteia horas extras nao pagas e adicional noturno."
     )
@@ -41,7 +39,9 @@ def _modelo_base_docx_bytes() -> bytes:
 
 def _payload_valido(**overrides) -> "peticao_route.ContestacaoPorPeticao":
     base = {
-        "arquivo_peticao_base64": base64.b64encode(_docx_peticao_bytes()).decode("ascii"),
+        "arquivo_peticao_base64": base64.b64encode(_docx_peticao_bytes()).decode(
+            "ascii"
+        ),
         "arquivo_peticao_nome": "peticao.docx",
         "arquivo_peticao_mime_type": (
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -103,19 +103,25 @@ def _resposta_n8n_ok() -> dict:
 
 def test_schema_recusa_extensao_invalida():
     with pytest.raises(Exception):
-        peticao_route.ContestacaoPorPeticao.model_validate({
-            "arquivo_peticao_base64": base64.b64encode(_docx_peticao_bytes()).decode("ascii"),
-            "arquivo_peticao_nome": "peticao.txt",
-        })
+        peticao_route.ContestacaoPorPeticao.model_validate(
+            {
+                "arquivo_peticao_base64": base64.b64encode(
+                    _docx_peticao_bytes()
+                ).decode("ascii"),
+                "arquivo_peticao_nome": "peticao.txt",
+            }
+        )
 
 
 def test_schema_recusa_arquivo_muito_grande():
     grande = b"%PDF-1.4\n" + b"a" * (21 * 1024 * 1024)
     with pytest.raises(Exception):
-        peticao_route.ContestacaoPorPeticao.model_validate({
-            "arquivo_peticao_base64": base64.b64encode(grande).decode("ascii"),
-            "arquivo_peticao_nome": "peticao.pdf",
-        })
+        peticao_route.ContestacaoPorPeticao.model_validate(
+            {
+                "arquivo_peticao_base64": base64.b64encode(grande).decode("ascii"),
+                "arquivo_peticao_nome": "peticao.pdf",
+            }
+        )
 
 
 # ── Happy path: rota gera DOCX a partir da resposta do n8n ──────────────────
@@ -250,14 +256,17 @@ def test_n8n_resposta_nao_dict_retorna_502(monkeypatch):
 def test_extracao_falha_retorna_422(monkeypatch):
     """Bytes que comecam com %PDF mas nao sao um PDF valido."""
     pdf_quebrado = b"%PDF-1.4\n" + b"corrompido " * 30
-    payload = peticao_route.ContestacaoPorPeticao.model_validate({
-        "arquivo_peticao_base64": base64.b64encode(pdf_quebrado).decode("ascii"),
-        "arquivo_peticao_nome": "peticao.pdf",
-    })
+    payload = peticao_route.ContestacaoPorPeticao.model_validate(
+        {
+            "arquivo_peticao_base64": base64.b64encode(pdf_quebrado).decode("ascii"),
+            "arquivo_peticao_nome": "peticao.pdf",
+        }
+    )
 
     # Forca o extractor a falhar.
     def fake_extract(peticao_bytes, peticao_nome, anexos=None):
         from App.services.peticao_extractor import ExtracaoError
+
         raise ExtracaoError("Nao foi possivel extrair texto legivel.")
 
     monkeypatch.setattr(peticao_route, "extrair_e_consolidar_textos", fake_extract)
@@ -371,15 +380,20 @@ def test_confianca_alta_gera_docx_e_persiste_minuta_original(monkeypatch):
     assert resposta["arquivo_editado_base64"]
 
     assert save_calls["requer_revisao_humana"] is False
-    assert save_calls["minuta_json_original"]["tese_central"] == "Improcedencia total dos pedidos."
+    assert (
+        save_calls["minuta_json_original"]["tese_central"]
+        == "Improcedencia total dos pedidos."
+    )
 
 
 def test_confirmar_extracao_404_quando_nao_pertence(monkeypatch):
     monkeypatch.setattr(peticao_route, "get_contestacao", lambda cid, uid: None)
 
-    payload = peticao_route.ConfirmacaoExtracao.model_validate({
-        "dados_extraidos": {"autor": "X", "tipo_acao": "Y", "pedidos": []},
-    })
+    payload = peticao_route.ConfirmacaoExtracao.model_validate(
+        {
+            "dados_extraidos": {"autor": "X", "tipo_acao": "Y", "pedidos": []},
+        }
+    )
 
     with pytest.raises(HTTPException) as exc:
         asyncio.run(
@@ -400,9 +414,11 @@ def test_confirmar_extracao_409_quando_nao_em_revisao(monkeypatch):
         lambda cid, uid: {"id": cid, "requer_revisao_humana": False, "status": "ok"},
     )
 
-    payload = peticao_route.ConfirmacaoExtracao.model_validate({
-        "dados_extraidos": {"autor": "X", "tipo_acao": "Y", "pedidos": []},
-    })
+    payload = peticao_route.ConfirmacaoExtracao.model_validate(
+        {
+            "dados_extraidos": {"autor": "X", "tipo_acao": "Y", "pedidos": []},
+        }
+    )
 
     with pytest.raises(HTTPException) as exc:
         asyncio.run(
@@ -428,7 +444,9 @@ def test_confirmar_extracao_envia_flag_pre_validados(monkeypatch):
         peticao_route,
         "get_contestacao",
         lambda cid, uid: {
-            "id": cid, "requer_revisao_humana": True, "status": "requer_revisao_humana",
+            "id": cid,
+            "requer_revisao_humana": True,
+            "status": "requer_revisao_humana",
         },
     )
     monkeypatch.setattr(peticao_route, "enviar_para_n8n_peticao", fake_n8n)
@@ -438,15 +456,17 @@ def test_confirmar_extracao_envia_flag_pre_validados(monkeypatch):
         lambda **kw: True,
     )
 
-    payload = peticao_route.ConfirmacaoExtracao.model_validate({
-        "dados_extraidos": {
-            "autor": "Joao Corrigido",
-            "tipo_acao": "Trabalhista",
-            "reu": "Empresa X",
-            "fatos_resumo": "Fatos corrigidos pelo humano.",
-            "pedidos": ["pedido 1", "pedido 2"],
-        },
-    })
+    payload = peticao_route.ConfirmacaoExtracao.model_validate(
+        {
+            "dados_extraidos": {
+                "autor": "Joao Corrigido",
+                "tipo_acao": "Trabalhista",
+                "reu": "Empresa X",
+                "fatos_resumo": "Fatos corrigidos pelo humano.",
+                "pedidos": ["pedido 1", "pedido 2"],
+            },
+        }
+    )
 
     resposta = asyncio.run(
         peticao_route.confirmar_extracao(
@@ -462,24 +482,31 @@ def test_confirmar_extracao_envia_flag_pre_validados(monkeypatch):
     assert resposta["arquivo_editado_base64"]
     # Flag de bypass do extrator chega ao workflow
     assert "dados_extraidos_pre_validados" in payload_n8n_capturado
-    assert payload_n8n_capturado["dados_extraidos_pre_validados"]["autor"] == "Joao Corrigido"
+    assert (
+        payload_n8n_capturado["dados_extraidos_pre_validados"]["autor"]
+        == "Joao Corrigido"
+    )
 
 
 # ── PR5 Multi-docs: anexos ─────────────────────────────────────────────────
 
 
 def test_payload_aceita_lista_anexos():
-    payload = peticao_route.ContestacaoPorPeticao.model_validate({
-        "arquivo_peticao_base64": base64.b64encode(_docx_peticao_bytes()).decode("ascii"),
-        "arquivo_peticao_nome": "peticao.docx",
-        "arquivos_anexos": [
-            {
-                "base64": base64.b64encode(_docx_peticao_bytes()).decode("ascii"),
-                "nome": "anexo1.docx",
-                "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            },
-        ],
-    })
+    payload = peticao_route.ContestacaoPorPeticao.model_validate(
+        {
+            "arquivo_peticao_base64": base64.b64encode(_docx_peticao_bytes()).decode(
+                "ascii"
+            ),
+            "arquivo_peticao_nome": "peticao.docx",
+            "arquivos_anexos": [
+                {
+                    "base64": base64.b64encode(_docx_peticao_bytes()).decode("ascii"),
+                    "nome": "anexo1.docx",
+                    "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                },
+            ],
+        }
+    )
     assert len(payload.arquivos_anexos) == 1
     assert payload.arquivos_anexos[0].nome == "anexo1.docx"
 
@@ -487,25 +514,29 @@ def test_payload_aceita_lista_anexos():
 def test_payload_recusa_mais_de_5_anexos():
     docx_b64 = base64.b64encode(_docx_peticao_bytes()).decode("ascii")
     with pytest.raises(Exception):  # ValidationError
-        peticao_route.ContestacaoPorPeticao.model_validate({
-            "arquivo_peticao_base64": docx_b64,
-            "arquivo_peticao_nome": "peticao.docx",
-            "arquivos_anexos": [
-                {"base64": docx_b64, "nome": f"a{i}.docx"} for i in range(6)
-            ],
-        })
+        peticao_route.ContestacaoPorPeticao.model_validate(
+            {
+                "arquivo_peticao_base64": docx_b64,
+                "arquivo_peticao_nome": "peticao.docx",
+                "arquivos_anexos": [
+                    {"base64": docx_b64, "nome": f"a{i}.docx"} for i in range(6)
+                ],
+            }
+        )
 
 
 def test_consolidacao_inclui_separadores_de_anexo(monkeypatch):
     """O texto enviado ao n8n contem cabecalhos === ANEXO N === por anexo."""
     docx_b64 = base64.b64encode(_docx_peticao_bytes()).decode("ascii")
-    payload = peticao_route.ContestacaoPorPeticao.model_validate({
-        "arquivo_peticao_base64": docx_b64,
-        "arquivo_peticao_nome": "peticao.docx",
-        "arquivos_anexos": [
-            {"base64": docx_b64, "nome": "contrato.docx"},
-        ],
-    })
+    payload = peticao_route.ContestacaoPorPeticao.model_validate(
+        {
+            "arquivo_peticao_base64": docx_b64,
+            "arquivo_peticao_nome": "peticao.docx",
+            "arquivos_anexos": [
+                {"base64": docx_b64, "nome": "contrato.docx"},
+            ],
+        }
+    )
 
     payload_n8n_capturado = {}
 
@@ -541,7 +572,10 @@ def test_patch_minuta_atualiza_editada(monkeypatch):
         lambda cid, uid: {
             "id": cid,
             "requer_revisao_humana": False,
-            "minuta_json_original": {"tese_central": "Tese original IA", "merito": "Merito IA"},
+            "minuta_json_original": {
+                "tese_central": "Tese original IA",
+                "merito": "Merito IA",
+            },
             "minuta_json_editada": None,
         },
     )
@@ -552,10 +586,12 @@ def test_patch_minuta_atualiza_editada(monkeypatch):
 
     monkeypatch.setattr(peticao_route, "salvar_minuta_editada", fake_salvar)
 
-    payload = peticao_route.MinutaEditada.model_validate({
-        "tese_central": "Tese reescrita pelo advogado",
-        "merito": "Merito ampliado pelo advogado",
-    })
+    payload = peticao_route.MinutaEditada.model_validate(
+        {
+            "tese_central": "Tese reescrita pelo advogado",
+            "merito": "Merito ampliado pelo advogado",
+        }
+    )
 
     resposta = asyncio.run(
         peticao_route.atualizar_minuta_editada(
@@ -572,7 +608,9 @@ def test_patch_minuta_atualiza_editada(monkeypatch):
     assert resposta["diff_resumo"]["total_secoes_alteradas"] >= 1
 
     # Persistiu so as secoes editadas, original intacta.
-    assert save_calls["minuta_editada"]["tese_central"] == "Tese reescrita pelo advogado"
+    assert (
+        save_calls["minuta_editada"]["tese_central"] == "Tese reescrita pelo advogado"
+    )
     assert save_calls["minuta_editada"]["merito"] == "Merito ampliado pelo advogado"
 
 

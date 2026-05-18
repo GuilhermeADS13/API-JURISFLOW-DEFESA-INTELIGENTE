@@ -3,6 +3,7 @@ import logging
 import os
 from pathlib import Path
 
+
 def load_env_file() -> None:
     env_path = Path(__file__).resolve().parent / ".env"
     if not env_path.exists():
@@ -16,9 +17,12 @@ def load_env_file() -> None:
         key, value = stripped.split("=", 1)
         key = key.strip()
         value = value.strip().strip('"').strip("'")
-        # Em desenvolvimento, garantimos que o .env do projeto tenha prioridade
-        # para evitar variaveis antigas do sistema operacional.
-        if key:
+        # PR8 P1.4: NAO sobrescrever variaveis ja presentes no ambiente.
+        # Em producao (Docker, Railway, Kubernetes) as envs vem injetadas e o
+        # .env local (se acidentalmente presente na imagem) nao pode vazar
+        # config de dev sobre prod. Em dev, basta nao ter a var setada no
+        # sistema antes de rodar o backend.
+        if key and key not in os.environ:
             os.environ[key] = value
 
 
@@ -32,17 +36,28 @@ logging.basicConfig(
     datefmt="%Y-%m-%dT%H:%M:%S",
 )
 
-from contextlib import asynccontextmanager
+# Imports a partir daqui sao posicionados apos load_env_file() de proposito,
+# para que modulos da App leiam env vars ja carregadas do .env local. ruff
+# desativado por linha (E402) — comportamento intencional documentado.
+from contextlib import asynccontextmanager  # noqa: E402
 
-from fastapi import FastAPI, HTTPException, Request, status
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
-from slowapi import _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
+from fastapi import FastAPI, HTTPException, Request, status  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import Response  # noqa: E402
+from slowapi import _rate_limit_exceeded_handler  # noqa: E402
+from slowapi.errors import RateLimitExceeded  # noqa: E402
 
-from App.database import init_db, ping_database
-from App.limiter import limiter
-from App.routes import contestacao, contestacao_peticao, edicao, feedback, rag, suporte, usuario
+from App.database import init_db, ping_database  # noqa: E402
+from App.limiter import limiter  # noqa: E402
+from App.routes import (  # noqa: E402
+    contestacao,
+    contestacao_peticao,
+    edicao,
+    feedback,
+    rag,
+    suporte,
+    usuario,
+)
 
 
 def parse_frontend_origins() -> list[str]:
@@ -50,7 +65,9 @@ def parse_frontend_origins() -> list[str]:
         "FRONTEND_ORIGINS",
         "http://localhost:5173,http://127.0.0.1:5173",
     )
-    return [origin.strip().rstrip("/") for origin in raw_value.split(",") if origin.strip()]
+    return [
+        origin.strip().rstrip("/") for origin in raw_value.split(",") if origin.strip()
+    ]
 
 
 @asynccontextmanager
@@ -77,17 +94,31 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization"],
 )
 
+
 @app.middleware("http")
 async def security_headers(request: Request, call_next) -> Response:
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin"
+    # PR8 P2.6 — CSP restritivo: backend e API JSON, nao serve script proprio
+    # nem incorpora HTML de terceiros. frame-ancestors 'none' complementa o
+    # X-Frame-Options para browsers modernos.
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'none'; "
+        "object-src 'none'; "
+        "frame-ancestors 'none'"
+    )
+    # Bloqueia APIs sensiveis do browser que o backend nao precisa.
+    response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
     return response
 
 
 app.include_router(contestacao.router, prefix="/api", tags=["Contestacao"])
-app.include_router(contestacao_peticao.router, prefix="/api", tags=["Contestacao por Peticao"])
+app.include_router(
+    contestacao_peticao.router, prefix="/api", tags=["Contestacao por Peticao"]
+)
 app.include_router(edicao.router, prefix="/api", tags=["Edicao"])
 app.include_router(usuario.router, prefix="/api", tags=["Usuarios"])
 app.include_router(suporte.router, prefix="/api", tags=["Suporte"])
@@ -121,4 +152,3 @@ def healthcheck_database() -> dict[str, str]:
         ) from error
 
     return {"status": "healthy", "database": "postgresql"}
-

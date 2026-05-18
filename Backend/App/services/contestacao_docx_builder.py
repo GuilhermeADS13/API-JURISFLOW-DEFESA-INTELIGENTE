@@ -41,7 +41,9 @@ def montar_docx_programatico(dados: dict[str, Any], minuta: dict[str, Any]) -> b
     titulo = doc.add_heading("CONTESTACAO", level=0)
     titulo.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    _add_paragraph(doc, f"Processo numero: {dados.get('numero_processo') or 'a definir'}")
+    _add_paragraph(
+        doc, f"Processo numero: {dados.get('numero_processo') or 'a definir'}"
+    )
     _add_paragraph(doc, f"Autor: {dados.get('autor') or ''}")
     _add_paragraph(doc, f"Reu: {dados.get('reu') or ''}")
     _add_paragraph(doc, f"Tipo de acao: {dados.get('tipo_acao') or ''}")
@@ -81,7 +83,7 @@ def montar_docx_programatico(dados: dict[str, Any], minuta: dict[str, Any]) -> b
     rodape_partes = [datetime.now().strftime("%Y-%m-%d %H:%M")]
     if minuta.get("observacoes"):
         rodape_partes.append(str(minuta["observacoes"]))
-    _add_paragraph(doc, f"[{ ' | '.join(rodape_partes) }]")
+    _add_paragraph(doc, f"[{' | '.join(rodape_partes)}]")
 
     out = BytesIO()
     doc.save(out)
@@ -115,8 +117,11 @@ def montar_docx_com_modelo(
     try:
         doc = DocxTemplate(BytesIO(modelo_bytes))
     except Exception as error:
-        logger.warning("Falha ao abrir modelo base como DocxTemplate: %s: %s",
-                       type(error).__name__, error)
+        logger.warning(
+            "Falha ao abrir modelo base como DocxTemplate: %s: %s",
+            type(error).__name__,
+            error,
+        )
         return None
 
     impugnacoes = minuta.get("impugnacao_pedidos") or {}
@@ -158,7 +163,9 @@ def montar_docx_com_modelo(
     try:
         doc.save(out)
     except Exception as error:
-        logger.warning("Falha ao salvar .docx renderizado: %s: %s", type(error).__name__, error)
+        logger.warning(
+            "Falha ao salvar .docx renderizado: %s: %s", type(error).__name__, error
+        )
         return None
     return out.getvalue()
 

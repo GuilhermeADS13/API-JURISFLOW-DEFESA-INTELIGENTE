@@ -95,7 +95,9 @@ def resumo_diff(diff: dict[str, dict[str, Any]]) -> dict[str, Any]:
     - `similaridade_media`: media dos ratios (excluindo secoes vazias)
     """
     secoes_alteradas = [s for s, d in diff.items() if d["alterada"]]
-    similaridades = [d["similaridade"] for d in diff.values() if d["similaridade"] is not None]
+    similaridades = [
+        d["similaridade"] for d in diff.values() if d["similaridade"] is not None
+    ]
     return {
         "secoes_alteradas": secoes_alteradas,
         "total_secoes_alteradas": len(secoes_alteradas),

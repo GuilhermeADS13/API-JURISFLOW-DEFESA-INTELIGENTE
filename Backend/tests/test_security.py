@@ -58,6 +58,48 @@ def test_apply_e_clear_cookie():
     assert security.SESSION_COOKIE_NAME in clear_cookie_header
 
 
+def test_apply_cookie_inclui_max_age_baseado_em_session_ttl(monkeypatch):
+    """PR8 P2.3 — cookie deve ter Max-Age para persistir entre fechamentos do browser."""
+    monkeypatch.setenv("SESSION_TTL_HOURS", "12")
+    response = Response()
+    security.apply_session_cookie(response, "token-xyz")
+    set_cookie_header = response.headers.get("set-cookie", "").lower()
+    # 12h * 3600 = 43200 segundos
+    assert "max-age=43200" in set_cookie_header
+
+
+def test_apply_cookie_respeita_session_ttl_customizado(monkeypatch):
+    monkeypatch.setenv("SESSION_TTL_HOURS", "2")
+    response = Response()
+    security.apply_session_cookie(response, "token-y")
+    set_cookie_header = response.headers.get("set-cookie", "").lower()
+    # 2h * 3600 = 7200
+    assert "max-age=7200" in set_cookie_header
+
+
+def test_supabase_cache_eviction_remove_expiradas_no_limite(monkeypatch):
+    """PR8 P2.2 — quando cache atinge MAX_ENTRIES, remove entradas expiradas antes de inserir."""
+    monkeypatch.setattr(security, "_SUPABASE_CACHE_MAX_ENTRIES", 3)
+    # Limpa cache
+    security._supabase_token_cache.clear()
+
+    # Insere 3 entradas expiradas (passado)
+    import time
+
+    agora = time.monotonic()
+    security._supabase_token_cache["k1"] = (agora - 100, {"id": "1"})
+    security._supabase_token_cache["k2"] = (agora - 50, {"id": "2"})
+    security._supabase_token_cache["k3"] = (agora - 10, {"id": "3"})
+    assert len(security._supabase_token_cache) == 3
+
+    # Insere uma 4a — deve disparar eviction das 3 expiradas
+    security._set_cached_supabase_user("token-novo", {"id": "novo"})
+
+    # As 3 antigas foram removidas; so a nova permanece
+    assert len(security._supabase_token_cache) == 1
+    assert security._supabase_cache_key("token-novo") in security._supabase_token_cache
+
+
 def test_get_authenticated_user_sem_token_retorna_401():
     request = _request_com_headers([])
     with pytest.raises(HTTPException) as exc_info:
@@ -77,7 +119,12 @@ def test_get_authenticated_user_sessao_invalida(monkeypatch):
 
 def test_get_authenticated_user_fluxo_feliz(monkeypatch):
     request = _request_com_headers([])
-    fake_session = {"id": "USR-001", "nome": "Ana", "email": "ana@teste.com", "token": "abc"}
+    fake_session = {
+        "id": "USR-001",
+        "nome": "Ana",
+        "email": "ana@teste.com",
+        "token": "abc",
+    }
 
     monkeypatch.setattr(security, "extract_session_token", lambda req, auth: "token-ok")
     monkeypatch.setattr(security, "get_sessao_ativa", lambda token: fake_session)
@@ -96,7 +143,9 @@ def test_get_authenticated_user_valida_bearer_supabase(monkeypatch):
     }
 
     monkeypatch.setattr(security, "get_sessao_ativa", lambda token: None)
-    monkeypatch.setattr(security, "validate_supabase_bearer_token", lambda token: supabase_user)
+    monkeypatch.setattr(
+        security, "validate_supabase_bearer_token", lambda token: supabase_user
+    )
 
     result = asyncio.run(
         security.get_authenticated_user(

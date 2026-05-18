@@ -1,4 +1,5 @@
 """Quest 2 — Testa sanitizacao de path traversal em nomes de arquivo."""
+
 import pytest
 from pydantic import ValidationError
 
@@ -19,6 +20,7 @@ PDF_B64 = "JVBE"  # %PDF — apenas os 4 bytes de magic para o teste de nome
 def _make(nome, b64="JVBE"):
     # Gera base64 valido com magic bytes de PDF para passar na validacao de conteudo
     import base64
+
     conteudo = base64.b64encode(b"%PDF-1.4 fake content").decode()
     return {**BASE, "arquivo_base_nome": nome, "arquivo_base_conteudo_base64": conteudo}
 

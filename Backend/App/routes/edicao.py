@@ -13,6 +13,7 @@ Fluxo:
 
 import base64
 import logging
+import time
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from pydantic import ValidationError
@@ -123,7 +124,10 @@ async def editar_contestacao(
     }
 
     try:
+        # PR8 P3.1 — mede tempo end-to-end da chamada ao n8n para observabilidade.
+        t_inicio = time.monotonic()
         resposta_bruta = await enviar_para_n8n_edicao(payload_n8n)
+        tempo_processamento_ms = int((time.monotonic() - t_inicio) * 1000)
     except N8NServiceError as error:
         # Mensagem generica ao cliente; detalhe completo no log do servico.
         logger.warning(
@@ -168,12 +172,14 @@ async def editar_contestacao(
     for sub in resposta.substituicoes:
         ocorrencias_reais = texto_documento.count(sub.antigo)
         if ocorrencias_reais != sub.ocorrencias_esperadas:
-            divergencias.append({
-                "campo": sub.campo,
-                "antigo": sub.antigo,
-                "ocorrencias_esperadas": sub.ocorrencias_esperadas,
-                "ocorrencias_reais": ocorrencias_reais,
-            })
+            divergencias.append(
+                {
+                    "campo": sub.campo,
+                    "antigo": sub.antigo,
+                    "ocorrencias_esperadas": sub.ocorrencias_esperadas,
+                    "ocorrencias_reais": ocorrencias_reais,
+                }
+            )
 
     if divergencias:
         logger.warning(
@@ -189,10 +195,7 @@ async def editar_contestacao(
             ),
         )
 
-    pares = [
-        {"antigo": sub.antigo, "novo": sub.novo}
-        for sub in resposta.substituicoes
-    ]
+    pares = [{"antigo": sub.antigo, "novo": sub.novo} for sub in resposta.substituicoes]
 
     if pares:
         try:
@@ -229,6 +232,7 @@ async def editar_contestacao(
         "relatorio": relatorio,
         "campos_ausentes": resposta.campos_ausentes,
         "ocorrencias_aplicadas": ocorrencias,
+        "tempo_processamento_ms": tempo_processamento_ms,
     }
 
 

@@ -1,4 +1,5 @@
 """Fixtures compartilhadas — reset do rate limiter entre testes."""
+
 import pytest
 
 
@@ -13,6 +14,7 @@ def _reset_rate_limiter():
     com o storage limpo.
     """
     from App.limiter import limiter
+
     limiter.reset()
     yield
     limiter.reset()

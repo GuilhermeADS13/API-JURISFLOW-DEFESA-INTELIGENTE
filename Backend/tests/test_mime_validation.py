@@ -1,4 +1,5 @@
 """Quest 2 — Testa validacao de MIME via magic bytes."""
+
 import base64
 
 import pytest
@@ -22,6 +23,7 @@ def _b64(content: bytes) -> str:
 
 # ── Tipos validos ────────────────────────────────────────────────────────────
 
+
 def test_pdf_valido_aceito():
     conteudo = _b64(b"%PDF-1.4 fake pdf content here")
     p = Processo(**{**BASE, "arquivo_base_conteudo_base64": conteudo})
@@ -30,20 +32,31 @@ def test_pdf_valido_aceito():
 
 def test_doc_valido_aceito():
     conteudo = _b64(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * 100)
-    p = Processo(**{**BASE, "arquivo_base_nome": "doc.doc",
-                    "arquivo_base_conteudo_base64": conteudo})
+    p = Processo(
+        **{
+            **BASE,
+            "arquivo_base_nome": "doc.doc",
+            "arquivo_base_conteudo_base64": conteudo,
+        }
+    )
     assert p.arquivo_base_conteudo_base64 is not None
 
 
 def test_docx_valido_aceito():
     # DOCX = ZIP com magic PK\x03\x04
     conteudo = _b64(b"PK\x03\x04" + b"\x00" * 100)
-    p = Processo(**{**BASE, "arquivo_base_nome": "doc.docx",
-                    "arquivo_base_conteudo_base64": conteudo})
+    p = Processo(
+        **{
+            **BASE,
+            "arquivo_base_nome": "doc.docx",
+            "arquivo_base_conteudo_base64": conteudo,
+        }
+    )
     assert p.arquivo_base_conteudo_base64 is not None
 
 
 # ── Tipos invalidos (MIME spoofing) ──────────────────────────────────────────
+
 
 def test_exe_disfarçado_de_pdf_rejeitado():
     """Bytes de executavel Windows (MZ) com extensao .pdf devem ser rejeitados."""

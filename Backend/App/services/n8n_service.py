@@ -3,6 +3,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -13,6 +14,46 @@ DEFAULT_N8N_WEBHOOK_URL = "http://localhost:5678/webhook/contestacao-claude"
 DEFAULT_N8N_EDICAO_WEBHOOK_URL = "http://localhost:5678/webhook/editar-contestacao"
 DEFAULT_N8N_PETICAO_WEBHOOK_URL = "http://localhost:5678/webhook/contestar-por-peticao"
 N8N_TIMEOUT_SECONDS = int(os.getenv("N8N_TIMEOUT_SECONDS", "60"))
+
+# PR8 P1.1 — retry com backoff exponencial para tolerar cold-start/reinicio do n8n.
+N8N_MAX_RETRIES = int(os.getenv("N8N_MAX_RETRIES", "3"))
+N8N_RETRY_BACKOFF_BASE = float(os.getenv("N8N_RETRY_BACKOFF_SECONDS", "1.0"))
+
+
+def _enviar_com_retry(request: Request, timeout: int, label: str) -> bytes:
+    """Tenta N8N_MAX_RETRIES vezes com backoff exponencial antes de levantar.
+
+    `label` aparece nos logs (ex: "contestacao", "edicao", "peticao") para
+    distinguir qual fluxo falhou no observability.
+    """
+    last_error: Exception | None = None
+    for attempt in range(1, N8N_MAX_RETRIES + 1):
+        try:
+            with urlopen(request, timeout=timeout) as response:
+                return response.read()
+        except (HTTPError, URLError, TimeoutError, OSError) as error:
+            last_error = error
+            if attempt < N8N_MAX_RETRIES:
+                wait = N8N_RETRY_BACKOFF_BASE * (2 ** (attempt - 1))
+                logger.warning(
+                    "n8n %s tentativa %d/%d falhou (%s). Aguardando %.1fs antes do retry.",
+                    label,
+                    attempt,
+                    N8N_MAX_RETRIES,
+                    type(error).__name__,
+                    wait,
+                )
+                time.sleep(wait)
+            else:
+                logger.error(
+                    "n8n %s falhou em todas as %d tentativas (%s: %s)",
+                    label,
+                    N8N_MAX_RETRIES,
+                    type(error).__name__,
+                    error,
+                )
+    # Por contrato N8N_MAX_RETRIES >= 1 entao last_error nunca e None aqui.
+    raise last_error  # type: ignore[misc]
 
 
 class N8NServiceError(Exception):
@@ -42,9 +83,13 @@ def get_n8n_webhook_auth_token() -> str:
     return os.getenv("N8N_WEBHOOK_AUTH_TOKEN", "").strip()
 
 
-def _enviar_para_n8n_sync(dados: dict[str, Any]) -> Any:
-    """Execucao sincrona do POST para n8n (usada em thread dedicada)."""
-    webhook_url = get_n8n_webhook_url()
+def _enviar_para_n8n_sync(dados: dict[str, Any], webhook_url: str | None = None) -> Any:
+    """Execucao sincrona do POST para n8n (usada em thread dedicada).
+
+    `webhook_url` opcional permite override do default `N8N_WEBHOOK_URL` —
+    util para roteamento dinamico entre fluxos (PR8 P1.2).
+    """
+    webhook_url = webhook_url or get_n8n_webhook_url()
     body = json.dumps(dados).encode("utf-8")
     request_headers = {"Content-Type": "application/json"}
     auth_token = get_n8n_webhook_auth_token()
@@ -59,17 +104,8 @@ def _enviar_para_n8n_sync(dados: dict[str, Any]) -> Any:
     )
 
     try:
-        with urlopen(request, timeout=N8N_TIMEOUT_SECONDS) as response:
-            response_body = response.read()
+        response_body = _enviar_com_retry(request, N8N_TIMEOUT_SECONDS, "contestacao")
     except (HTTPError, URLError, TimeoutError, OSError) as error:
-        # Log estruturado do erro original (URL + tipo de excecao) para debug em producao.
-        # NUNCA logamos auth_token nem o body do payload (PII).
-        logger.error(
-            "Falha ao acionar n8n em %s: %s: %s",
-            webhook_url,
-            type(error).__name__,
-            error,
-        )
         raise N8NServiceError(
             f"Falha ao acionar o n8n em {webhook_url}. Verifique se o workflow esta ativo."
         ) from error
@@ -86,23 +122,37 @@ def _enviar_para_n8n_sync(dados: dict[str, Any]) -> Any:
             webhook_url,
             type(error).__name__,
         )
-        return {"status": "processando", "raw_response": response_body.decode("utf-8", errors="replace")}
+        return {
+            "status": "processando",
+            "raw_response": response_body.decode("utf-8", errors="replace"),
+        }
 
     # Valida e filtra campos desconhecidos para prevenir injecao de dados arbitrarios.
     if isinstance(raw, dict):
         from App.models.n8n_response import N8NResponse
+
         try:
             return N8NResponse(**raw).model_dump(exclude_none=True)
         except Exception:
-            logger.warning("Resposta n8n nao passou na validacao de schema — retornando status padrao")
+            logger.warning(
+                "Resposta n8n nao passou na validacao de schema — retornando status padrao"
+            )
             return {"status": "processando"}
 
     return raw
 
 
-async def enviar_para_n8n(dados: dict[str, Any]) -> Any:
-    """Envia payload sem bloquear o loop principal da API."""
-    return await asyncio.to_thread(_enviar_para_n8n_sync, dados)
+async def enviar_para_n8n(
+    dados: dict[str, Any],
+    webhook_url: str | None = None,
+) -> Any:
+    """Envia payload sem bloquear o loop principal da API.
+
+    `webhook_url` opcional sobrescreve a env var `N8N_WEBHOOK_URL` (PR8 P1.2).
+    Util para o futuro fluxo /api/contestar-por-peticao que aponta para um
+    webhook diferente sem precisar duplicar a funcao.
+    """
+    return await asyncio.to_thread(_enviar_para_n8n_sync, dados, webhook_url)
 
 
 def _enviar_para_n8n_edicao_sync(dados: dict[str, Any]) -> Any:
@@ -128,15 +178,8 @@ def _enviar_para_n8n_edicao_sync(dados: dict[str, Any]) -> Any:
     )
 
     try:
-        with urlopen(request, timeout=N8N_TIMEOUT_SECONDS) as response:
-            response_body = response.read()
+        response_body = _enviar_com_retry(request, N8N_TIMEOUT_SECONDS, "edicao")
     except (HTTPError, URLError, TimeoutError, OSError) as error:
-        logger.error(
-            "Falha ao acionar n8n (edicao) em %s: %s: %s",
-            webhook_url,
-            type(error).__name__,
-            error,
-        )
         raise N8NServiceError(
             f"Falha ao acionar o n8n em {webhook_url}. Verifique se o workflow esta ativo."
         ) from error
@@ -184,22 +227,17 @@ def _enviar_para_n8n_peticao_sync(dados: dict[str, Any]) -> Any:
     )
 
     try:
-        with urlopen(request, timeout=N8N_TIMEOUT_SECONDS) as response:
-            response_body = response.read()
+        response_body = _enviar_com_retry(request, N8N_TIMEOUT_SECONDS, "peticao")
     except (HTTPError, URLError, TimeoutError, OSError) as error:
-        logger.error(
-            "Falha ao acionar n8n (peticao) em %s: %s: %s",
-            webhook_url,
-            type(error).__name__,
-            error,
-        )
         raise N8NServiceError(
             f"Falha ao acionar o n8n em {webhook_url}. Verifique se o workflow esta ativo."
         ) from error
 
     if not response_body:
         logger.warning("n8n (peticao) respondeu sem corpo em %s", webhook_url)
-        raise N8NServiceError("Workflow de contestacao-por-peticao retornou resposta vazia.")
+        raise N8NServiceError(
+            "Workflow de contestacao-por-peticao retornou resposta vazia."
+        )
 
     try:
         return json.loads(response_body.decode("utf-8"))

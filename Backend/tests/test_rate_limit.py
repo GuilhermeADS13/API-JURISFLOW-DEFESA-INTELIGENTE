@@ -1,4 +1,5 @@
 """Quest 2 — Testa rate limiting nos endpoints que antes nao tinham protecao."""
+
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -27,32 +28,45 @@ def auth_override():
     app.dependency_overrides.clear()
 
 
-# ── /gerar-contestacao: 2/minute ────────────────────────────────────────────
+# ── /gerar-contestacao: default 10/minute (configuravel via RATE_LIMIT_CONTESTACAO) ──
+
 
 def test_gerar_contestacao_rate_limit(auth_override):
-    with patch("App.routes.contestacao.enviar_para_n8n", new_callable=AsyncMock,
-               return_value={"status": "processando"}), \
-         patch("App.routes.contestacao.save_contestacao", return_value=1):
-
-        # Primeiras 2 devem passar (status != 429)
-        for _ in range(2):
+    """PR8 P2.1 — default mudou para 10/minute via env RATE_LIMIT_CONTESTACAO."""
+    with (
+        patch(
+            "App.routes.contestacao.enviar_para_n8n",
+            new_callable=AsyncMock,
+            return_value={"status": "processando"},
+        ),
+        patch("App.routes.contestacao.save_contestacao", return_value=1),
+    ):
+        # Primeiras 10 devem passar (default novo)
+        for i in range(10):
             r = client.post("/api/gerar-contestacao", json=PROCESSO_VALIDO)
-            assert r.status_code != 429, f"Rate limit prematuro: {r.status_code}"
+            assert r.status_code != 429, (
+                f"Rate limit prematuro na chamada {i + 1}: {r.status_code}"
+            )
 
-        # 3a deve retornar 429
+        # 11a deve retornar 429
         r = client.post("/api/gerar-contestacao", json=PROCESSO_VALIDO)
         assert r.status_code == 429
 
 
-# ── /contestacoes/resumo: 10/minute ─────────────────────────────────────────
+# ── /contestacoes/resumo: default 30/minute (configuravel via RATE_LIMIT_DASHBOARD) ──
+
 
 def test_resumo_rate_limit(auth_override):
-    with patch("App.routes.contestacao.get_dashboard_cards_por_usuario", return_value=[]), \
-         patch("App.routes.contestacao.list_contestacoes_por_usuario", return_value=[]):
-
-        for _ in range(10):
+    """PR8 P2.1 — default mudou para 30/minute via env RATE_LIMIT_DASHBOARD."""
+    with (
+        patch(
+            "App.routes.contestacao.get_dashboard_cards_por_usuario", return_value=[]
+        ),
+        patch("App.routes.contestacao.list_contestacoes_por_usuario", return_value=[]),
+    ):
+        for i in range(30):
             r = client.get("/api/contestacoes/resumo")
-            assert r.status_code != 429
+            assert r.status_code != 429, f"Rate limit prematuro na chamada {i + 1}"
 
         r = client.get("/api/contestacoes/resumo")
         assert r.status_code == 429

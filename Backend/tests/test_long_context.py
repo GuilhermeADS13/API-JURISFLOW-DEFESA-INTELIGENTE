@@ -9,8 +9,6 @@ Cobre:
 
 from __future__ import annotations
 
-import pytest
-
 from App.services.peticao_extractor import (
     MAX_TEXTO_PETICAO_CHARS,
     _aplicar_long_context,
@@ -148,6 +146,7 @@ def test_extrair_texto_peticao_curta_passa_direto():
     doc.save(out)
 
     from App.services.peticao_extractor import extrair_texto_peticao
+
     texto = extrair_texto_peticao(out.getvalue(), "peticao.docx")
     # Texto pequeno volta integralmente sem cabecalho de pre-filtragem.
     assert "Joao da Silva" in texto
@@ -175,6 +174,7 @@ def test_extrair_texto_peticao_grande_aplica_long_context():
     doc.save(out)
 
     from App.services.peticao_extractor import extrair_texto_peticao
+
     texto = extrair_texto_peticao(out.getvalue(), "peticao.docx")
 
     assert len(texto) <= MAX_TEXTO_PETICAO_CHARS

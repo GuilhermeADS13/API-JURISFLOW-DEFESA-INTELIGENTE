@@ -206,7 +206,9 @@ async def contestar_por_peticao(
         "numero_processo": dados_extraidos.get("numero_processo") or "a definir",
         "autor": dados_extraidos.get("autor") or "",
         "reu": dados_extraidos.get("reu") or "",
-        "tipo_acao": dados_extraidos.get("tipo_acao") or payload.tipo_acao_hint or "Nao identificado",
+        "tipo_acao": dados_extraidos.get("tipo_acao")
+        or payload.tipo_acao_hint
+        or "Nao identificado",
         "fatos": dados_extraidos.get("fatos_resumo") or "",
         "pedido_autor": _join_pedidos(dados_extraidos.get("pedidos")),
         "arquivo_base_nome": payload.arquivo_peticao_nome,
@@ -376,7 +378,9 @@ async def confirmar_extracao(
         )
 
     # Monta DOCX final com dados corrigidos pelo humano.
-    docx_bytes = _montar_docx_minimal(payload, dados_corrigidos, minuta_nova, usuario["id"])
+    docx_bytes = _montar_docx_minimal(
+        payload, dados_corrigidos, minuta_nova, usuario["id"]
+    )
 
     arquivo_editado_base64 = base64.b64encode(docx_bytes).decode("ascii")
     arquivo_editado_nome = _montar_nome_saida(dados_corrigidos)
@@ -477,10 +481,7 @@ def _montar_docx_minimal(
 def _montar_nome_saida(dados_extraidos: dict) -> str:
     numero = (dados_extraidos.get("numero_processo") or "").strip()
     if numero:
-        sufixo = (
-            "".join(c if c.isalnum() else "_" for c in numero)
-            .strip("_")
-        )
+        sufixo = "".join(c if c.isalnum() else "_" for c in numero).strip("_")
         return f"contestacao_{sufixo}.docx"
     return "contestacao.docx"
 

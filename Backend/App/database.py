@@ -66,7 +66,6 @@ class DatabaseIntegrityError(Exception):
     """Erro de integridade no banco (ex.: chave unica duplicada)."""
 
 
-
 def _safe_int(value: str | None, fallback: int) -> int:
     """Converte string para inteiro positivo, com fallback seguro."""
     try:
@@ -76,18 +75,31 @@ def _safe_int(value: str | None, fallback: int) -> int:
         return fallback
 
 
-
 def _build_database_url_from_parts() -> str:
     """Monta a URL do banco usando variaveis de ambiente separadas.
 
     Requer `DATABASE_PASSWORD` para evitar fallback inseguro em producao.
     """
-    host = os.getenv("DATABASE_HOST", DEFAULT_DATABASE_HOST).strip() or DEFAULT_DATABASE_HOST
-    port = _safe_int(os.getenv("DATABASE_PORT", str(DEFAULT_DATABASE_PORT)), DEFAULT_DATABASE_PORT)
-    name = os.getenv("DATABASE_NAME", DEFAULT_DATABASE_NAME).strip() or DEFAULT_DATABASE_NAME
-    user = os.getenv("DATABASE_USER", DEFAULT_DATABASE_USER).strip() or DEFAULT_DATABASE_USER
+    host = (
+        os.getenv("DATABASE_HOST", DEFAULT_DATABASE_HOST).strip()
+        or DEFAULT_DATABASE_HOST
+    )
+    port = _safe_int(
+        os.getenv("DATABASE_PORT", str(DEFAULT_DATABASE_PORT)), DEFAULT_DATABASE_PORT
+    )
+    name = (
+        os.getenv("DATABASE_NAME", DEFAULT_DATABASE_NAME).strip()
+        or DEFAULT_DATABASE_NAME
+    )
+    user = (
+        os.getenv("DATABASE_USER", DEFAULT_DATABASE_USER).strip()
+        or DEFAULT_DATABASE_USER
+    )
     password = os.getenv("DATABASE_PASSWORD", "").strip()
-    sslmode = os.getenv("DATABASE_SSLMODE", DEFAULT_DATABASE_SSLMODE).strip() or DEFAULT_DATABASE_SSLMODE
+    sslmode = (
+        os.getenv("DATABASE_SSLMODE", DEFAULT_DATABASE_SSLMODE).strip()
+        or DEFAULT_DATABASE_SSLMODE
+    )
 
     if not password:
         raise RuntimeError(
@@ -100,14 +112,12 @@ def _build_database_url_from_parts() -> str:
     )
 
 
-
 def _normalize_database_url(database_url: str) -> str:
     """Normaliza prefixo legado `postgres://` para `postgresql://`."""
     value = database_url.strip()
     if value.startswith("postgres://"):
         return "postgresql://" + value[len("postgres://") :]
     return value
-
 
 
 def _get_database_url() -> str:
@@ -118,12 +128,13 @@ def _get_database_url() -> str:
     return _build_database_url_from_parts()
 
 
-
 def _get_session_ttl_seconds() -> int:
     """Calcula TTL da sessao em segundos com base no ambiente."""
-    ttl_hours = _safe_int(os.getenv("SESSION_TTL_HOURS", str(DEFAULT_SESSION_TTL_HOURS)), DEFAULT_SESSION_TTL_HOURS)
+    ttl_hours = _safe_int(
+        os.getenv("SESSION_TTL_HOURS", str(DEFAULT_SESSION_TTL_HOURS)),
+        DEFAULT_SESSION_TTL_HOURS,
+    )
     return ttl_hours * 3600
-
 
 
 def _get_pool() -> "psycopg2_pool.ThreadedConnectionPool":
@@ -148,7 +159,10 @@ def _get_pool() -> "psycopg2_pool.ThreadedConnectionPool":
                     DEFAULT_POOL_MAX_CONNECTIONS,
                 )
                 timeout = _safe_int(
-                    os.getenv("DATABASE_CONNECT_TIMEOUT", str(DEFAULT_DATABASE_CONNECT_TIMEOUT)),
+                    os.getenv(
+                        "DATABASE_CONNECT_TIMEOUT",
+                        str(DEFAULT_DATABASE_CONNECT_TIMEOUT),
+                    ),
                     DEFAULT_DATABASE_CONNECT_TIMEOUT,
                 )
                 _connection_pool = psycopg2_pool.ThreadedConnectionPool(
@@ -178,7 +192,6 @@ def _get_connection():
         pool.putconn(conn)
 
 
-
 def ping_database() -> None:
     """Executa um ping simples no banco para healthcheck.
 
@@ -191,7 +204,6 @@ def ping_database() -> None:
             row = cursor.fetchone()
             if row is None or int(row[0]) != 1:
                 raise RuntimeError("Falha no teste de conexao com PostgreSQL.")
-
 
 
 def init_db() -> None:
@@ -250,9 +262,15 @@ def init_db() -> None:
                 )
 
                 # Ajustes para ambientes que ja tinham schema antigo.
-                cursor.execute("ALTER TABLE contestacoes ADD COLUMN IF NOT EXISTS usuario_id TEXT")
-                cursor.execute("ALTER TABLE contestacoes ADD COLUMN IF NOT EXISTS arquivo_base_nome TEXT")
-                cursor.execute("ALTER TABLE contestacoes ADD COLUMN IF NOT EXISTS arquivo_base_mime_type TEXT")
+                cursor.execute(
+                    "ALTER TABLE contestacoes ADD COLUMN IF NOT EXISTS usuario_id TEXT"
+                )
+                cursor.execute(
+                    "ALTER TABLE contestacoes ADD COLUMN IF NOT EXISTS arquivo_base_nome TEXT"
+                )
+                cursor.execute(
+                    "ALTER TABLE contestacoes ADD COLUMN IF NOT EXISTS arquivo_base_mime_type TEXT"
+                )
                 cursor.execute(
                     "ALTER TABLE contestacoes ADD COLUMN IF NOT EXISTS arquivo_base_tamanho_bytes BIGINT"
                 )
@@ -368,17 +386,24 @@ def init_db() -> None:
                     ON contestacoes_exemplares (tipo_acao, nota_qualidade DESC)
                     """
                 )
-            connection.commit()
+            # PR8 P2.4 — commit + rollback explicito em volta das migrations.
+            # Captura tanto falha em commit() quanto falha em algum execute()
+            # acima (ja propagada antes daqui pela maquina de excecoes do with).
+            # O rollback explicito documenta intencao e cobre o caso de psycopg
+            # manter transacao aberta apos erro de DDL.
+            try:
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
 
         _db_initialized = True
-
 
 
 def _ensure_db_initialized() -> None:
     """Garante inicializacao do schema antes de operacoes de escrita/leitura."""
     if not _db_initialized:
         init_db()
-
 
 
 def cleanup_sessoes_expiradas(batch_size: int = 1000, max_batches: int = 50) -> int:
@@ -416,8 +441,9 @@ def cleanup_sessoes_expiradas(batch_size: int = 1000, max_batches: int = 50) -> 
     return total_deleted
 
 
-
-def create_usuario(user_id: str, nome: str, email: str, senha_hash: str) -> dict[str, str]:
+def create_usuario(
+    user_id: str, nome: str, email: str, senha_hash: str
+) -> dict[str, str]:
     """Cria usuario e devolve payload seguro (sem senha)."""
     _ensure_db_initialized()
 
@@ -437,7 +463,9 @@ def create_usuario(user_id: str, nome: str, email: str, senha_hash: str) -> dict
                     raise RuntimeError("Falha ao criar usuario no banco de dados.")
             except Exception as error:
                 if psycopg2 is not None and isinstance(error, psycopg2.IntegrityError):
-                    raise DatabaseIntegrityError("Conflito de integridade no banco.") from error
+                    raise DatabaseIntegrityError(
+                        "Conflito de integridade no banco."
+                    ) from error
                 raise
         connection.commit()
 
@@ -446,7 +474,6 @@ def create_usuario(user_id: str, nome: str, email: str, senha_hash: str) -> dict
         "nome": str(row[1]),
         "email": str(row[2]),
     }
-
 
 
 def update_usuario_senha_hash(usuario_id: str, novo_hash: str) -> None:
@@ -497,10 +524,10 @@ def get_usuario_por_email(email: str) -> dict[str, str] | None:
     }
 
 
-
 def create_sessao_usuario(usuario_id: str) -> str:
     """Cria sessao para o usuario e retorna token opaco."""
     import random
+
     _ensure_db_initialized()
     # Executa cleanup em ~2% dos logins para nao bloquear o fluxo de autenticacao.
     # Sessoes expiradas acumulam lentamente; limpeza probabilistica e suficiente.
@@ -520,7 +547,6 @@ def create_sessao_usuario(usuario_id: str) -> str:
         connection.commit()
 
     return token
-
 
 
 def get_sessao_ativa(token: str) -> dict[str, str] | None:
@@ -581,7 +607,6 @@ def get_sessao_ativa(token: str) -> dict[str, str] | None:
     return payload
 
 
-
 def revoke_sessao(token: str) -> bool:
     """Revoga sessao pelo token e devolve se havia registro."""
     _ensure_db_initialized()
@@ -603,7 +628,6 @@ def revoke_sessao(token: str) -> bool:
     _invalidate_session_cache(token)
 
     return row is not None
-
 
 
 def save_contestacao(
@@ -629,12 +653,16 @@ def save_contestacao(
     """
     _ensure_db_initialized()
 
-    arquivo_nome = str(payload.get("arquivo_base_nome") or payload.get("arquivo_base") or "")
+    arquivo_nome = str(
+        payload.get("arquivo_base_nome") or payload.get("arquivo_base") or ""
+    )
     arquivo_conteudo = str(payload.get("arquivo_base_conteudo_base64") or "")
     arquivo_mime_type = str(payload.get("arquivo_base_mime_type") or "")
     arquivo_tamanho_raw = payload.get("arquivo_base_tamanho_bytes")
     try:
-        arquivo_tamanho = int(arquivo_tamanho_raw) if arquivo_tamanho_raw is not None else None
+        arquivo_tamanho = (
+            int(arquivo_tamanho_raw) if arquivo_tamanho_raw is not None else None
+        )
     except (TypeError, ValueError):
         arquivo_tamanho = None
 
@@ -683,7 +711,9 @@ def save_contestacao(
                     origem,
                     bool(requer_revisao_humana),
                     float(dados_confianca) if dados_confianca is not None else None,
-                    PGJsonAdapter(minuta_json_original) if (PGJsonAdapter and minuta_json_original) else minuta_json_original,
+                    PGJsonAdapter(minuta_json_original)
+                    if (PGJsonAdapter and minuta_json_original)
+                    else minuta_json_original,
                 ),
             )
             row = cursor.fetchone()
@@ -697,7 +727,9 @@ def save_contestacao(
 
 def _format_case_id(contestacao_id: int, criado_em: datetime | None) -> str:
     """Monta id legivel para o dashboard mantendo ordenacao por ano."""
-    case_year = criado_em.year if isinstance(criado_em, datetime) else datetime.now().year
+    case_year = (
+        criado_em.year if isinstance(criado_em, datetime) else datetime.now().year
+    )
     return f"CTR-{case_year}-{int(contestacao_id):06d}"
 
 
@@ -715,7 +747,9 @@ def _map_dashboard_status(status_value: str) -> tuple[str, str]:
     return ("Em analise", "Defesa em processamento")
 
 
-def list_contestacoes_por_usuario(usuario_id: str, limit: int = 20) -> list[dict[str, str]]:
+def list_contestacoes_por_usuario(
+    usuario_id: str, limit: int = 20
+) -> list[dict[str, str]]:
     """Retorna historico do dashboard para o usuario autenticado."""
     _ensure_db_initialized()
     safe_limit = max(1, min(int(limit), 100))
@@ -823,7 +857,6 @@ def salvar_feedback(
     return updated > 0
 
 
-
 def get_contestacoes_exemplares(tipo_acao: str) -> list[dict[str, Any]]:
     """Retorna exemplares curados para o tipo_acao, ordenados por nota_qualidade DESC.
 
@@ -847,14 +880,13 @@ def get_contestacoes_exemplares(tipo_acao: str) -> list[dict[str, Any]]:
 
     return [
         {
-            "tipo_acao":          row[0],
-            "tese_central":       row[1],
+            "tipo_acao": row[0],
+            "tese_central": row[1],
             "fundamentos_resumo": row[2],
-            "nota_qualidade":     row[3],
+            "nota_qualidade": row[3],
         }
         for row in rows
     ]
-
 
 
 def get_contestacao(contestacao_id: int, usuario_id: str) -> dict[str, Any] | None:
@@ -937,11 +969,16 @@ def atualizar_contestacao_pos_revisao(
                 """,
                 (
                     PGJsonAdapter(minuta_nova) if PGJsonAdapter else minuta_nova,
-                    PGJsonAdapter(n8n_resposta_nova) if PGJsonAdapter else n8n_resposta_nova,
+                    PGJsonAdapter(n8n_resposta_nova)
+                    if PGJsonAdapter
+                    else n8n_resposta_nova,
                     str(dados_extraidos_corrigidos.get("autor", "")),
                     str(dados_extraidos_corrigidos.get("reu", "")),
                     str(dados_extraidos_corrigidos.get("tipo_acao", "")),
-                    str(dados_extraidos_corrigidos.get("numero_processo", "") or "a definir"),
+                    str(
+                        dados_extraidos_corrigidos.get("numero_processo", "")
+                        or "a definir"
+                    ),
                     str(dados_extraidos_corrigidos.get("fatos_resumo", "")),
                     contestacao_id,
                     usuario_id,

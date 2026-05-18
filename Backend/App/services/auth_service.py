@@ -23,13 +23,17 @@ def hash_password(password: str) -> str:
     )
     encoded_salt = base64.b64encode(salt).decode("utf-8")
     encoded_digest = base64.b64encode(digest).decode("utf-8")
-    return f"pbkdf2_{PBKDF2_ALGORITHM}${PBKDF2_ITERATIONS}${encoded_salt}${encoded_digest}"
+    return (
+        f"pbkdf2_{PBKDF2_ALGORITHM}${PBKDF2_ITERATIONS}${encoded_salt}${encoded_digest}"
+    )
 
 
 def verify_password(password: str, stored_hash: str) -> bool:
     """Compara senha informada com hash persistido usando tempo constante."""
     try:
-        algorithm, iterations_str, encoded_salt, encoded_digest = stored_hash.split("$", 3)
+        algorithm, iterations_str, encoded_salt, encoded_digest = stored_hash.split(
+            "$", 3
+        )
         if algorithm != f"pbkdf2_{PBKDF2_ALGORITHM}":
             return False
 

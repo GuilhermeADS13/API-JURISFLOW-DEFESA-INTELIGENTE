@@ -26,6 +26,7 @@ def _criar_pdf_pypdf_pobre() -> bytes:
     # o conteudo eh muito pequeno, pypdf deve retornar pouco/nada.
     try:
         from reportlab.pdfgen import canvas
+
         buf = BytesIO()
         c = canvas.Canvas(buf)
         # Escreve so 5 chars — abaixo do PDF_OCR_FALLBACK_THRESHOLD=200.
@@ -78,7 +79,8 @@ def test_ocr_desligado_nao_aciona_fallback(monkeypatch):
 
     chamadas_ocr = []
     monkeypatch.setattr(
-        peticao_extractor, "_extrair_pdf_via_ocr",
+        peticao_extractor,
+        "_extrair_pdf_via_ocr",
         lambda c: chamadas_ocr.append(c) or "",
     )
 
@@ -113,7 +115,8 @@ def test_pypdf_com_texto_suficiente_pula_ocr(monkeypatch):
 
     chamadas_ocr = []
     monkeypatch.setattr(
-        peticao_extractor, "_extrair_pdf_via_ocr",
+        peticao_extractor,
+        "_extrair_pdf_via_ocr",
         lambda c: chamadas_ocr.append(c) or "OCR_NAO_DEVERIA",
     )
 
@@ -126,7 +129,9 @@ def test_pypdf_com_texto_suficiente_pula_ocr(monkeypatch):
 
     buf = BytesIO()
     c = canvas.Canvas(buf)
-    texto_grande = "Texto longo o suficiente para pypdf retornar mais que threshold. " * 10
+    texto_grande = (
+        "Texto longo o suficiente para pypdf retornar mais que threshold. " * 10
+    )
     c.drawString(100, 700, texto_grande)
     c.save()
 
@@ -160,10 +165,13 @@ def test_ocr_combina_pypdf_quando_pypdf_tem_algo(monkeypatch):
 
     monkeypatch.setattr(peticao_extractor, "OCR_ENABLED", True)
     monkeypatch.setattr(peticao_extractor, "_OCR_LIBS_DISPONIVEIS", True)
-    monkeypatch.setattr(peticao_extractor, "PDF_OCR_FALLBACK_THRESHOLD", 9999)  # forca OCR
+    monkeypatch.setattr(
+        peticao_extractor, "PDF_OCR_FALLBACK_THRESHOLD", 9999
+    )  # forca OCR
 
     monkeypatch.setattr(
-        peticao_extractor, "_extrair_pdf_via_ocr",
+        peticao_extractor,
+        "_extrair_pdf_via_ocr",
         lambda c: "TEXTO_OCR_CORPO",
     )
 

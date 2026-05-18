@@ -19,9 +19,7 @@ def _docx_base_bytes() -> bytes:
     doc = Document()
     doc.add_paragraph("CONTESTACAO")
     doc.add_paragraph("Processo numero 0000091-39.2026.5.06.0341")
-    doc.add_paragraph(
-        "Reu: Janaina Pereira da Silva Matos, residente em Recife/PE."
-    )
+    doc.add_paragraph("Reu: Janaina Pereira da Silva Matos, residente em Recife/PE.")
     doc.add_paragraph(
         "Por meio desta peca, a parte re Janaina Pereira da Silva Matos contesta os pedidos."
     )
@@ -67,70 +65,84 @@ def _fake_request(path: str = "/api/editar-contestacao") -> Request:
 def test_schema_recusa_payload_sem_nenhum_campo_novo():
     docx_b64 = base64.b64encode(_docx_base_bytes()).decode("ascii")
     with pytest.raises(Exception):  # ValidationError
-        edicao_route.EdicaoContestacao.model_validate({
-            "arquivo_base_conteudo_base64": docx_b64,
-            "arquivo_base_nome": "Contestacao.docx",
-        })
+        edicao_route.EdicaoContestacao.model_validate(
+            {
+                "arquivo_base_conteudo_base64": docx_b64,
+                "arquivo_base_nome": "Contestacao.docx",
+            }
+        )
 
 
 def test_schema_recusa_extensao_diferente_de_docx():
     docx_b64 = base64.b64encode(_docx_base_bytes()).decode("ascii")
     with pytest.raises(Exception):
-        edicao_route.EdicaoContestacao.model_validate({
-            "arquivo_base_conteudo_base64": docx_b64,
-            "arquivo_base_nome": "Contestacao.pdf",
-            "nome_novo": "Erica Cavalcante",
-        })
+        edicao_route.EdicaoContestacao.model_validate(
+            {
+                "arquivo_base_conteudo_base64": docx_b64,
+                "arquivo_base_nome": "Contestacao.pdf",
+                "nome_novo": "Erica Cavalcante",
+            }
+        )
 
 
 def test_schema_recusa_base64_que_nao_eh_docx():
     """Base64 valido, mas conteudo nao tem magic bytes ZIP."""
     fake = base64.b64encode(b"not a real docx").decode("ascii")
     with pytest.raises(Exception):
-        edicao_route.EdicaoContestacao.model_validate({
-            "arquivo_base_conteudo_base64": fake,
-            "arquivo_base_nome": "Contestacao.docx",
-            "nome_novo": "Erica Cavalcante",
-        })
+        edicao_route.EdicaoContestacao.model_validate(
+            {
+                "arquivo_base_conteudo_base64": fake,
+                "arquivo_base_nome": "Contestacao.docx",
+                "nome_novo": "Erica Cavalcante",
+            }
+        )
 
 
 def test_schema_recusa_numero_processo_fora_do_padrao_cnj():
     docx_b64 = base64.b64encode(_docx_base_bytes()).decode("ascii")
     with pytest.raises(Exception):
-        edicao_route.EdicaoContestacao.model_validate({
-            "arquivo_base_conteudo_base64": docx_b64,
-            "arquivo_base_nome": "Contestacao.docx",
-            "numero_processo_novo": "12345",
-        })
+        edicao_route.EdicaoContestacao.model_validate(
+            {
+                "arquivo_base_conteudo_base64": docx_b64,
+                "arquivo_base_nome": "Contestacao.docx",
+                "numero_processo_novo": "12345",
+            }
+        )
 
 
 def test_schema_recusa_valor_causa_em_formato_invalido():
     docx_b64 = base64.b64encode(_docx_base_bytes()).decode("ascii")
     with pytest.raises(Exception):
-        edicao_route.EdicaoContestacao.model_validate({
-            "arquivo_base_conteudo_base64": docx_b64,
-            "arquivo_base_nome": "Contestacao.docx",
-            "valor_causa_novo": "27598.41",  # ponto como decimal — invalido
-        })
+        edicao_route.EdicaoContestacao.model_validate(
+            {
+                "arquivo_base_conteudo_base64": docx_b64,
+                "arquivo_base_nome": "Contestacao.docx",
+                "valor_causa_novo": "27598.41",  # ponto como decimal — invalido
+            }
+        )
 
 
 def test_schema_aceita_valor_com_prefixo_real():
     docx_b64 = base64.b64encode(_docx_base_bytes()).decode("ascii")
-    payload = edicao_route.EdicaoContestacao.model_validate({
-        "arquivo_base_conteudo_base64": docx_b64,
-        "arquivo_base_nome": "Contestacao.docx",
-        "valor_causa_novo": "R$ 27.598,41",
-    })
+    payload = edicao_route.EdicaoContestacao.model_validate(
+        {
+            "arquivo_base_conteudo_base64": docx_b64,
+            "arquivo_base_nome": "Contestacao.docx",
+            "valor_causa_novo": "R$ 27.598,41",
+        }
+    )
     assert payload.valor_causa_novo == "R$ 27.598,41"
 
 
 def test_schema_sanitiza_path_traversal_no_nome_do_arquivo():
     docx_b64 = base64.b64encode(_docx_base_bytes()).decode("ascii")
-    payload = edicao_route.EdicaoContestacao.model_validate({
-        "arquivo_base_conteudo_base64": docx_b64,
-        "arquivo_base_nome": "../../etc/passwd/Contestacao.docx",
-        "nome_novo": "Erica Cavalcante",
-    })
+    payload = edicao_route.EdicaoContestacao.model_validate(
+        {
+            "arquivo_base_conteudo_base64": docx_b64,
+            "arquivo_base_nome": "../../etc/passwd/Contestacao.docx",
+            "nome_novo": "Erica Cavalcante",
+        }
+    )
     assert "/" not in payload.arquivo_base_nome
     assert payload.arquivo_base_nome == "Contestacao.docx"
 
@@ -182,7 +194,10 @@ def test_happy_path_aplica_substituicoes_e_retorna_relatorio(monkeypatch):
     relatorio = resposta["relatorio"]
     assert any("Erica Cavalcante de Oliveira" in linha for linha in relatorio)
     assert any("0000057-64.2026.5.06.0341" in linha for linha in relatorio)
-    assert any("valor da causa" in linha.lower() and "27.598,41" in linha for linha in relatorio)
+    assert any(
+        "valor da causa" in linha.lower() and "27.598,41" in linha
+        for linha in relatorio
+    )
 
     # O .docx editado deve abrir e conter o texto novo, sem o antigo.
     docx_editado = base64.b64decode(resposta["arquivo_editado_base64"])
@@ -318,10 +333,12 @@ def test_nome_arquivo_saida_usa_numero_processo_novo():
 
 def test_nome_arquivo_saida_padrao_quando_sem_numero():
     docx_b64 = base64.b64encode(_docx_base_bytes()).decode("ascii")
-    payload = edicao_route.EdicaoContestacao.model_validate({
-        "arquivo_base_conteudo_base64": docx_b64,
-        "arquivo_base_nome": "Contestacao.docx",
-        "nome_novo": "Erica Cavalcante",
-    })
+    payload = edicao_route.EdicaoContestacao.model_validate(
+        {
+            "arquivo_base_conteudo_base64": docx_b64,
+            "arquivo_base_nome": "Contestacao.docx",
+            "nome_novo": "Erica Cavalcante",
+        }
+    )
     nome = edicao_route._montar_nome_saida(payload)
     assert nome == "contestacao_editada.docx"

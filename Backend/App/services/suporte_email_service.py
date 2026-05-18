@@ -40,11 +40,15 @@ def _resolve_email_config() -> dict[str, Any]:
     try:
         port = int(os.getenv("SUPPORT_SMTP_PORT", str(DEFAULT_SMTP_PORT)).strip())
     except ValueError as error:
-        raise SupportEmailConfigError("SUPPORT_SMTP_PORT deve ser um numero inteiro valido.") from error
+        raise SupportEmailConfigError(
+            "SUPPORT_SMTP_PORT deve ser um numero inteiro valido."
+        ) from error
 
     try:
         timeout = int(
-            os.getenv("SUPPORT_SMTP_TIMEOUT_SECONDS", str(DEFAULT_SMTP_TIMEOUT_SECONDS)).strip()
+            os.getenv(
+                "SUPPORT_SMTP_TIMEOUT_SECONDS", str(DEFAULT_SMTP_TIMEOUT_SECONDS)
+            ).strip()
         )
     except ValueError as error:
         raise SupportEmailConfigError(
@@ -61,7 +65,9 @@ def _resolve_email_config() -> dict[str, Any]:
         )
 
     if user and not password:
-        raise SupportEmailConfigError("SUPPORT_SMTP_PASSWORD nao configurado para o usuario SMTP.")
+        raise SupportEmailConfigError(
+            "SUPPORT_SMTP_PASSWORD nao configurado para o usuario SMTP."
+        )
 
     return {
         "host": host,
@@ -76,9 +82,13 @@ def _resolve_email_config() -> dict[str, Any]:
     }
 
 
-def _build_email(payload: dict[str, Any], from_email: str, to_email: str) -> EmailMessage:
+def _build_email(
+    payload: dict[str, Any], from_email: str, to_email: str
+) -> EmailMessage:
     """Monta assunto/corpo do e-mail com dados da reclamacao e protocolo."""
-    subject_prefix = os.getenv("SUPPORT_EMAIL_SUBJECT_PREFIX", DEFAULT_SUBJECT_PREFIX).strip()
+    subject_prefix = os.getenv(
+        "SUPPORT_EMAIL_SUBJECT_PREFIX", DEFAULT_SUBJECT_PREFIX
+    ).strip()
     prefix = subject_prefix or DEFAULT_SUBJECT_PREFIX
     subject = f"{prefix} {payload['assunto']}".strip()
 
@@ -109,7 +119,9 @@ def _build_email(payload: dict[str, Any], from_email: str, to_email: str) -> Ema
 def enviar_reclamacao_por_email(payload: dict[str, Any]) -> None:
     """Envia uma reclamacao de suporte para o e-mail configurado."""
     config = _resolve_email_config()
-    message = _build_email(payload, from_email=config["from_email"], to_email=config["to_email"])
+    message = _build_email(
+        payload, from_email=config["from_email"], to_email=config["to_email"]
+    )
 
     try:
         if config["use_ssl"]:
