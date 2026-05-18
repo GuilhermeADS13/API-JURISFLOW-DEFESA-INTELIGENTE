@@ -1,5 +1,6 @@
 # Rotas HTTP de contestacoes: envio ao n8n e consulta de resumo do dashboard.
 import logging
+import os
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -18,9 +19,15 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# PR8 P2.1 — rate limit configuravel via env. Default generoso (10/min) suporta
+# fluxo real do advogado submetendo 3-5 casos em sequencia. Testes de carga
+# podem definir "2/minute" no .env.
+RATE_LIMIT_CONTESTACAO = os.getenv("RATE_LIMIT_CONTESTACAO", "10/minute")
+RATE_LIMIT_DASHBOARD = os.getenv("RATE_LIMIT_DASHBOARD", "30/minute")
+
 
 @router.post("/gerar-contestacao")
-@limiter.limit("2/minute")
+@limiter.limit(RATE_LIMIT_CONTESTACAO)
 async def gerar_contestacao(
     request: Request,
     processo: Processo,
@@ -81,7 +88,7 @@ async def gerar_contestacao(
 
 
 @router.get("/contestacoes/resumo")
-@limiter.limit("10/minute")
+@limiter.limit(RATE_LIMIT_DASHBOARD)
 async def obter_resumo_contestacoes(
     request: Request,
     limit: int = Query(default=20, ge=1, le=100),
