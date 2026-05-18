@@ -280,3 +280,43 @@ def test_extrair_texto_bytes_vazios_levanta_erro():
 def test_extrair_texto_bytes_invalidos_levantam_erro():
     with pytest.raises(SubstituicaoError):
         extrair_texto(b"nao eh um docx valido")
+
+
+# ── PR8 P3.2 — MAX_SUBSTITUICOES_DOCX ────────────────────────────────────────
+
+
+def test_aplicar_substituicoes_bloqueia_payload_acima_do_limite(monkeypatch):
+    """51 substituicoes (limite=50) deve levantar SubstituicaoError antes de
+    processar o documento."""
+    from App.services import docx_editor
+
+    monkeypatch.setattr(docx_editor, "MAX_SUBSTITUICOES_DOCX", 50)
+
+    doc = Document()
+    doc.add_paragraph("Teste")
+    out = BytesIO()
+    doc.save(out)
+
+    pares = [{"antigo": f"palavra{i}", "novo": f"trocada{i}"} for i in range(51)]
+
+    with pytest.raises(SubstituicaoError, match=r"excede o limite"):
+        aplicar_substituicoes(out.getvalue(), pares)
+
+
+def test_aplicar_substituicoes_aceita_exatamente_no_limite(monkeypatch):
+    """50 substituicoes (limite=50) deve passar sem levantar limite."""
+    from App.services import docx_editor
+
+    monkeypatch.setattr(docx_editor, "MAX_SUBSTITUICOES_DOCX", 50)
+
+    doc = Document()
+    doc.add_paragraph("Conteudo arbitrario.")
+    out = BytesIO()
+    doc.save(out)
+
+    pares = [{"antigo": f"x{i}", "novo": f"y{i}"} for i in range(50)]
+
+    bytes_editados, ocorrencias = aplicar_substituicoes(out.getvalue(), pares)
+    assert isinstance(bytes_editados, bytes)
+    assert len(bytes_editados) > 0
+    assert all(v == 0 for v in ocorrencias.values())
