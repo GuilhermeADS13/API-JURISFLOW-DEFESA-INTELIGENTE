@@ -1,0 +1,194 @@
+{
+  "updatedAt": "2026-04-28T19:46:23.000Z",
+  "createdAt": "2026-03-24T21:14:59.979Z",
+  "id": "WF_AUTOJURI_CONTESTACAO",
+  "name": "AutoJuri - Webhook Contestacao v3",
+  "description": "Workflow com agente IA Claude (Anthropic) pre-configurado, busca de defesas anteriores no Supabase e contexto completo de rotas/banco.",
+  "active": false,
+  "isArchived": true,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "contestacao",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook-contestacao",
+      "name": "Webhook Contestacao",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "webhookId": "autojuri-contestacao-webhook",
+      "position": [
+        220,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const input = $input.first()?.json || {};\nconst payload = input.body && typeof input.body === 'object' ? input.body : input;\n\nconst normalize = (value, fallback = '') => {\n  if (value === null || value === undefined) return fallback;\n  const text = String(value).trim();\n  return text || fallback;\n};\n\nconst readEnv = (key, fallback = '') => {\n  try {\n    const envObject = typeof $env === 'object' && $env ? $env : null;\n    if (envObject) {\n      const envValue = envObject[key];\n      if (envValue !== undefined && envValue !== null) {\n        return normalize(envValue, fallback);\n      }\n    }\n  } catch {}\n  try {\n    if (typeof process !== 'undefined' && process && process.env) {\n      const processValue = process.env[key];\n      if (processValue !== undefined && processValue !== null) {\n        return normalize(processValue, fallback);\n      }\n    }\n  } catch {}\n  return fallback;\n};\n\nconst safeInt = (value, fallback = 0) => {\n  const parsed = Number.parseInt(String(value ?? ''), 10);\n  return Number.isFinite(parsed) ? parsed : fallback;\n};\n\nconst clip = (value, max = 12000) => {\n  const text = normalize(value);\n  return text.length > max ? text.slice(0, max) : text;\n};\n\nconst splitUserPoints = (text, maxItems = 10) => {\n  const raw = clip(text, 12000);\n  if (!raw) return [];\n  const lines = raw.split(/\\r?\\n/).map((line) => line.replace(/^[-*\\d.)\\s]+/, '').trim()).filter(Boolean);\n  const unique = [];\n  for (const line of lines) {\n    if (!unique.includes(line)) unique.push(line);\n    if (unique.length >= maxItems) break;\n  }\n  return unique;\n};\n\nconst numeroProcesso = normalize(payload.numero_processo);\nconst autor = normalize(payload.autor);\nconst reu = normalize(payload.reu, 'Nao informado');\nconst tipoAcao = normalize(payload.tipo_acao);\nconst fatos = clip(payload.fatos, 12000);\nconst pedidoAutor = clip(payload.pedido_autor, 8000);\nconst textoEditadoAoVivo = clip(payload.texto_editado_ao_vivo, 12000);\nconst arquivoNome = normalize(payload.arquivo_base_nome || payload.arquivo_base);\nconst arquivoMime = normalize(payload.arquivo_base_mime_type, 'application/octet-stream');\nconst arquivoTamanhoBytes = safeInt(payload.arquivo_base_tamanho_bytes, 0);\nconst arquivoConteudoBase64 = normalize(payload.arquivo_base_conteudo_base64);\nconst modeloMaeTexto = clip(payload.modelo_mae_texto || readEnv('MODELO_MAE_CONTESTACAO'), 15000);\n\nconst inferTextFromFile = () => {\n  if (!arquivoConteudoBase64) return '';\n  const lowerName = arquivoNome.toLowerCase();\n  const isTextLike = arquivoMime.startsWith('text/') || /\\.(txt|md|json|csv|xml|html|htm|rtf)$/i.test(lowerName);\n  if (!isTextLike) return '';\n  try {\n    return Buffer.from(arquivoConteudoBase64, 'base64').toString('utf8').replace(/\\0/g, '').slice(0, 15000);\n  } catch { return ''; }\n};\n\nconst textoPeticaoBase = inferTextFromFile();\nconst pontosUsuario = splitUserPoints(textoEditadoAoVivo, 10);\n\nconst errors = [];\nif (!numeroProcesso) errors.push('numero_processo obrigatorio');\nif (!autor) errors.push('autor obrigatorio');\nif (!tipoAcao) errors.push('tipo_acao obrigatorio');\nif (!fatos) errors.push('fatos obrigatorio');\nif (!pedidoAutor) errors.push('pedido_autor obrigatorio');\n\nconst cnjRegex = /^\\d{7}-\\d{2}\\.\\d{4}\\.\\d\\.\\d{2}\\.\\d{4}$/;\nif (numeroProcesso && !cnjRegex.test(numeroProcesso)) {\n  errors.push('numero_processo fora do padrao CNJ 0001234-56.2026.8.00.0000');\n}\nif (arquivoNome && !arquivoConteudoBase64) errors.push('arquivo_base_conteudo_base64 obrigatorio quando arquivo_base_nome for enviado');\nif (arquivoConteudoBase64 && !arquivoNome) errors.push('arquivo_base_nome obrigatorio quando arquivo_base_conteudo_base64 for enviado');\nif (arquivoTamanhoBytes > 10 * 1024 * 1024) errors.push('arquivo_base excede o tamanho maximo de 10MB');\nif (arquivoNome && !/\\.(pdf|doc|docx|txt|md|rtf)$/i.test(arquivoNome)) errors.push('arquivo_base deve ser PDF, DOC, DOCX, TXT, MD ou RTF');\n\nconst regrasAplicadas = [\n  'Trigger webhook POST /contestacao ativo',\n  'Validacao de campos obrigatorios e formato CNJ',\n  'Normalizacao de payload para o agente de IA',\n  'Leitura de contexto do usuario (texto_editado_ao_vivo)',\n  'Suporte a modelo-mae (payload ou env MODELO_MAE_CONTESTACAO)',\n  'Leitura best-effort de peticao base textual (quando arquivo for texto)',\n];\n\nif (errors.length) {\n  return [{ json: { status: 'erro_validacao', mensagem: 'Falha de validacao no trigger Webhook Contestacao.', erros: errors, regras_aplicadas: regrasAplicadas, gatilhos_acionados: [{ tipo: 'webhook', metodo: 'POST', path: 'contestacao' }], recebido_em: new Date().toISOString() } }];\n}\n\nreturn [{ json: { status: 'entrada_validada', mensagem: 'Entrada validada para processamento do agente de IA.', regras_aplicadas: regrasAplicadas, gatilhos_acionados: [{ tipo: 'webhook', metodo: 'POST', path: 'contestacao' }], contexto: { numero_processo: numeroProcesso, autor, reu, tipo_acao: tipoAcao, fatos, pedido_autor: pedidoAutor, texto_editado_ao_vivo: textoEditadoAoVivo, modo_ia: normalize(payload.modo_ia), openai_free_test_mode: payload.openai_free_test_mode === true || String(payload.openai_free_test_mode || '').toLowerCase() === 'true', pontos_usuario: pontosUsuario, modelo_mae_texto: modeloMaeTexto, arquivo_base: { nome: arquivoNome, mime_type: arquivoMime, tamanho_bytes: arquivoTamanhoBytes, conteudo_texto: textoPeticaoBase } }, recebido_em: new Date().toISOString() } }];"
+      },
+      "id": "node-orquestrador-regras",
+      "name": "Orquestrador Regras Contestacao",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const envelope = $input.first()?.json || {};\nif (envelope.status === 'erro_validacao') return [{ json: envelope }];\n\nconst contexto = envelope.contexto && typeof envelope.contexto === 'object' ? envelope.contexto : {};\nconst textoLivre = `${contexto.texto_editado_ao_vivo || ''} ${contexto.fatos || ''}`.toLowerCase();\n\nconst prioridade = /urgente|liminar|prazo hoje|prazo final|24h|48h/.test(textoLivre) ? 'alta' : /prioridade media|sem urgencia/.test(textoLivre) ? 'media' : 'normal';\nconst complexidade = (contexto.fatos || '').length > 2500 || (contexto.pontos_usuario || []).length >= 6 ? 'alta' : (contexto.fatos || '').length > 900 ? 'media' : 'baixa';\nconst categoria = (contexto.tipo_acao || '').trim() || 'Nao informado';\nconst scoreRisco = (prioridade === 'alta' ? 50 : prioridade === 'media' ? 30 : 15) + (complexidade === 'alta' ? 35 : complexidade === 'media' ? 20 : 10);\n\nconst regras = Array.isArray(envelope.regras_aplicadas) ? envelope.regras_aplicadas : [];\nregras.push('Classificacao de prioridade e complexidade da entrada');\nregras.push('Auditoria de versao do workflow v3 - Claude AI');\n\nreturn [{ json: { ...envelope, regras_aplicadas: regras, classificacao: { prioridade, complexidade, categoria, score_risco: Math.min(scoreRisco, 100) }, auditoria_execucao: { workflow_version: 'v3.1.0-claude', classificado_em: new Date().toISOString() } } }];"
+      },
+      "id": "node-classificador-entrada",
+      "name": "Classificador Entrada Contestacao",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        535,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const envelope = $input.first()?.json || {};\nif (envelope.status === 'erro_validacao') return [{ json: envelope }];\n\nconst contexto = envelope.contexto && typeof envelope.contexto === 'object' ? envelope.contexto : {};\nconst tipoAcao = (contexto.tipo_acao || '').trim();\nconst numeroProcessoAtual = (contexto.numero_processo || '').trim();\n\nconst normalize = (value, fallback = '') => {\n  if (value === null || value === undefined) return fallback;\n  const text = String(value).trim();\n  return text || fallback;\n};\n\nconst readEnv = (key, fallback = '') => {\n  try {\n    const envObject = typeof $env === 'object' && $env ? $env : null;\n    if (envObject) { const v = envObject[key]; if (v !== undefined && v !== null) return normalize(v, fallback); }\n  } catch {}\n  try {\n    if (typeof process !== 'undefined' && process && process.env) { const v = process.env[key]; if (v !== undefined && v !== null) return normalize(v, fallback); }\n  } catch {}\n  return fallback;\n};\n\nconst SUPABASE_URL = normalize(readEnv('SUPABASE_URL')).replace(/\\/+$/, '');\nconst SUPABASE_KEY = normalize(readEnv('SUPABASE_PUBLISHABLE_KEY') || readEnv('SUPABASE_ANON_KEY') || readEnv('SUPABASE_SERVICE_ROLE_KEY'));\n\nconst regras = Array.isArray(envelope.regras_aplicadas) ? [...envelope.regras_aplicadas] : [];\nlet defesasAnteriores = [];\nlet consultaStatus = 'nao_executada';\nlet consultaDetalhe = '';\n\nif (!SUPABASE_URL || !SUPABASE_KEY) {\n  consultaStatus = 'sem_credenciais';\n  consultaDetalhe = 'SUPABASE_URL ou SUPABASE_PUBLISHABLE_KEY nao configuradas no ambiente do n8n.';\n  regras.push('Consulta de defesas anteriores ignorada: credenciais Supabase ausentes');\n} else {\n  let timeoutHandle;\n  try {\n    const queryParams = new URLSearchParams({ select: 'numero_processo,tipo_acao,fatos,pedido_autor,n8n_resposta,status,criado_em', status: 'eq.ok', order: 'criado_em.desc', limit: '5' });\n    if (tipoAcao) queryParams.set('tipo_acao', `eq.${tipoAcao}`);\n    if (numeroProcessoAtual) queryParams.set('numero_processo', `neq.${numeroProcessoAtual}`);\n\n    const url = `${SUPABASE_URL}/rest/v1/contestacoes?${queryParams.toString()}`;\n    const controller = new AbortController();\n    timeoutHandle = setTimeout(() => controller.abort(), 8000);\n\n    const response = await fetch(url, { method: 'GET', headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' }, signal: controller.signal });\n\n    if (!response.ok) {\n      consultaStatus = 'erro_http';\n      consultaDetalhe = `HTTP ${response.status} ao consultar Supabase REST API.`;\n      regras.push(`Consulta de defesas anteriores falhou: HTTP ${response.status}`);\n    } else {\n      const data = await response.json().catch(() => []);\n      if (Array.isArray(data) && data.length > 0) {\n        defesasAnteriores = data.map((row) => {\n          const n8nResp = row.n8n_resposta && typeof row.n8n_resposta === 'object' ? row.n8n_resposta : {};\n          const minuta = n8nResp.minuta && typeof n8nResp.minuta === 'object' ? n8nResp.minuta : {};\n          return { numero_processo: normalize(row.numero_processo), tipo_acao: normalize(row.tipo_acao), fatos_resumo: normalize(row.fatos).slice(0, 500), pedido_autor_resumo: normalize(row.pedido_autor).slice(0, 300), tese_central: normalize(minuta.tese_central), resumo_estrategico: normalize(minuta.resumo_estrategico), riscos: Array.isArray(minuta.riscos) ? minuta.riscos.slice(0, 3) : [], criado_em: normalize(row.criado_em) };\n        });\n        consultaStatus = 'sucesso';\n        consultaDetalhe = `${defesasAnteriores.length} defesa(s) anterior(es) encontrada(s) para ${tipoAcao || 'todos os tipos'}.`;\n        regras.push(`Contexto historico carregado: ${defesasAnteriores.length} defesas anteriores similares`);\n      } else {\n        consultaStatus = 'sem_resultados';\n        consultaDetalhe = `Nenhuma defesa concluida encontrada para tipo_acao=${tipoAcao || 'qualquer'}.`;\n        regras.push('Consulta de defesas anteriores: nenhum caso similar encontrado no banco');\n      }\n    }\n  } catch (error) {\n    consultaStatus = 'erro_conexao';\n    consultaDetalhe = normalize(error?.message, 'Erro ao conectar com Supabase').slice(0, 200);\n    regras.push('Consulta de defesas anteriores falhou: erro de conexao com Supabase');\n  } finally {\n    if (timeoutHandle) clearTimeout(timeoutHandle);\n  }\n}\n\nreturn [{ json: { ...envelope, regras_aplicadas: regras, defesas_anteriores: { status: consultaStatus, detalhe: consultaDetalhe, casos: defesasAnteriores, total: defesasAnteriores.length } } }];"
+      },
+      "id": "node-buscar-defesas-db",
+      "name": "Buscar Defesas Anteriores",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        650,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// =============================================================\n// Agente IA Contestacao v3.1 - Claude AI (Anthropic) pre-configurado\n// Prioridade: 1) Claude API  2) OpenAI API  3) Fallback local (teste)\n// =============================================================\n\nconst envelope = $input.first()?.json || {};\nif (envelope.status === 'erro_validacao') return [{ json: envelope }];\n\nconst contexto = envelope.contexto && typeof envelope.contexto === 'object' ? envelope.contexto : {};\nconst classificacaoEntrada = envelope.classificacao && typeof envelope.classificacao === 'object' ? envelope.classificacao : {};\nconst auditoriaExecucao = envelope.auditoria_execucao && typeof envelope.auditoria_execucao === 'object' ? envelope.auditoria_execucao : {};\nconst defesasAnteriores = envelope.defesas_anteriores && typeof envelope.defesas_anteriores === 'object' ? envelope.defesas_anteriores : { status: 'nao_disponivel', casos: [], total: 0 };\n\nconst normalize = (value, fallback = '') => {\n  if (value === null || value === undefined) return fallback;\n  const text = String(value).trim();\n  return text || fallback;\n};\n\nconst readEnv = (key, fallback = '') => {\n  try {\n    const envObject = typeof $env === 'object' && $env ? $env : null;\n    if (envObject) { const v = envObject[key]; if (v !== undefined && v !== null) return normalize(v, fallback); }\n  } catch {}\n  try {\n    if (typeof process !== 'undefined' && process && process.env) { const v = process.env[key]; if (v !== undefined && v !== null) return normalize(v, fallback); }\n  } catch {}\n  return fallback;\n};\n\nconst clip = (value, max = 16000) => {\n  const text = normalize(value);\n  return text.length > max ? text.slice(0, max) : text;\n};\n\n// --- Dados do caso ---\nconst numeroProcesso = normalize(contexto.numero_processo);\nconst autor = normalize(contexto.autor);\nconst reu = normalize(contexto.reu, 'Nao informado');\nconst tipoAcao = normalize(contexto.tipo_acao);\nconst fatos = clip(contexto.fatos, 12000);\nconst pedidoAutor = clip(contexto.pedido_autor, 8000);\nconst textoEditado = clip(contexto.texto_editado_ao_vivo, 12000);\nconst pontosUsuario = Array.isArray(contexto.pontos_usuario) ? contexto.pontos_usuario.map((item) => normalize(item)).filter(Boolean).slice(0, 10) : [];\nconst modeloMaeTexto = clip(contexto.modelo_mae_texto, 15000);\nconst textoPeticaoBase = clip(contexto?.arquivo_base?.conteudo_texto, 15000);\nconst arquivoNome = normalize(contexto?.arquivo_base?.nome);\n\nconst regrasAplicadas = Array.isArray(envelope.regras_aplicadas) ? [...envelope.regras_aplicadas] : [];\nregrasAplicadas.push('Aplicacao de regras juridicas de contestacao civil');\nregrasAplicadas.push('Priorizacao dos pontos pedidos pelo usuario');\nregrasAplicadas.push('Uso de modelo-mae quando disponivel');\nregrasAplicadas.push('Persistencia de dados delegada ao backend PostgreSQL/Supabase');\nregrasAplicadas.push('Contexto de rotas e arquitetura do sistema injetado no agente');\nregrasAplicadas.push('Defesas anteriores similares consultadas no banco');\n\nconst gatilhosAcionados = Array.isArray(envelope.gatilhos_acionados) ? envelope.gatilhos_acionados : [{ tipo: 'webhook', metodo: 'POST', path: 'contestacao' }];\n\n// =============================================================\n// Configuracao de providers IA (Claude primeiro, OpenAI fallback)\n// =============================================================\n\n// Claude (Anthropic) - PROVIDER PRINCIPAL\nconst ANTHROPIC_API_KEY = normalize(\n  readEnv('ANTHROPIC_API_KEY') || readEnv('CLAUDE_API_KEY') || readEnv('CLAUDE_SECRET_KEY'),\n);\nconst CLAUDE_MODEL = normalize(\n  readEnv('CLAUDE_MODEL') || readEnv('ANTHROPIC_MODEL'),\n  'claude-sonnet-4-6',\n);\nconst ANTHROPIC_BASE_URL = normalize(\n  readEnv('ANTHROPIC_BASE_URL') || readEnv('CLAUDE_BASE_URL'),\n  'https://api.anthropic.com',\n).replace(/\\/+$/, '');\nconst ANTHROPIC_VERSION = normalize(readEnv('ANTHROPIC_VERSION'), '2023-06-01');\n\n// OpenAI - PROVIDER SECUNDARIO (fallback)\nconst OPENAI_API_KEY = normalize(\n  readEnv('OPENAI_API_KEY') || readEnv('OPENAI_KEY') || readEnv('OPENAI_SECRET_KEY'),\n);\nconst OPENAI_MODEL = normalize(\n  readEnv('OPENAI_MODEL') || readEnv('OPENAI_RESPONSES_MODEL') || readEnv('OPENAI_CHAT_MODEL'),\n  'gpt-4o',\n);\nconst OPENAI_BASE_URL = normalize(\n  readEnv('OPENAI_BASE_URL') || readEnv('OPENAI_API_BASE_URL'),\n  'https://api.openai.com/v1',\n).replace(/\\/+$/, '');\n\n// Configuracoes compartilhadas\nconst MAX_TOKENS = Math.max(700, Number.parseInt(readEnv('CLAUDE_MAX_TOKENS') || readEnv('OPENAI_MAX_OUTPUT_TOKENS') || '4096', 10) || 4096);\nconst TIMEOUT_MS = Math.max(10000, Number.parseInt(readEnv('CLAUDE_TIMEOUT_MS') || readEnv('OPENAI_TIMEOUT_MS') || '45000', 10) || 45000);\nconst TEMPERATURE_RAW = Number.parseFloat(readEnv('CLAUDE_TEMPERATURE') || readEnv('OPENAI_TEMPERATURE') || '0.12');\nconst TEMPERATURE = Number.isFinite(TEMPERATURE_RAW) ? Math.min(Math.max(TEMPERATURE_RAW, 0), 1) : 0.12;\n\nconst DB_PROVIDER = normalize(readEnv('CONTESTACAO_DB_PROVIDER'), 'backend_postgresql_supabase');\nconst DB_TABLE = normalize(readEnv('CONTESTACAO_DB_TABLE'), 'contestacoes');\nconst DB_STATUS_FIELD = normalize(readEnv('CONTESTACAO_DB_STATUS_FIELD'), 'status');\n\n// Determina qual provider esta ativo\nconst activeProvider = ANTHROPIC_API_KEY ? 'claude' : OPENAI_API_KEY ? 'openai' : 'fallback_local';\nconst activeModel = activeProvider === 'claude' ? CLAUDE_MODEL : activeProvider === 'openai' ? OPENAI_MODEL : 'deterministico';\n\nconst requestedMode = normalize(contexto.modo_ia).toLowerCase();\nconst payloadFreeTestMode = contexto.openai_free_test_mode === true || requestedMode === 'teste_gratis';\nconst envFreeTestMode = normalize(readEnv('OPENAI_FREE_TEST_MODE'), 'false').toLowerCase() === 'true';\nconst FREE_TEST_MODE = payloadFreeTestMode || envFreeTestMode;\n\n// --- Contexto de defesas anteriores ---\nconst casosAnteriores = Array.isArray(defesasAnteriores.casos) ? defesasAnteriores.casos : [];\nlet defesasAnteriorTexto = '';\nif (casosAnteriores.length > 0) {\n  const resumos = casosAnteriores.map((caso, i) => {\n    const parts = [`Caso ${i + 1}: ${caso.numero_processo} (${caso.tipo_acao})`, `  Fatos resumo: ${caso.fatos_resumo}`, `  Pedido autor: ${caso.pedido_autor_resumo}`, `  Tese central usada: ${caso.tese_central}`, `  Estrategia: ${caso.resumo_estrategico}`];\n    if (caso.riscos && caso.riscos.length > 0) parts.push(`  Riscos identificados: ${caso.riscos.join('; ')}`);\n    return parts.join('\\n');\n  });\n  defesasAnteriorTexto = '\\n\\nDEFESAS_ANTERIORES_SIMILARES (do banco de dados, mesmo tipo_acao, para referencia):\\n' + resumos.join('\\n\\n');\n}\n\n// =============================================================\n// Funcao de fallback local (modo teste / sem API key)\n// =============================================================\nconst buildFallbackDraft = (reason = 'fallback_local') => {\n  const pontosUsuarioTexto = pontosUsuario.length ? `Pontos solicitados pelo usuario: ${pontosUsuario.join('; ')}.` : 'Sem pontos adicionais informados pelo usuario.';\n  const sintese = `Trata-se de contestacao referente ao processo ${numeroProcesso}, proposta por ${autor} em face de ${reu}, no contexto de ${tipoAcao}.`;\n  const fundamentos = `Com base nos fatos informados (${fatos}), impugna-se a narrativa autoral e requer-se a improcedencia dos pedidos, preservando contraditorio e ampla defesa. ${pontosUsuarioTexto}`;\n  const pedidos = `Requer-se: (i) recebimento da contestacao; (ii) improcedencia dos pedidos autorais (${pedidoAutor}); (iii) producao de provas em direito admitidas.`;\n  const observacoesModelo = modeloMaeTexto ? 'Modelo-mae identificado e sinalizado para revisao humana.' : 'Sem modelo-mae explicito. Estrutura padrao aplicada.';\n\n  let referenciaAnterior = '';\n  if (casosAnteriores.length > 0) {\n    const teses = casosAnteriores.map(c => c.tese_central).filter(Boolean);\n    if (teses.length > 0) referenciaAnterior = `\\n\\nReferencia de teses anteriores similares: ${teses.join('; ')}.`;\n  }\n\n  const minutaBase = ['I - Sintese da Demanda', sintese, '', 'II - Fundamentos de Defesa', fundamentos + referenciaAnterior, '', 'III - Pedidos', pedidos, '', textoEditado ? 'IV - Pontos do Usuario\\n' + textoEditado : '', textoPeticaoBase ? 'V - Trechos da Peticao Base (analise textual)\\n' + textoPeticaoBase.slice(0, 1500) : '', 'VI - Observacoes', observacoesModelo].filter(Boolean).join('\\n\\n');\n\n  return { json: { status: 'ok', mensagem: 'Contestacao processada em modo fallback local (teste).', numero_processo: numeroProcesso, protocolo_n8n: `N8N-${Date.now()}`, gatilhos_acionados: gatilhosAcionados, regras_aplicadas: [...regrasAplicadas, 'Fallback local sem chamada externa (modo teste)'], engine_ia: { provider: 'fallback_local', model: 'deterministico', motivo: reason, providers_disponiveis: { claude: Boolean(ANTHROPIC_API_KEY), openai: Boolean(OPENAI_API_KEY) } }, classificacao: classificacaoEntrada, auditoria_execucao: auditoriaExecucao, infra: { modelo_configurado: activeModel, banco_provider: DB_PROVIDER, banco_tabela: DB_TABLE, banco_campo_status: DB_STATUS_FIELD, persistencia: 'realizada_no_backend' }, defesas_anteriores: { consultadas: casosAnteriores.length, status: defesasAnteriores.status }, minuta: { texto_base: minutaBase, secoes: { sintese, fundamentos: fundamentos + referenciaAnterior, pedidos }, resumo_estrategico: 'Minuta base gerada localmente para revisao humana.', tese_central: 'Impugnacao dos pedidos autorais e pedido de improcedencia.', pontos_atendidos: pontosUsuario, riscos: ['Sem IA externa ativa: revisar fundamentacao legal manualmente.'] }, auditoria: { modelo_mae_utilizado: Boolean(modeloMaeTexto), peticao_base_lida: Boolean(textoPeticaoBase), pontos_usuario_identificados: pontosUsuario.length, defesas_anteriores_consultadas: casosAnteriores.length, arquivo_base_nome: arquivoNome || '' }, contexto: { autor, reu, tipo_acao: tipoAcao }, recebido_em: new Date().toISOString() } };\n};\n\n// Modo teste gratis -> fallback local\nif (FREE_TEST_MODE) return [buildFallbackDraft('modo_teste_gratis')];\n\n// Sem nenhuma API key -> fallback local\nif (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) return [buildFallbackDraft('nenhuma_api_key_configurada')];\n\n// =============================================================\n// System prompt enriquecido com rotas, banco e defesas\n// =============================================================\nconst systemPrompt = [\n  'Voce e um agente juridico especialista em contestacoes civeis no Brasil, integrado ao sistema AutoJuri.',\n  '',\n  'CONTEXTO DO SISTEMA AUTOJURI:',\n  '- Backend: FastAPI na porta 8000.',\n  '- Frontend: React + Vite na porta 5173.',\n  '- Automacao: n8n na porta 5678 (este workflow).',\n  '- Banco de dados: PostgreSQL hospedado no Supabase.',\n  '- Autenticacao: Supabase Auth com Bearer token JWT.',\n  '',\n  'ROTAS DO BACKEND:',\n  '- POST /api/gerar-contestacao -> envia caso para este workflow n8n e persiste no banco.',\n  '- GET /api/contestacoes/resumo -> retorna cards e historico do dashboard do usuario.',\n  '- POST /api/usuarios/cadastro -> cadastro de novo usuario.',\n  '- POST /api/usuarios/login -> login com cookie HTTPOnly.',\n  '- POST /api/usuarios/logout -> logout e revogacao de sessao.',\n  '- GET /api/usuarios/sessao -> valida sessao ativa.',\n  '- POST /api/suporte/contato -> canal de reclamacao do usuario.',\n  '',\n  'SCHEMA DO BANCO (tabela contestacoes):',\n  '- id (BIGSERIAL PK), usuario_id, numero_processo, autor, reu, tipo_acao,',\n  '- fatos, pedido_autor, arquivo_base, texto_editado_ao_vivo,',\n  '- status (ok|processando|erro|erro_validacao|rejeitado),',\n  '- n8n_resposta (JSONB), criado_em (TIMESTAMPTZ).',\n  '',\n  'PAGINAS DO FRONTEND: Inicio, Painel (formulario+upload+editor), Dashboard (cards+historico), Suporte.',\n  '',\n  'SUA TAREFA:',\n  'Redigir minuta de contestacao para revisao humana.',\n  'Regras: objetividade, clareza, sem inventar fatos, sem inventar jurisprudencia ou citacoes numericas.',\n  'Se MODELO_MAE existir, preserve estilo e estrutura do modelo.',\n  'Se TEXTO_PETICAO_BASE existir, identifique pontos centrais e responda tecnicamente.',\n  'Priorize pontos do usuario em texto_editado_ao_vivo.',\n  '',\n  'Se houver DEFESAS_ANTERIORES_SIMILARES, use como referencia de estilo e tese (sem copiar ipsis litteris).',\n  '',\n  'Responda SOMENTE JSON valido com as chaves:',\n  '{\"resumo_estrategico\":\"...\",\"tese_central\":\"...\",\"pontos_atendidos\":[\"...\"],\"sintese\":\"...\",\"fundamentos\":\"...\",\"pedidos\":\"...\",\"observacoes\":\"...\",\"riscos\":[\"...\"]}',\n  'Nao use markdown.',\n].join('\\n');\n\nconst userPayload = { numero_processo: numeroProcesso, autor, reu, tipo_acao: tipoAcao, fatos, pedido_autor: pedidoAutor, pontos_usuario: pontosUsuario, texto_editado_ao_vivo: textoEditado, texto_peticao_base: textoPeticaoBase, modelo_mae_texto: modeloMaeTexto, classificacao: classificacaoEntrada };\nlet userMessageText = `CASO_JSON:\\n${JSON.stringify(userPayload, null, 2)}`;\nif (defesasAnteriorTexto) userMessageText += defesasAnteriorTexto;\n\nconst stripMarkdownFences = (value) => {\n  const trimmed = normalize(value);\n  if (!trimmed.startsWith('```')) return trimmed;\n  return trimmed.replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/i, '').trim();\n};\nconst parseModelJson = (value) => JSON.parse(stripMarkdownFences(value));\n\n// =============================================================\n// Chamada para a API de IA (Claude ou OpenAI)\n// =============================================================\nlet rawModelText = '';\nlet usedProvider = activeProvider;\n\nconst controller = new AbortController();\nconst timeoutHandle = setTimeout(() => controller.abort(), TIMEOUT_MS);\n\ntry {\n  if (activeProvider === 'claude') {\n    // ===================== CLAUDE API (Anthropic Messages) =====================\n    const requestBody = {\n      model: CLAUDE_MODEL,\n      max_tokens: MAX_TOKENS,\n      temperature: TEMPERATURE,\n      system: systemPrompt,\n      messages: [{ role: 'user', content: userMessageText }],\n    };\n\n    const response = await fetch(`${ANTHROPIC_BASE_URL}/v1/messages`, {\n      method: 'POST',\n      headers: {\n        'x-api-key': ANTHROPIC_API_KEY,\n        'anthropic-version': ANTHROPIC_VERSION,\n        'content-type': 'application/json',\n      },\n      body: JSON.stringify(requestBody),\n      signal: controller.signal,\n    });\n\n    const payload = await response.json().catch(() => ({}));\n\n    if (!response.ok) {\n      const detail = normalize(payload?.error?.message) || `HTTP_${response.status}`;\n      throw new Error(`Claude API falhou: ${detail}`);\n    }\n\n    // Extrai texto da resposta Claude\n    if (Array.isArray(payload?.content)) {\n      for (const block of payload.content) {\n        if (block?.type === 'text' && block?.text) rawModelText += block.text;\n      }\n    }\n    usedProvider = 'claude';\n\n  } else {\n    // ===================== OPENAI API (Responses) =====================\n    const requestBody = {\n      model: OPENAI_MODEL,\n      temperature: TEMPERATURE,\n      max_output_tokens: MAX_TOKENS,\n      input: [\n        { role: 'system', content: [{ type: 'input_text', text: systemPrompt }] },\n        { role: 'user', content: [{ type: 'input_text', text: userMessageText }] },\n      ],\n    };\n\n    const response = await fetch(`${OPENAI_BASE_URL}/responses`, {\n      method: 'POST',\n      headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },\n      body: JSON.stringify(requestBody),\n      signal: controller.signal,\n    });\n\n    const payload = await response.json().catch(() => ({}));\n\n    if (!response.ok) {\n      const detail = normalize(payload?.error?.message) || `HTTP_${response.status}`;\n      throw new Error(`OpenAI API falhou: ${detail}`);\n    }\n\n    if (typeof payload?.output_text === 'string' && payload.output_text.trim()) rawModelText = payload.output_text;\n    if (Array.isArray(payload?.output)) {\n      for (const block of payload.output) {\n        if (!Array.isArray(block?.content)) continue;\n        for (const ci of block.content) {\n          const t = normalize(ci?.text) || normalize(ci?.output_text) || normalize(ci?.input_text);\n          if (t) rawModelText += '\\n' + t;\n        }\n      }\n    }\n    usedProvider = 'openai';\n  }\n} catch (error) {\n  const reason = normalize(error?.message, 'erro_api').slice(0, 160);\n  return [buildFallbackDraft(reason)];\n} finally {\n  clearTimeout(timeoutHandle);\n}\n\nrawModelText = rawModelText.trim();\n\nif (!rawModelText) return [buildFallbackDraft('resposta_ia_sem_conteudo')];\n\nlet modelData = {};\ntry { modelData = parseModelJson(rawModelText); } catch { return [buildFallbackDraft('resposta_ia_nao_json')]; }\n\n// =============================================================\n// Monta resposta final estruturada\n// =============================================================\nconst sinteseIa = clip(modelData.sintese, 10000) || `Trata-se de contestacao referente ao processo ${numeroProcesso}, proposta por ${autor} em face de ${reu}, no contexto de ${tipoAcao}.`;\nconst fundamentosIa = clip(modelData.fundamentos, 15000) || `Com base nos fatos informados (${fatos}), impugna-se a narrativa autoral e requer-se a improcedencia dos pedidos.`;\nconst pedidosIa = clip(modelData.pedidos, 8000) || `Requer-se o recebimento da contestacao e a improcedencia do pedido autoral (${pedidoAutor}).`;\nconst observacoesIa = clip(modelData.observacoes, 6000);\nconst resumoEstrategico = clip(modelData.resumo_estrategico, 3000) || 'Defesa gerada por IA para revisao humana.';\nconst teseCentral = clip(modelData.tese_central, 2000) || 'Improcedencia dos pedidos autorais.';\nconst pontosAtendidos = Array.isArray(modelData.pontos_atendidos) ? modelData.pontos_atendidos.map((item) => normalize(item)).filter(Boolean).slice(0, 12) : pontosUsuario;\nconst riscos = Array.isArray(modelData.riscos) ? modelData.riscos.map((item) => normalize(item)).filter(Boolean).slice(0, 6) : ['Revisar fundamentos e provas antes do protocolo.'];\n\nconst minutaBase = ['I - Sintese da Demanda', sinteseIa, '', 'II - Fundamentos de Defesa', fundamentosIa, '', 'III - Pedidos', pedidosIa, '', pontosUsuario.length ? 'IV - Pontos Solicitados pelo Usuario\\n- ' + pontosUsuario.join('\\n- ') : '', observacoesIa ? 'V - Observacoes do Agente de IA\\n' + observacoesIa : '', riscos.length ? 'VI - Riscos e Pontos de Atencao\\n- ' + riscos.join('\\n- ') : ''].filter(Boolean).join('\\n\\n');\n\nreturn [{ json: { status: 'ok', mensagem: `Contestacao processada pelo agente de IA (${usedProvider}) com regras completas e contexto historico.`, numero_processo: numeroProcesso, protocolo_n8n: `N8N-${Date.now()}`, gatilhos_acionados: gatilhosAcionados, regras_aplicadas: [...regrasAplicadas, `Resposta estruturada via ${usedProvider} (${activeModel})`], engine_ia: { provider: usedProvider, model: activeModel, endpoint: usedProvider === 'claude' ? `${ANTHROPIC_BASE_URL}/v1/messages` : `${OPENAI_BASE_URL}/responses`, temperature: TEMPERATURE, max_tokens: MAX_TOKENS }, classificacao: classificacaoEntrada, auditoria_execucao: { ...auditoriaExecucao, agente_ia_executado_em: new Date().toISOString() }, infra: { modelo_configurado: activeModel, banco_provider: DB_PROVIDER, banco_tabela: DB_TABLE, banco_campo_status: DB_STATUS_FIELD, persistencia: 'realizada_no_backend' }, defesas_anteriores: { consultadas: casosAnteriores.length, status: defesasAnteriores.status }, minuta: { texto_base: minutaBase, secoes: { sintese: sinteseIa, fundamentos: fundamentosIa, pedidos: pedidosIa }, resumo_estrategico: resumoEstrategico, tese_central: teseCentral, pontos_atendidos: pontosAtendidos, riscos }, auditoria: { modelo_mae_utilizado: Boolean(modeloMaeTexto), peticao_base_lida: Boolean(textoPeticaoBase), pontos_usuario_identificados: pontosUsuario.length, defesas_anteriores_consultadas: casosAnteriores.length, arquivo_base_nome: arquivoNome || '' }, contexto: { autor, reu, tipo_acao: tipoAcao }, recebido_em: new Date().toISOString() } }];"
+      },
+      "id": "node-agente-ia-contestacao",
+      "name": "Agente IA Contestacao",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        870,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$input.first().json}}",
+        "options": {}
+      },
+      "id": "node-responder",
+      "name": "Responder",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1090,
+        280
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Contestacao": {
+      "main": [
+        [
+          {
+            "node": "Orquestrador Regras Contestacao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Orquestrador Regras Contestacao": {
+      "main": [
+        [
+          {
+            "node": "Classificador Entrada Contestacao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classificador Entrada Contestacao": {
+      "main": [
+        [
+          {
+            "node": "Buscar Defesas Anteriores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Defesas Anteriores": {
+      "main": [
+        [
+          {
+            "node": "Agente IA Contestacao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente IA Contestacao": {
+      "main": [
+        [
+          {
+            "node": "Responder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder": {
+      "main": []
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "versionId": "a20db242-909e-4e94-9a49-b84cc4744364",
+  "activeVersionId": null,
+  "versionCounter": 58,
+  "triggerCount": 1,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-04-22T18:55:13.053Z",
+      "createdAt": "2026-04-22T18:55:13.053Z",
+      "role": "workflow:owner",
+      "workflowId": "WF_AUTOJURI_CONTESTACAO",
+      "projectId": "fVE6HlMpElxfDgKz",
+      "project": {
+        "updatedAt": "2026-04-27T18:25:44.194Z",
+        "createdAt": "2026-04-22T18:50:54.138Z",
+        "id": "fVE6HlMpElxfDgKz",
+        "name": "guilherme maciel <guilhermeads13@outlook.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "a2e7c69d-6ff1-4b61-a2f7-e63ca1d6dfa1"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}
