@@ -109,6 +109,64 @@
           "responseCode": 200
         }
       }
+    },
+    {
+      "id": "node-checar-validacao",
+      "name": "Checar Validacao",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-status-erro",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "erro_validacao",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "cond-status-erro-auth",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "erro_auth",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-responder-erro",
+      "name": "Responder Erro",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        900,
+        500
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": "={{ $json.status === 'erro_auth' ? 401 : 422 }}"
+        }
+      }
     }
   ],
   "connections": {
@@ -127,7 +185,7 @@
       "main": [
         [
           {
-            "node": "Claude Extrator",
+            "node": "Checar Validacao",
             "type": "main",
             "index": 0
           }
@@ -172,6 +230,24 @@
         [
           {
             "node": "Responder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Checar Validacao": {
+      "main": [
+        [
+          {
+            "node": "Claude Extrator",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder Erro",
             "type": "main",
             "index": 0
           }
