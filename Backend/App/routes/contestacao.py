@@ -67,6 +67,27 @@ async def gerar_contestacao(
                 detail="Nao foi possivel gerar a contestacao com os dados informados. Revise os campos e tente novamente.",
             )
 
+        # PR9 P3.2 — workflow sinaliza falha da IA (Claude indisponivel, fallback
+        # local acionado) com status='erro_ia'. Backend deve retornar HTTP 503
+        # (servico temporariamente indisponivel) em vez de 422 — usuario sabe
+        # que e problema do servico, nao dos dados que enviou.
+        if workflow_status == "erro_ia":
+            save_contestacao(payload, status=workflow_status, n8n_resposta=resposta)
+            motivo = (
+                resposta.get("_debug", {}).get("fallback_motivo")
+                if isinstance(resposta, dict)
+                else None
+            )
+            logger.error(
+                "n8n retornou erro_ia usuario_id=%s motivo=%s",
+                usuario["id"],
+                motivo,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Servico de IA temporariamente indisponivel. Tente novamente em alguns minutos.",
+            )
+
         registro_id = save_contestacao(
             payload, status=workflow_status, n8n_resposta=resposta
         )

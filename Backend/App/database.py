@@ -386,6 +386,20 @@ def init_db() -> None:
                     ON contestacoes_exemplares (tipo_acao, nota_qualidade DESC)
                     """
                 )
+
+                # PR9 P1.2 — tabela `configuracoes` (chave/valor) para guardar
+                # o `modelo_mae_contestacao` (texto do template padrao do escritorio)
+                # e outras configuracoes globais. n8n workflow `contestacao-claude`
+                # busca via REST API quando o frontend nao envia o modelo no payload.
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS configuracoes (
+                        chave           TEXT PRIMARY KEY,
+                        valor           TEXT NOT NULL,
+                        atualizado_em   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                    """
+                )
             # PR8 P2.4 — commit + rollback explicito em volta das migrations.
             # Captura tanto falha em commit() quanto falha em algum execute()
             # acima (ja propagada antes daqui pela maquina de excecoes do with).
@@ -1137,3 +1151,43 @@ def salvar_exemplar(
         connection.commit()
 
     return int(inserted_id)
+
+
+# ── PR9 P1.2 — CRUD da tabela `configuracoes` ────────────────────────────────
+
+
+def obter_configuracao(chave: str) -> str | None:
+    """Busca o valor de uma chave da tabela `configuracoes`. None se nao existe.
+
+    Usado pelo n8n workflow `contestacao-claude` (via REST API do Supabase)
+    quando o frontend nao envia `modelo_mae_texto` no payload.
+    """
+    _ensure_db_initialized()
+
+    with _get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT valor FROM configuracoes WHERE chave = %s LIMIT 1",
+                (chave,),
+            )
+            row = cursor.fetchone()
+    return str(row[0]) if row else None
+
+
+def salvar_configuracao(chave: str, valor: str) -> None:
+    """Upsert numa chave da tabela `configuracoes`."""
+    _ensure_db_initialized()
+
+    with _get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO configuracoes (chave, valor)
+                VALUES (%s, %s)
+                ON CONFLICT (chave) DO UPDATE
+                  SET valor = EXCLUDED.valor,
+                      atualizado_em = NOW()
+                """,
+                (chave, valor),
+            )
+        connection.commit()

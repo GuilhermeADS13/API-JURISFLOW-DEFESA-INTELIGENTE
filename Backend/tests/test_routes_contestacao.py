@@ -151,6 +151,48 @@ def test_gerar_contestacao_retorna_422_em_erro_validacao(monkeypatch, processo_v
     )
 
 
+def test_gerar_contestacao_retorna_503_quando_workflow_status_erro_ia(
+    monkeypatch, processo_valido
+):
+    """PR9 P3.2 — n8n sinaliza falha do Claude (fallback acionado) com erro_ia.
+    Backend deve retornar HTTP 503 (servico IA indisponivel), nao 422.
+    """
+    calls: dict = {}
+
+    async def fake_enviar_para_n8n(payload):
+        return {
+            "status": "erro_ia",
+            "_debug": {
+                "fallback_acionado": True,
+                "fallback_motivo": "anthropic_429",
+            },
+            "engine_ia": {"provider": "fallback_local", "api_error": "rate_limit_429"},
+        }
+
+    def fake_save_contestacao(payload, status, n8n_resposta):
+        calls["save"] = {"status": status, "n8n_resposta": n8n_resposta}
+        return 88
+
+    monkeypatch.setattr(contestacao, "enviar_para_n8n", fake_enviar_para_n8n)
+    monkeypatch.setattr(contestacao, "save_contestacao", fake_save_contestacao)
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            contestacao.gerar_contestacao(
+                request=_fake_request(),
+                processo=processo_valido,
+                usuario={"id": "USR-IA", "nome": "Ana", "email": "ana@teste.com"},
+            )
+        )
+
+    assert exc_info.value.status_code == 503
+    detail = str(exc_info.value.detail).lower()
+    assert "indisponivel" in detail or "tente novamente" in detail
+    # Persistido para auditoria
+    assert calls["save"]["status"] == "erro_ia"
+    assert calls["save"]["n8n_resposta"]["_debug"]["fallback_motivo"] == "anthropic_429"
+
+
 def test_obter_resumo_contestacoes_retorna_cards_e_historico(monkeypatch):
     calls: dict = {}
 
