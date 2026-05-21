@@ -240,8 +240,12 @@ async def get_authenticated_user(
         # Compatibilidade: aceita token opaco legado ou JWT do Supabase no header.
         try:
             session = get_sessao_ativa(bearer_token)
-        except Exception:
-            logger.warning("Sessao local indisponivel; tentando validacao Supabase.")
+        except (RuntimeError, OSError, ValueError) as err:
+            # DB indisponivel ou token mal formado: continua tentando Supabase.
+            logger.warning(
+                "Sessao local indisponivel (%s); tentando validacao Supabase.",
+                type(err).__name__,
+            )
             session = None
         if session:
             return session

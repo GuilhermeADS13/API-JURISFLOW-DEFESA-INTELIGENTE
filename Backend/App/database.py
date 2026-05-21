@@ -182,10 +182,10 @@ def _get_connection():
     conn = pool.getconn()
     try:
         yield conn
-    except Exception:
+    except Exception:  # noqa: BLE001 - rollback intencional em qualquer erro; re-raise abaixo
         try:
             conn.rollback()
-        except Exception:
+        except Exception:  # noqa: BLE001 - rollback pode falhar se conexao morreu; ignorar e prosseguir
             pass
         raise
     finally:
@@ -407,7 +407,7 @@ def init_db() -> None:
             # manter transacao aberta apos erro de DDL.
             try:
                 connection.commit()
-            except Exception:
+            except Exception:  # noqa: BLE001 - rollback + re-raise para nao deixar transacao aberta
                 connection.rollback()
                 raise
 
@@ -475,7 +475,7 @@ def create_usuario(
                 row = cursor.fetchone()
                 if row is None:
                     raise RuntimeError("Falha ao criar usuario no banco de dados.")
-            except Exception as error:
+            except Exception as error:  # noqa: BLE001 - filtra IntegrityError via isinstance + re-raise demais
                 if psycopg2 is not None and isinstance(error, psycopg2.IntegrityError):
                     raise DatabaseIntegrityError(
                         "Conflito de integridade no banco."

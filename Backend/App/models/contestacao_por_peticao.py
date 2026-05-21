@@ -108,7 +108,9 @@ class ContestacaoPorPeticao(BaseModel):
         for a in self.arquivos_anexos:
             try:
                 total += len(base64.b64decode(a.base64.strip(), validate=True))
-            except Exception:
+            except (binascii.Error, ValueError):
+                # base64 malformado neste anexo: ignora no calculo do total;
+                # a validacao pontual de cada anexo acontece em ArquivoAnexo.
                 continue
         if total > MAX_TOTAL_ANEXOS_BYTES:
             raise ValueError(

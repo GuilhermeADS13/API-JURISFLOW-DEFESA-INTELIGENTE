@@ -22,9 +22,15 @@ Fluxo de confirmacao (`POST /contestacoes/{id}/confirmar-extracao`):
 
 Nota: NAO usar `from __future__ import annotations` — quebra FastAPI/OpenAPI
 quando combinado com Body(...).
+
+Refatorado na Etapa 5: extrair_method para reduzir CC de `contestar_por_peticao`
+(24 -> meta < 10) e `confirmar_extracao` (12 -> meta < 8), unificacao de
+`_montar_docx`/`_montar_docx_minimal` e substituicao de broad `except Exception:`
+por excecoes especificas com logging estruturado.
 """
 
 import base64
+import binascii
 import logging
 import threading
 
@@ -48,8 +54,8 @@ from App.services.contestacao_docx_builder import (
     montar_docx_com_modelo,
     montar_docx_programatico,
 )
-from App.services.n8n_service import N8NServiceError, enviar_para_n8n_peticao
 from App.services.diff_minuta import diff_secoes, resumo_diff
+from App.services.n8n_service import N8NServiceError, enviar_para_n8n_peticao
 from App.services.peticao_extractor import (
     ExtracaoError,
     extrair_e_consolidar_textos,
@@ -62,6 +68,13 @@ router = APIRouter()
 # Limiar de confianca abaixo do qual a contestacao exige revisao humana antes
 # de gerar o DOCX final (PR5 HiL — Guia Tecnico v3 secao 2.1).
 CONFIANCA_THRESHOLD = 0.7
+
+DOCX_MIME_TYPE = (
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+)
+
+
+# ─────────────────────────── Helpers de embedding ───────────────────────────
 
 
 def _salvar_embedding_background(contestacao_id: int, texto: str) -> None:
@@ -76,7 +89,7 @@ def _salvar_embedding_background(contestacao_id: int, texto: str) -> None:
         emb = gerar_embedding(texto)
         if emb:
             salvar_embedding(contestacao_id, emb)
-    except Exception as err:
+    except Exception as err:  # noqa: BLE001 - background fire-and-forget: nao pode quebrar a thread
         logger.warning(
             "Falha ao salvar embedding contestacao_id=%s: %s",
             contestacao_id,
@@ -97,6 +110,198 @@ def _disparar_embedding(contestacao_id: int, fatos: str, pedidos: str) -> None:
     ).start()
 
 
+# ─────────────────────── Helpers de decodificacao/extracao ────────────────────
+
+
+def _decodificar_peticao_base64(peticao_b64: str) -> bytes:
+    """Decodifica conteudo base64 da peticao ou levanta HTTP 422."""
+    try:
+        return base64.b64decode(peticao_b64)
+    except (binascii.Error, ValueError) as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Conteudo da peticao invalido em base64.",
+        ) from error
+
+
+def _decodificar_anexos(anexos) -> list[tuple[bytes, str]]:
+    """Decodifica anexos base64; anexos invalidos sao apenas logados e descartados."""
+    decodificados: list[tuple[bytes, str]] = []
+    for anexo in anexos:
+        try:
+            decodificados.append((base64.b64decode(anexo.base64), anexo.nome))
+        except (binascii.Error, ValueError):
+            logger.warning("Anexo descartado por base64 invalido: %s", anexo.nome)
+    return decodificados
+
+
+def _extrair_texto_peticao(
+    peticao_bytes: bytes,
+    nome: str,
+    anexos: list[tuple[bytes, str]],
+    usuario_id: str,
+) -> str:
+    """Wrapper do extrator que mapeia ExtracaoError para HTTP 422."""
+    try:
+        return extrair_e_consolidar_textos(peticao_bytes, nome, anexos)
+    except ExtracaoError as error:
+        logger.warning(
+            "Falha ao extrair texto da peticao usuario_id=%s erro=%s",
+            usuario_id,
+            error,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(error),
+        ) from error
+
+
+# ───────────────────────── Helpers de orquestracao n8n ────────────────────────
+
+
+async def _chamar_n8n_peticao(
+    payload_n8n: dict,
+    *,
+    fluxo: str,
+    contexto_log: str,
+) -> tuple[dict, dict]:
+    """Chama o webhook n8n de peticao e devolve (resposta_n8n, minuta).
+
+    Mapeia falhas conhecidas para HTTP 502 com mensagem amigavel.
+    `fluxo` e `contexto_log` aparecem nos logs para distinguir os dois fluxos
+    (contestar inicial vs confirmar pos-revisao humana).
+    """
+    try:
+        resposta = await enviar_para_n8n_peticao(payload_n8n)
+    except N8NServiceError as error:
+        logger.error(
+            "n8n %s indisponivel %s erro=%s", fluxo, contexto_log, error
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Servico de geracao indisponivel. Tente novamente em instantes.",
+        ) from error
+
+    if not isinstance(resposta, dict):
+        logger.warning(
+            "Resposta inesperada do n8n %s tipo=%s", fluxo, type(resposta).__name__
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Resposta invalida do servico de geracao.",
+        )
+
+    minuta = resposta.get("minuta") or {}
+    if not minuta:
+        logger.warning(
+            "n8n %s nao devolveu minuta %s status=%s",
+            fluxo,
+            contexto_log,
+            resposta.get("status"),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Servico de geracao nao retornou a minuta da contestacao.",
+        )
+
+    return resposta, minuta
+
+
+# ────────────────────────── Helpers de persistencia ──────────────────────────
+
+
+def _montar_save_payload(
+    payload: ContestacaoPorPeticao,
+    dados_extraidos: dict,
+    usuario_id: str,
+    peticao_bytes: bytes,
+) -> dict:
+    """Monta dict base usado tanto no fluxo OK quanto no requer_revisao_humana."""
+    return {
+        "usuario_id": usuario_id,
+        "numero_processo": dados_extraidos.get("numero_processo") or "a definir",
+        "autor": dados_extraidos.get("autor") or "",
+        "reu": dados_extraidos.get("reu") or "",
+        "tipo_acao": (
+            dados_extraidos.get("tipo_acao")
+            or payload.tipo_acao_hint
+            or "Nao identificado"
+        ),
+        "fatos": dados_extraidos.get("fatos_resumo") or "",
+        "pedido_autor": _join_pedidos(dados_extraidos.get("pedidos")),
+        "arquivo_base_nome": payload.arquivo_peticao_nome,
+        "arquivo_base_conteudo_base64": "",
+        "arquivo_base_mime_type": payload.arquivo_peticao_mime_type,
+        "arquivo_base_tamanho_bytes": len(peticao_bytes),
+        "texto_editado_ao_vivo": "",
+    }
+
+
+def _persistir_contestacao(usuario_id: str, contexto: str, **kwargs) -> int:
+    """Wrapper de save_contestacao que mapeia falhas para HTTP 500."""
+    try:
+        return save_contestacao(**kwargs)
+    except (RuntimeError, ValueError, OSError) as error:
+        logger.error(
+            "Falha ao persistir contestacao %s usuario_id=%s erro=%s",
+            contexto,
+            usuario_id,
+            error,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Falha ao persistir a contestacao gerada.",
+        ) from error
+
+
+# ───────────────────────── Helpers de montagem do DOCX ────────────────────────
+
+
+def _montar_docx(
+    modelo_b64: str | None,
+    dados_extraidos: dict,
+    minuta: dict,
+    usuario_id: str,
+    contexto: str = "",
+) -> bytes:
+    """Monta DOCX com modelo base (se houver) ou cai no programatico.
+
+    Unifica o que antes eram `_montar_docx` e `_montar_docx_minimal`, eliminando
+    duplicacao: ambos chamavam `montar_docx_com_modelo` + fallback identico.
+    """
+    docx_bytes = None
+    if modelo_b64:
+        docx_bytes = montar_docx_com_modelo(modelo_b64, dados_extraidos, minuta)
+    if docx_bytes is not None:
+        return docx_bytes
+
+    try:
+        return montar_docx_programatico(dados_extraidos, minuta)
+    except (RuntimeError, ValueError, OSError) as error:
+        logger.error(
+            "Falha ao montar .docx programatico %s usuario_id=%s erro=%s",
+            contexto,
+            usuario_id,
+            error,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Falha ao montar o arquivo da contestacao.",
+        ) from error
+
+
+def _resposta_docx(docx_bytes: bytes, dados_extraidos: dict) -> dict:
+    """Encapsula encoding base64 + nome + mime do DOCX para resposta JSON."""
+    return {
+        "arquivo_editado_base64": base64.b64encode(docx_bytes).decode("ascii"),
+        "arquivo_editado_nome": _montar_nome_saida(dados_extraidos),
+        "arquivo_editado_mime_type": DOCX_MIME_TYPE,
+    }
+
+
+# ─────────────────────────────── Rotas ───────────────────────────────────────
+
+
 @router.post("/contestar-por-peticao")
 @limiter.limit("10/minute")
 async def contestar_por_peticao(
@@ -110,186 +315,136 @@ async def contestar_por_peticao(
     Quando `dados_confianca < 0.7` retorna `{requer_revisao_humana: True, ...}`
     e o frontend deve disparar o modal de revisao + chamar /confirmar-extracao.
     """
+    usuario_id = usuario["id"]
 
-    # 1. Decodifica peticao
-    try:
-        peticao_bytes = base64.b64decode(payload.arquivo_peticao_base64)
-    except Exception as error:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Conteudo da peticao invalido em base64.",
-        ) from error
+    # 1-2. Decodifica peticao + anexos e consolida o texto.
+    peticao_bytes = _decodificar_peticao_base64(payload.arquivo_peticao_base64)
+    anexos = _decodificar_anexos(payload.arquivos_anexos)
+    texto_peticao = _extrair_texto_peticao(
+        peticao_bytes, payload.arquivo_peticao_nome, anexos, usuario_id
+    )
 
-    # 2. Decodifica anexos (PR5 multi-docs) e consolida texto com a peticao.
-    anexos_decodificados: list[tuple[bytes, str]] = []
-    for anexo in payload.arquivos_anexos:
-        try:
-            anexos_decodificados.append((base64.b64decode(anexo.base64), anexo.nome))
-        except Exception:
-            logger.warning("Anexo descartado por base64 invalido: %s", anexo.nome)
-
-    try:
-        texto_peticao = extrair_e_consolidar_textos(
-            peticao_bytes,
-            payload.arquivo_peticao_nome,
-            anexos_decodificados,
-        )
-    except ExtracaoError as error:
-        logger.warning(
-            "Falha ao extrair texto da peticao usuario_id=%s erro=%s",
-            usuario["id"],
-            error,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(error),
-        ) from error
-
-    # 3. Extrai texto do modelo base (opcional, nao falha)
+    # 3-4. Texto do modelo base e payload para o n8n.
     texto_modelo_base = extrair_texto_modelo_base(payload.modelo_base_base64)
-
-    # 4. Monta payload para o n8n
     payload_n8n = {
         "texto_peticao": texto_peticao,
         "modelo_base_texto": texto_modelo_base,
         "tipo_acao_hint": payload.tipo_acao_hint or "",
         "pontos_contestante": payload.pontos_contestante or "",
-        "usuario_id": usuario["id"],
+        "usuario_id": usuario_id,
         "auth_provider": usuario.get("auth_provider", "legacy"),
     }
 
-    # 5. Chama o n8n
-    try:
-        resposta_n8n = await enviar_para_n8n_peticao(payload_n8n)
-    except N8NServiceError as error:
-        logger.error(
-            "n8n contestar-por-peticao indisponivel usuario_id=%s erro=%s",
-            usuario["id"],
-            error,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Servico de geracao indisponivel. Tente novamente em instantes.",
-        ) from error
-
-    if not isinstance(resposta_n8n, dict):
-        logger.warning(
-            "Resposta inesperada do n8n contestar-por-peticao tipo=%s",
-            type(resposta_n8n).__name__,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Resposta invalida do servico de geracao.",
-        )
+    # 5. Chamada ao n8n (com validacao e mapeamento de erros).
+    resposta_n8n, minuta = await _chamar_n8n_peticao(
+        payload_n8n,
+        fluxo="contestar-por-peticao",
+        contexto_log=f"usuario_id={usuario_id}",
+    )
 
     dados_extraidos = resposta_n8n.get("dados_extraidos") or {}
-    minuta = resposta_n8n.get("minuta") or {}
     engine_ia = resposta_n8n.get("engine_ia") or {}
-
-    if not minuta:
-        logger.warning(
-            "n8n nao devolveu minuta usuario_id=%s status=%s",
-            usuario["id"],
-            resposta_n8n.get("status"),
-        )
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Servico de geracao nao retornou a minuta da contestacao.",
-        )
-
-    # 6. PR5 HiL: avalia confianca da extracao.
     confianca = _coerce_float(dados_extraidos.get("confianca"))
-    requer_revisao = confianca is not None and confianca < CONFIANCA_THRESHOLD
+    save_payload_base = _montar_save_payload(
+        payload, dados_extraidos, usuario_id, peticao_bytes
+    )
 
-    save_payload_base = {
-        "usuario_id": usuario["id"],
-        "numero_processo": dados_extraidos.get("numero_processo") or "a definir",
-        "autor": dados_extraidos.get("autor") or "",
-        "reu": dados_extraidos.get("reu") or "",
-        "tipo_acao": dados_extraidos.get("tipo_acao")
-        or payload.tipo_acao_hint
-        or "Nao identificado",
-        "fatos": dados_extraidos.get("fatos_resumo") or "",
-        "pedido_autor": _join_pedidos(dados_extraidos.get("pedidos")),
-        "arquivo_base_nome": payload.arquivo_peticao_nome,
-        "arquivo_base_conteudo_base64": "",
-        "arquivo_base_mime_type": payload.arquivo_peticao_mime_type,
-        "arquivo_base_tamanho_bytes": len(peticao_bytes),
-        "texto_editado_ao_vivo": "",
+    # 6. PR5 HiL: confianca baixa -> nao gera DOCX, retorna para revisao.
+    if confianca is not None and confianca < CONFIANCA_THRESHOLD:
+        return _fluxo_revisao_humana(
+            usuario_id=usuario_id,
+            save_payload_base=save_payload_base,
+            resposta_n8n=resposta_n8n,
+            minuta=minuta,
+            dados_extraidos=dados_extraidos,
+            engine_ia=engine_ia,
+            confianca=confianca,
+        )
+
+    # 7-8. Confianca alta: monta DOCX, persiste e retorna minuta final.
+    return _fluxo_ok(
+        payload=payload,
+        usuario_id=usuario_id,
+        save_payload_base=save_payload_base,
+        resposta_n8n=resposta_n8n,
+        minuta=minuta,
+        dados_extraidos=dados_extraidos,
+        engine_ia=engine_ia,
+        confianca=confianca,
+    )
+
+
+def _fluxo_revisao_humana(
+    *,
+    usuario_id: str,
+    save_payload_base: dict,
+    resposta_n8n: dict,
+    minuta: dict,
+    dados_extraidos: dict,
+    engine_ia: dict,
+    confianca: float,
+) -> dict:
+    """Salva contestacao em estado requer_revisao_humana e devolve preview."""
+    contestacao_id = _persistir_contestacao(
+        usuario_id,
+        contexto="em revisao",
+        payload=save_payload_base,
+        status="requer_revisao_humana",
+        n8n_resposta=resposta_n8n,
+        origem="peticao",
+        requer_revisao_humana=True,
+        dados_confianca=confianca,
+        minuta_json_original=minuta,
+    )
+    return {
+        "status": "requer_revisao_humana",
+        "contestacao_id": contestacao_id,
+        "requer_revisao_humana": True,
+        "dados_confianca": confianca,
+        "dados_extraidos": dados_extraidos,
+        "minuta_preview": minuta,
+        "engine_ia": engine_ia,
+        "mensagem": (
+            f"A IA teve baixa confianca ({confianca:.2f}) na extracao dos "
+            "dados. Revise os campos extraidos antes de gerar a minuta final."
+        ),
     }
 
-    if requer_revisao:
-        # Salva sem gerar DOCX. Frontend recebe dados extraidos para o
-        # advogado revisar e enviar via /confirmar-extracao.
-        try:
-            contestacao_id = save_contestacao(
-                payload=save_payload_base,
-                status="requer_revisao_humana",
-                n8n_resposta=resposta_n8n,
-                origem="peticao",
-                requer_revisao_humana=True,
-                dados_confianca=confianca,
-                minuta_json_original=minuta,
-            )
-        except Exception as error:
-            logger.error(
-                "Falha ao persistir contestacao em revisao usuario_id=%s erro=%s",
-                usuario["id"],
-                error,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Falha ao persistir a contestacao gerada.",
-            ) from error
 
-        return {
-            "status": "requer_revisao_humana",
-            "contestacao_id": contestacao_id,
-            "requer_revisao_humana": True,
-            "dados_confianca": confianca,
-            "dados_extraidos": dados_extraidos,
-            "minuta_preview": minuta,
-            "engine_ia": engine_ia,
-            "mensagem": (
-                f"A IA teve baixa confianca ({confianca:.2f}) na extracao dos "
-                "dados. Revise os campos extraidos antes de gerar a minuta final."
-            ),
-        }
+def _fluxo_ok(
+    *,
+    payload: ContestacaoPorPeticao,
+    usuario_id: str,
+    save_payload_base: dict,
+    resposta_n8n: dict,
+    minuta: dict,
+    dados_extraidos: dict,
+    engine_ia: dict,
+    confianca: float | None,
+) -> dict:
+    """Monta DOCX, persiste e devolve resposta de minuta pronta."""
+    docx_bytes = _montar_docx(
+        payload.modelo_base_base64, dados_extraidos, minuta, usuario_id
+    )
 
-    # 7. Confianca alta: monta o .docx final
-    docx_bytes = _montar_docx(payload, dados_extraidos, minuta, usuario["id"])
+    contestacao_id = _persistir_contestacao(
+        usuario_id,
+        contexto="por peticao",
+        payload=save_payload_base,
+        status=str(resposta_n8n.get("status") or "ok"),
+        n8n_resposta=resposta_n8n,
+        origem="peticao",
+        requer_revisao_humana=False,
+        dados_confianca=confianca,
+        minuta_json_original=minuta,
+    )
 
-    # 8. Persiste com confianca + minuta original (golden dataset PR5)
-    try:
-        contestacao_id = save_contestacao(
-            payload=save_payload_base,
-            status=str(resposta_n8n.get("status") or "ok"),
-            n8n_resposta=resposta_n8n,
-            origem="peticao",
-            requer_revisao_humana=False,
-            dados_confianca=confianca,
-            minuta_json_original=minuta,
-        )
-    except Exception as error:
-        logger.error(
-            "Falha ao persistir contestacao por peticao usuario_id=%s erro=%s",
-            usuario["id"],
-            error,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Falha ao persistir a contestacao gerada.",
-        ) from error
-
-    # PR6 #4: gera e salva embedding em background (nao bloqueia resposta)
+    # PR6 #4: embedding em background (nao bloqueia resposta)
     _disparar_embedding(
         contestacao_id,
         save_payload_base.get("fatos", ""),
         save_payload_base.get("pedido_autor", ""),
     )
-
-    arquivo_editado_base64 = base64.b64encode(docx_bytes).decode("ascii")
-    arquivo_editado_nome = _montar_nome_saida(dados_extraidos)
 
     return {
         "status": "ok",
@@ -299,11 +454,7 @@ async def contestar_por_peticao(
         "dados_extraidos": dados_extraidos,
         "minuta": minuta,
         "engine_ia": engine_ia,
-        "arquivo_editado_base64": arquivo_editado_base64,
-        "arquivo_editado_nome": arquivo_editado_nome,
-        "arquivo_editado_mime_type": (
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        ),
+        **_resposta_docx(docx_bytes, dados_extraidos),
     }
 
 
@@ -321,25 +472,84 @@ async def confirmar_extracao(
     bypassa o Claude Extrator (poupando 1 chamada Claude e tokens). RAG +
     Gerador rodam normalmente com os dados corrigidos pelo advogado.
     """
+    usuario_id = usuario["id"]
+    contestacao = _carregar_contestacao_em_revisao(contestacao_id, usuario_id)
 
-    contestacao = get_contestacao(contestacao_id, usuario["id"])
+    dados_corrigidos = dict(payload.dados_extraidos)
+    payload_n8n = _montar_payload_revisao(payload, dados_corrigidos, usuario)
+
+    resposta_n8n, minuta_nova = await _chamar_n8n_peticao(
+        payload_n8n,
+        fluxo="confirmar-extracao",
+        contexto_log=f"contestacao_id={contestacao_id}",
+    )
+    engine_ia = resposta_n8n.get("engine_ia") or {}
+
+    docx_bytes = _montar_docx(
+        payload.modelo_base_base64,
+        dados_corrigidos,
+        minuta_nova,
+        usuario_id,
+        contexto="pos-revisao",
+    )
+
+    if not atualizar_contestacao_pos_revisao(
+        contestacao_id=contestacao_id,
+        usuario_id=usuario_id,
+        minuta_nova=minuta_nova,
+        n8n_resposta_nova=resposta_n8n,
+        dados_extraidos_corrigidos=dados_corrigidos,
+    ):
+        logger.error(
+            "Falha ao atualizar contestacao pos-revisao id=%s usuario=%s",
+            contestacao_id,
+            usuario_id,
+        )
+
+    # PR6 #4: re-gera embedding com dados corrigidos pelo humano
+    _disparar_embedding(
+        contestacao_id,
+        str(dados_corrigidos.get("fatos_resumo") or ""),
+        str(dados_corrigidos.get("pedido_autor") or ""),
+    )
+    # Sem warning: contestacao foi carregada em _carregar_contestacao_em_revisao.
+    _ = contestacao
+
+    return {
+        "status": "ok",
+        "contestacao_id": contestacao_id,
+        "requer_revisao_humana": False,
+        "dados_extraidos": dados_corrigidos,
+        "minuta": minuta_nova,
+        "engine_ia": engine_ia,
+        **_resposta_docx(docx_bytes, dados_corrigidos),
+    }
+
+
+def _carregar_contestacao_em_revisao(contestacao_id: int, usuario_id: str) -> dict:
+    """Recupera contestacao do DB e valida que esta em revisao humana."""
+    contestacao = get_contestacao(contestacao_id, usuario_id)
     if contestacao is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Contestacao nao encontrada para o usuario autenticado.",
         )
-
     if not contestacao.get("requer_revisao_humana"):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Esta contestacao nao esta em revisao humana.",
         )
+    return contestacao
 
-    dados_corrigidos = dict(payload.dados_extraidos)
 
-    # Monta payload n8n com flag de bypass.
-    payload_n8n = {
-        # texto_peticao vazio: o extrator vai bypassar e usar dados_extraidos_pre_validados.
+def _montar_payload_revisao(
+    payload: ConfirmacaoExtracao,
+    dados_corrigidos: dict,
+    usuario: dict[str, str],
+) -> dict:
+    """Monta payload n8n com flag de bypass do Claude Extrator."""
+    return {
+        # Extrator vai bypassar e usar dados_extraidos_pre_validados.
         "texto_peticao": "(revisao humana - extrator bypassado)",
         "modelo_base_texto": extrair_texto_modelo_base(payload.modelo_base_base64),
         "tipo_acao_hint": dados_corrigidos.get("tipo_acao", ""),
@@ -349,133 +559,8 @@ async def confirmar_extracao(
         "dados_extraidos_pre_validados": dados_corrigidos,
     }
 
-    try:
-        resposta_n8n = await enviar_para_n8n_peticao(payload_n8n)
-    except N8NServiceError as error:
-        logger.error(
-            "n8n confirmar-extracao indisponivel contestacao_id=%s erro=%s",
-            contestacao_id,
-            error,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Servico de geracao indisponivel. Tente novamente em instantes.",
-        ) from error
 
-    if not isinstance(resposta_n8n, dict):
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Resposta invalida do servico de geracao.",
-        )
-
-    minuta_nova = resposta_n8n.get("minuta") or {}
-    engine_ia = resposta_n8n.get("engine_ia") or {}
-
-    if not minuta_nova:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Servico de geracao nao retornou a minuta da contestacao.",
-        )
-
-    # Monta DOCX final com dados corrigidos pelo humano.
-    docx_bytes = _montar_docx_minimal(
-        payload, dados_corrigidos, minuta_nova, usuario["id"]
-    )
-
-    arquivo_editado_base64 = base64.b64encode(docx_bytes).decode("ascii")
-    arquivo_editado_nome = _montar_nome_saida(dados_corrigidos)
-
-    # Atualiza contestacao no DB: status=ok, requer_revisao=false, nova minuta.
-    atualizou = atualizar_contestacao_pos_revisao(
-        contestacao_id=contestacao_id,
-        usuario_id=usuario["id"],
-        minuta_nova=minuta_nova,
-        n8n_resposta_nova=resposta_n8n,
-        dados_extraidos_corrigidos=dados_corrigidos,
-    )
-    if not atualizou:
-        logger.error(
-            "Falha ao atualizar contestacao pos-revisao id=%s usuario=%s",
-            contestacao_id,
-            usuario["id"],
-        )
-
-    # PR6 #4: atualiza embedding com dados corrigidos pelo humano
-    _disparar_embedding(
-        contestacao_id,
-        str(dados_corrigidos.get("fatos_resumo") or ""),
-        str(dados_corrigidos.get("pedido_autor") or ""),
-    )
-
-    return {
-        "status": "ok",
-        "contestacao_id": contestacao_id,
-        "requer_revisao_humana": False,
-        "dados_extraidos": dados_corrigidos,
-        "minuta": minuta_nova,
-        "engine_ia": engine_ia,
-        "arquivo_editado_base64": arquivo_editado_base64,
-        "arquivo_editado_nome": arquivo_editado_nome,
-        "arquivo_editado_mime_type": (
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        ),
-    }
-
-
-def _montar_docx(
-    payload: ContestacaoPorPeticao,
-    dados_extraidos: dict,
-    minuta: dict,
-    usuario_id: str,
-) -> bytes:
-    """Monta DOCX com modelo base (se houver) ou programatico. Levanta HTTPException em falha."""
-    docx_bytes = None
-    if payload.modelo_base_base64:
-        docx_bytes = montar_docx_com_modelo(
-            payload.modelo_base_base64, dados_extraidos, minuta
-        )
-    if docx_bytes is None:
-        try:
-            docx_bytes = montar_docx_programatico(dados_extraidos, minuta)
-        except Exception as error:
-            logger.error(
-                "Falha ao montar .docx programatico usuario_id=%s erro=%s",
-                usuario_id,
-                error,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Falha ao montar o arquivo da contestacao.",
-            ) from error
-    return docx_bytes
-
-
-def _montar_docx_minimal(
-    payload: ConfirmacaoExtracao,
-    dados_extraidos: dict,
-    minuta: dict,
-    usuario_id: str,
-) -> bytes:
-    """Variante de _montar_docx para o fluxo de confirmacao (modelo base do payload)."""
-    docx_bytes = None
-    if payload.modelo_base_base64:
-        docx_bytes = montar_docx_com_modelo(
-            payload.modelo_base_base64, dados_extraidos, minuta
-        )
-    if docx_bytes is None:
-        try:
-            docx_bytes = montar_docx_programatico(dados_extraidos, minuta)
-        except Exception as error:
-            logger.error(
-                "Falha ao montar .docx pos-revisao usuario_id=%s erro=%s",
-                usuario_id,
-                error,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Falha ao montar o arquivo da contestacao.",
-            ) from error
-    return docx_bytes
+# ──────────────────────────────── Utilitarios ────────────────────────────────
 
 
 def _montar_nome_saida(dados_extraidos: dict) -> str:
@@ -530,42 +615,48 @@ async def atualizar_minuta_editada(
             detail="Contestacao nao encontrada para o usuario autenticado.",
         )
 
-    # Merge: parte da minuta_editada anterior (se houver) + campos enviados agora.
-    minuta_anterior = contestacao.get("minuta_json_editada") or {}
-    nova = dict(minuta_anterior)
-    if payload.tese_central is not None:
-        nova["tese_central"] = payload.tese_central
-    if payload.preliminares is not None:
-        nova["preliminares"] = payload.preliminares
-    if payload.merito is not None:
-        nova["merito"] = payload.merito
-    if payload.fundamentos is not None:
-        nova["fundamentos"] = payload.fundamentos
-    if payload.pedidos is not None:
-        nova["pedidos"] = payload.pedidos
-    if payload.observacoes is not None:
-        nova["observacoes"] = payload.observacoes
-    if payload.impugnacao_pedidos is not None:
-        nova["impugnacao_pedidos"] = payload.impugnacao_pedidos
+    nova = _aplicar_patches_minuta(
+        minuta_anterior=contestacao.get("minuta_json_editada") or {},
+        patch=payload,
+    )
 
-    atualizou = salvar_minuta_editada(
+    if not salvar_minuta_editada(
         contestacao_id=contestacao_id,
         usuario_id=usuario["id"],
         minuta_editada=nova,
-    )
-    if not atualizou:
+    ):
         # Race condition: contestacao foi removida entre o get e o update.
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Contestacao nao encontrada para o usuario autenticado.",
         )
 
-    # Calcula diff resumido (apenas para retornar ao frontend, nao persistido —
-    # podemos recalcular sob demanda lendo as duas minutas).
     diff = diff_secoes(contestacao.get("minuta_json_original"), nova)
-
     return {
         "status": "ok",
         "contestacao_id": contestacao_id,
         "diff_resumo": resumo_diff(diff),
     }
+
+
+# Campos da MinutaEditada que sao aplicados em ordem como patch parcial.
+# Manter sincronizado com o modelo `MinutaEditada`.
+_CAMPOS_MINUTA_EDITAVEL = (
+    "tese_central",
+    "preliminares",
+    "merito",
+    "fundamentos",
+    "pedidos",
+    "observacoes",
+    "impugnacao_pedidos",
+)
+
+
+def _aplicar_patches_minuta(*, minuta_anterior: dict, patch: MinutaEditada) -> dict:
+    """Aplica campos nao-None de `patch` sobre `minuta_anterior` (merge parcial)."""
+    nova = dict(minuta_anterior)
+    for campo in _CAMPOS_MINUTA_EDITAVEL:
+        valor = getattr(patch, campo, None)
+        if valor is not None:
+            nova[campo] = valor
+    return nova

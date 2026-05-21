@@ -12,6 +12,7 @@ Fluxo:
 """
 
 import base64
+import binascii
 import logging
 import time
 
@@ -87,7 +88,7 @@ async def editar_contestacao(
     """Recebe .docx base + campos novos, retorna .docx editado + relatorio."""
     try:
         docx_bytes = base64.b64decode(payload.arquivo_base_conteudo_base64)
-    except Exception as error:
+    except (binascii.Error, ValueError) as error:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Conteudo do arquivo base invalido em base64.",

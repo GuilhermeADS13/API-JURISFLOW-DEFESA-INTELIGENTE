@@ -19,19 +19,27 @@ def normalizar_email(email: str) -> str:
     return email.strip().lower()
 
 
+# Politica de senha forte: ao menos um caractere de cada classe abaixo.
+# Tabela-de-regras para manter senha_forte() simples (CC = 2) e a politica
+# auditavel num lugar so — incluir/remover requisitos so altera a tupla.
+_REQUISITOS_SENHA: tuple[tuple[str, callable], ...] = (
+    ("maiuscula", lambda c: c.isupper()),
+    ("minuscula", lambda c: c.islower()),
+    ("numero",    lambda c: c.isdigit()),
+    ("simbolo",   lambda c: not c.isalnum()),
+)
+
+
 def senha_forte(senha: str) -> bool:
-    """Aplica politica de senha forte usada no backend."""
+    """Aplica politica de senha forte usada no backend.
+
+    Refatorado na Etapa 5: substitui 5 ifs sequenciais por um loop sobre
+    `_REQUISITOS_SENHA` — CC 11 C -> CC 2 A, abrindo espaco para evolucao
+    da politica sem aumentar a complexidade.
+    """
     if any(char.isspace() for char in senha):
         return False
-    if not any(char.isupper() for char in senha):
-        return False
-    if not any(char.islower() for char in senha):
-        return False
-    if not any(char.isdigit() for char in senha):
-        return False
-    if not any(not char.isalnum() for char in senha):
-        return False
-    return True
+    return all(any(check(c) for c in senha) for _, check in _REQUISITOS_SENHA)
 
 
 class Usuario(BaseModel):
