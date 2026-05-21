@@ -6,7 +6,7 @@
 fastapi==0.116.1
 uvicorn[standard]==0.35.0
 pydantic==2.13.3
-psycopg2-binary==2.9.9
+psycopg2-binary==2.9.12
 slowapi==0.1.9
 python-docx==1.1.2
 pypdf==4.3.1
@@ -14,7 +14,7 @@ docxtpl==0.16.8
 # PR6 #3 - OCR fallback para PDFs digitalizados (Guia v3 §2.7)
 pytesseract==0.3.13
 pdf2image==1.17.0
-Pillow==11.0.0
+Pillow==12.2.0
 # PR6 #4 - RAG Semantico (Guia v3 §2.3) - provider 'local' por padrao
 # sentence-transformers usa o modelo MiniLM-L12 (118MB, 384 dims).
 # Roda no proprio container, sem custo, sem chamada externa.
