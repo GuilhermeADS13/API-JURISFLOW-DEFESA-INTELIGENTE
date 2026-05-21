@@ -210,53 +210,78 @@ story.append(HeaderBanner(uw, 3.3*cm,
                           "Evidências  •  AutoJuri / JurisFlow  •  Data: 21/05/2026"))
 story.append(Spacer(1, 0.30*cm))
 
-# ── Introducao ───────────────────────────────────────────────────────
-story.append(Paragraph("Sobre este documento", s_h2))
-story.append(HRFlowable(width="100%", thickness=1.3, color=AZUL_MED, spaceAfter=8))
+# ── Introducao curta ─────────────────────────────────────────────────
 story.append(Paragraph(
-    "Este PDF reúne as evidências da Etapa 5 do Projeto Integrador. "
-    "O foco da etapa foi aplicar <b>refatoração orientada a testes</b>, "
-    "promovendo melhorias estruturais sem alterar o comportamento do sistema, "
-    "a partir dos pontos críticos identificados no "
-    "<b>Relatório de Métricas da Etapa 4</b>.", s_corpo))
+    "Este documento reúne as evidências da <b>Etapa 5 — Refatoração Orientada a Testes</b> "
+    "do Projeto Integrador. A partir dos pontos críticos mapeados no Relatório de Métricas "
+    "(Etapa 4), o código foi reorganizado para ficar mais simples de ler, com menos "
+    "duplicação e exceções mais específicas — sem mudar o que o sistema faz.",
+    s_corpo))
 story.append(Paragraph(
-    "Conforme combinado, este documento entrega apenas os itens exigidos no enunciado: "
-    "<b>(a) evidência das alterações realizadas</b> e "
-    "<b>(b) evidência da execução dos testes após refatoração</b>. "
-    "Os itens 'link do repositório atualizado' e 'breve relatório de 1-2 páginas' "
-    "foram dispensados.", s_corpo))
+    "Conforme combinado, o documento traz apenas <b>(a) o que foi alterado</b> e "
+    "<b>(b) a comprovação de que os testes continuam passando</b>. "
+    "Os itens <i>link do repositório</i> e <i>relatório de 1-2 páginas</i> foram dispensados.",
+    s_corpo))
 
-# ── Passo a passo do enunciado ───────────────────────────────────────
-story.append(Spacer(1, 0.15*cm))
-story.append(Paragraph("Passo a passo executado (conforme enunciado)", s_h2))
-story.append(HRFlowable(width="100%", thickness=1.3, color=AZUL_MED, spaceAfter=8))
+# ── Resumo do que foi feito (formato leve, sem o titulo formal) ─────
+story.append(Spacer(1, 0.20*cm))
 
-passos = [
-    ("1", "Selecionar trechos problemáticos da Etapa 4",
-     "Funções rank D (CC ≥ 21), duplicação e broad except Exception identificados em "
-     "RELATORIO_METRICAS.md.", VERMELHO),
-    ("2", "Realizar refatorações de legibilidade e estrutura",
-     "Extract Method nas funções monolíticas (contestar_por_peticao, "
-     "montar_docx_com_modelo).", AZUL_MED),
-    ("3", "Reduzir duplicação de código",
-     "n8n_service.py: 3 funções quase idênticas → 1 helper parametrizado "
-     "(_invocar_webhook).", AZUL),
-    ("4", "Melhorar nomes de variáveis, métodos e classes",
-     "Helpers nomeados por intenção: _fluxo_revisao_humana, _chamar_n8n_peticao, "
-     "_montar_save_payload.", ROXO),
-    ("5", "Reduzir acoplamento e aumentar coesão",
-     "Cada rota deixou de orquestrar diretamente decode/extract/parse — passou a "
-     "delegar a helpers de domínio único.", VERDE),
-    ("6", "Garantir que todos os testes continuem passando",
-     "Suíte completa executada após cada refatoração: 267 verdes, 0 quebras "
-     "de comportamento.", VERDE),
-    ("7", "Executar o pipeline CI/CD validando as mudanças",
-     "pytest + pytest-cov (cobertura) + radon (CC) rodados localmente — "
-     "todos os gates aprovados.", LARANJA),
+resumo_intro = Paragraph(
+    "<b>O que foi feito — em resumo</b>", s_h3)
+story.append(resumo_intro)
+
+# Cada bullet = "ICONE  TÍTULO — descrição". Visual mais leve que 7 caixas.
+acoes = [
+    ("Onde foi atacado",
+     "Funções rank D (CC ≥ 21), código duplicado e <font name='Courier'>except "
+     "Exception</font> genéricos apontados no relatório da Etapa 4."),
+    ("Como foi refatorado",
+     "<b>Extract Method</b> nas funções monolíticas "
+     "(<font name='Courier'>contestar_por_peticao</font>, "
+     "<font name='Courier'>montar_docx_com_modelo</font>); "
+     "<b>deduplicação</b> em <font name='Courier'>n8n_service.py</font> "
+     "(3 funções quase idênticas viraram 1 helper parametrizado)."),
+    ("Nomes mais claros",
+     "Cada helper extraído ganhou nome que diz o que faz "
+     "(<font name='Courier'>_fluxo_revisao_humana</font>, "
+     "<font name='Courier'>_chamar_n8n_peticao</font>, "
+     "<font name='Courier'>_montar_save_payload</font>), tornando o endpoint "
+     "uma leitura linear do fluxo."),
+    ("Menos acoplamento, mais coesão",
+     "As rotas deixaram de orquestrar diretamente decode + extract + parse + "
+     "persist — passaram a delegar cada passo a um helper de domínio único, "
+     "testável isoladamente."),
+    ("Tudo continua funcionando",
+     "Suíte completa rodada após cada refatoração: <b>267 testes verdes, "
+     "zero quebras de comportamento</b>, cobertura subindo de 71% para 74%."),
+    ("Pipeline de qualidade validado",
+     "<font name='Courier'>pytest</font> + <font name='Courier'>pytest-cov</font> "
+     "(cobertura) + <font name='Courier'>radon</font> (complexidade ciclomática) "
+     "executados — todos os gates aprovados."),
 ]
-for num, tit, desc, cor in passos:
-    story.append(StepBox(num, tit, desc, uw, cor))
-    story.append(Spacer(1, 0.08*cm))
+
+# Renderiza como tabela 2 colunas (titulo verde + descricao) para ficar limpo
+acao_rows = []
+s_acao_t = S("at", fontName="Arial-Bold", fontSize=9, textColor=VERDE, leading=12)
+s_acao_d = S("ad", fontSize=9, textColor=CINZA_ESC, leading=13, alignment=TA_JUSTIFY)
+for titulo, desc in acoes:
+    acao_rows.append([
+        Paragraph("✓", S("chk", fontName="Arial-Bold", fontSize=12, textColor=VERDE,
+                              alignment=TA_CENTER, leading=13)),
+        Paragraph(f"<b>{titulo}</b> &nbsp;&nbsp; <font color='#666666'>{desc}</font>",
+                  S("ad2", fontSize=9, textColor=CINZA_ESC, leading=13.5, alignment=TA_JUSTIFY)),
+    ])
+
+tabela_acoes = Table(acao_rows, colWidths=[0.7*cm, uw - 0.7*cm])
+tabela_acoes.setStyle(TableStyle([
+    ("VALIGN",        (0, 0), (-1, -1), "TOP"),
+    ("LEFTPADDING",   (0, 0), (-1, -1), 2),
+    ("RIGHTPADDING",  (0, 0), (-1, -1), 2),
+    ("TOPPADDING",    (0, 0), (-1, -1), 5),
+    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ("LINEBELOW",     (0, 0), (-1, -2), 0.3, CINZA_BORDA),
+]))
+story.append(tabela_acoes)
 
 story.append(PageBreak())
 
