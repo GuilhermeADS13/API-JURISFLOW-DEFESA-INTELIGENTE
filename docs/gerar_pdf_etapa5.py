@@ -223,41 +223,88 @@ story.append(Paragraph(
     "Os itens <i>link do repositório</i> e <i>relatório de 1-2 páginas</i> foram dispensados.",
     s_corpo))
 
-# ── Resumo do que foi feito (formato leve, sem o titulo formal) ─────
+# ── Passo a passo tecnico (formato leve em checklist) ───────────────
 story.append(Spacer(1, 0.20*cm))
 
 resumo_intro = Paragraph(
-    "<b>O que foi feito — em resumo</b>", s_h3)
+    "<b>Passo a passo técnico executado</b>", s_h3)
 story.append(resumo_intro)
 
-# Cada bullet = "ICONE  TÍTULO — descrição". Visual mais leve que 7 caixas.
+# Cada bullet = passo tecnico real do ciclo de refatoracao orientada a testes.
 acoes = [
-    ("Onde foi atacado",
-     "Funções rank D (CC ≥ 21), código duplicado e <font name='Courier'>except "
-     "Exception</font> genéricos apontados no relatório da Etapa 4."),
-    ("Como foi refatorado",
-     "<b>Extract Method</b> nas funções monolíticas "
-     "(<font name='Courier'>contestar_por_peticao</font>, "
-     "<font name='Courier'>montar_docx_com_modelo</font>); "
-     "<b>deduplicação</b> em <font name='Courier'>n8n_service.py</font> "
-     "(3 funções quase idênticas viraram 1 helper parametrizado)."),
-    ("Nomes mais claros",
-     "Cada helper extraído ganhou nome que diz o que faz "
-     "(<font name='Courier'>_fluxo_revisao_humana</font>, "
+    ("1. Baseline antes de tocar no código",
+     "Rodado <font name='Courier'>pytest --tb=short</font> + "
+     "<font name='Courier'>radon cc App -a -s -nC</font> para fotografar a suíte "
+     "(220 testes verdes / 27,91s) e marcar os hotspots: 2 funções rank D "
+     "(<font name='Courier'>contestar_por_peticao</font> CC 24 e "
+     "<font name='Courier'>montar_docx_com_modelo</font> CC 21) + 12 funções rank C "
+     "+ 6 arquivos com <font name='Courier'>except Exception</font> genérico."),
+    ("2. Bugfix prévio no harness de testes",
+     "Identificadas 6 falhas pré-existentes em "
+     "<font name='Courier'>test_rag_semantico.py</font> por "
+     "<font name='Courier'>asyncio.get_event_loop()</font> depreciado no Python 3.14. "
+     "Substituído por <font name='Courier'>asyncio.new_event_loop()</font> para "
+     "garantir baseline verde (267 verdes) antes de qualquer refatoração."),
+    ("3. Extract Method nas funções monolíticas",
+     "<font name='Courier'>contestar_por_peticao</font> (CC 24 → 7) quebrada em 8 "
+     "helpers de domínio único: "
+     "<font name='Courier'>_decodificar_peticao_base64</font>, "
+     "<font name='Courier'>_decodificar_anexos</font>, "
+     "<font name='Courier'>_extrair_texto_peticao</font>, "
      "<font name='Courier'>_chamar_n8n_peticao</font>, "
-     "<font name='Courier'>_montar_save_payload</font>), tornando o endpoint "
-     "uma leitura linear do fluxo."),
-    ("Menos acoplamento, mais coesão",
-     "As rotas deixaram de orquestrar diretamente decode + extract + parse + "
-     "persist — passaram a delegar cada passo a um helper de domínio único, "
-     "testável isoladamente."),
-    ("Tudo continua funcionando",
-     "Suíte completa rodada após cada refatoração: <b>267 testes verdes, "
-     "zero quebras de comportamento</b>, cobertura subindo de 71% para 74%."),
-    ("Pipeline de qualidade validado",
-     "<font name='Courier'>pytest</font> + <font name='Courier'>pytest-cov</font> "
-     "(cobertura) + <font name='Courier'>radon</font> (complexidade ciclomática) "
-     "executados — todos os gates aprovados."),
+     "<font name='Courier'>_montar_save_payload</font>, "
+     "<font name='Courier'>_fluxo_revisao_humana</font>, "
+     "<font name='Courier'>_fluxo_ok</font>, "
+     "<font name='Courier'>_persistir_contestacao</font>. "
+     "Endpoint vira leitura linear do fluxo HiL."),
+    ("4. Remove Duplication via Strategy Pattern",
+     "<font name='Courier'>n8n_service.py</font>: 3 funções "
+     "<font name='Courier'>_enviar_*_sync</font> (~40 linhas idênticas cada de "
+     "POST + headers + retry + parse) consolidadas em "
+     "<font name='Courier'>_invocar_webhook(...)</font> parametrizado por "
+     "<font name='Courier'>parse_response</font> + "
+     "<font name='Courier'>vazio_fatal</font>, com "
+     "<font name='Courier'>_parse_contestacao</font> e "
+     "<font name='Courier'>_parse_estrito(rotulo)</font> como estratégias. "
+     "Os 3 fluxos viram one-liners que só configuram URL + política. "
+     "Bônus: <font name='Courier'>_montar_docx</font> + "
+     "<font name='Courier'>_montar_docx_minimal</font> unificados em uma função só."),
+    ("5. Table-Driven Design para abrir/fechar",
+     "<font name='Courier'>montar_docx_programatico</font> (CC 17 → 1): "
+     "7 ifs em cadeia substituídos por loop sobre "
+     "<font name='Courier'>_SECOES_TEXTO</font> / "
+     "<font name='Courier'>_SECOES_FINAIS</font>. "
+     "<font name='Courier'>senha_forte</font> (CC 11 → 2): 5 "
+     "<font name='Courier'>if any(...)</font> sequenciais viram "
+     "<font name='Courier'>all(any(check(c) for c in senha) for _, check in "
+     "_REQUISITOS_SENHA)</font>. Adicionar regra = +1 linha na tupla."),
+    ("6. Narrow Exception conforme política auditável",
+     "<font name='Courier'>except Exception:</font> estreitado para tipos "
+     "específicos onde aplicável: decode base64 → "
+     "<font name='Courier'>(binascii.Error, ValueError)</font>; "
+     "<font name='Courier'>get_sessao_ativa</font> → "
+     "<font name='Courier'>(RuntimeError, OSError, ValueError)</font>. "
+     "Onde o broad é correto (rollback de transação em "
+     "<font name='Courier'>database.py</font>, fire-and-forget de embedding, "
+     "wrapper de <font name='Courier'>docxtpl</font>), mantido com "
+     "<font name='Courier'># noqa: BLE001</font> + comentário + log de "
+     "<font name='Courier'>type(error).__name__</font>."),
+    ("7. Validação a cada refatoração (TDD inverso)",
+     "Suíte <font name='Courier'>pytest</font> completa rodada após cada commit "
+     "lógico — <b>267 verdes, 0 regressões</b>. Métricas finais: "
+     "<font name='Courier'>radon cc App -a</font> média global "
+     "<b>A (3,86)</b> e <b>0 funções rank D</b> (antes eram 2); "
+     "<font name='Courier'>pytest-cov</font> global <b>71% → 74%</b>, "
+     "com ganhos pontuais em <font name='Courier'>n8n_service</font> "
+     "(23% → 50%) e <font name='Courier'>security</font> (52% → 72%) "
+     "obtidos <i>sem adicionar testes</i> — efeito colateral de concentrar "
+     "branches em caminhos únicos."),
+    ("8. Pipeline CI/CD validado localmente",
+     "Triple gate executado: <font name='Courier'>pytest --tb=short</font> "
+     "(comportamento), <font name='Courier'>pytest --cov=App --cov-report=html</font> "
+     "(cobertura), <font name='Courier'>radon cc App -nC -s</font> + "
+     "<font name='Courier'>radon mi App -s</font> (complexidade e "
+     "manutenibilidade). Todos os gates aprovados."),
 ]
 
 # Renderiza como tabela 2 colunas (titulo verde + descricao) para ficar limpo
