@@ -23,3 +23,6 @@ Front end/vite-project/coverage/
 Backend/.coverage
 Backend/coverage.xml
 Backend/coverage_html/
+
+# Supabase CLI cache local (criado por `supabase link`)
+supabase/
