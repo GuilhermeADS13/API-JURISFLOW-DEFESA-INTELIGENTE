@@ -328,7 +328,7 @@ class TestRagRoute:
 
     @staticmethod
     def _run(coro):
-        return asyncio.get_event_loop().run_until_complete(coro)
+        return asyncio.new_event_loop().run_until_complete(coro)
 
     def _req(self):
         from fastapi import Request
