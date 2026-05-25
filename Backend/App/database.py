@@ -644,6 +644,32 @@ def revoke_sessao(token: str) -> bool:
     return row is not None
 
 
+def _extrair_metadados_arquivo(
+    payload: dict[str, Any],
+) -> tuple[str, str, str, int | None]:
+    """Extrai (nome, conteudo_base64, mime_type, tamanho) com fallbacks seguros."""
+    nome = str(
+        payload.get("arquivo_base_nome") or payload.get("arquivo_base") or ""
+    )
+    conteudo = str(payload.get("arquivo_base_conteudo_base64") or "")
+    mime_type = str(payload.get("arquivo_base_mime_type") or "")
+
+    tamanho_raw = payload.get("arquivo_base_tamanho_bytes")
+    try:
+        tamanho = int(tamanho_raw) if tamanho_raw is not None else None
+    except (TypeError, ValueError):
+        tamanho = None
+
+    return nome, conteudo, mime_type, tamanho
+
+
+def _adaptar_json_pg(value: Any) -> Any:
+    """Envelopa em PGJsonAdapter quando disponivel; preserva None/falsy intacto."""
+    if PGJsonAdapter and value:
+        return PGJsonAdapter(value)
+    return value
+
+
 def save_contestacao(
     payload: dict[str, Any],
     status: str,
@@ -667,18 +693,29 @@ def save_contestacao(
     """
     _ensure_db_initialized()
 
-    arquivo_nome = str(
-        payload.get("arquivo_base_nome") or payload.get("arquivo_base") or ""
+    nome, conteudo, mime_type, tamanho = _extrair_metadados_arquivo(payload)
+    confianca = float(dados_confianca) if dados_confianca is not None else None
+
+    params = (
+        str(payload.get("usuario_id") or ""),
+        str(payload.get("numero_processo", "")),
+        str(payload.get("autor", "")),
+        str(payload.get("reu", "")),
+        str(payload.get("tipo_acao", "")),
+        str(payload.get("fatos", "")),
+        str(payload.get("pedido_autor", "")),
+        conteudo,
+        nome,
+        mime_type,
+        tamanho,
+        str(payload.get("texto_editado_ao_vivo", "")),
+        status,
+        _adaptar_json_pg(n8n_resposta) if PGJsonAdapter else n8n_resposta,
+        origem,
+        bool(requer_revisao_humana),
+        confianca,
+        _adaptar_json_pg(minuta_json_original),
     )
-    arquivo_conteudo = str(payload.get("arquivo_base_conteudo_base64") or "")
-    arquivo_mime_type = str(payload.get("arquivo_base_mime_type") or "")
-    arquivo_tamanho_raw = payload.get("arquivo_base_tamanho_bytes")
-    try:
-        arquivo_tamanho = (
-            int(arquivo_tamanho_raw) if arquivo_tamanho_raw is not None else None
-        )
-    except (TypeError, ValueError):
-        arquivo_tamanho = None
 
     with _get_connection() as connection:
         with connection.cursor() as cursor:
@@ -707,28 +744,7 @@ def save_contestacao(
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
-                (
-                    str(payload.get("usuario_id") or ""),
-                    str(payload.get("numero_processo", "")),
-                    str(payload.get("autor", "")),
-                    str(payload.get("reu", "")),
-                    str(payload.get("tipo_acao", "")),
-                    str(payload.get("fatos", "")),
-                    str(payload.get("pedido_autor", "")),
-                    arquivo_conteudo,
-                    arquivo_nome,
-                    arquivo_mime_type,
-                    arquivo_tamanho,
-                    str(payload.get("texto_editado_ao_vivo", "")),
-                    status,
-                    PGJsonAdapter(n8n_resposta) if PGJsonAdapter else n8n_resposta,
-                    origem,
-                    bool(requer_revisao_humana),
-                    float(dados_confianca) if dados_confianca is not None else None,
-                    PGJsonAdapter(minuta_json_original)
-                    if (PGJsonAdapter and minuta_json_original)
-                    else minuta_json_original,
-                ),
+                params,
             )
             row = cursor.fetchone()
             if row is None:
@@ -1037,6 +1053,41 @@ def salvar_minuta_editada(
     return updated > 0
 
 
+def _format_pgvector(embedding: list[float]) -> str:
+    """Serializa lista de floats para o literal do tipo `vector` do pgvector."""
+    return "[" + ",".join(f"{v:.10f}" for v in embedding) + "]"
+
+
+def _extrair_minuta(n8n_resposta: Any) -> dict:
+    if isinstance(n8n_resposta, dict):
+        return n8n_resposta.get("minuta") or {}
+    return {}
+
+
+def _iso_or_str(value: Any) -> str:
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value or "")
+
+
+def _row_to_defesa_semantica(row: tuple) -> dict[str, Any]:
+    """Mapeia tupla do SELECT de `buscar_defesas_semanticas` para dict de resposta."""
+    minuta = _extrair_minuta(row[4])
+    return {
+        "numero_processo": str(row[0] or ""),
+        "tipo_acao": str(row[1] or ""),
+        "fatos": str(row[2] or ""),
+        "pedido_autor": str(row[3] or ""),
+        "feedback_util": row[5],
+        "criado_em": _iso_or_str(row[6]),
+        "similarity": float(row[7] or 0.0),
+        "tese_central": str(minuta.get("tese_central") or ""),
+        "resumo_estrategico": str(minuta.get("resumo_estrategico") or ""),
+        "fundamentos_curtos": str(minuta.get("fundamentos") or "")[:1500],
+        "riscos": list((minuta.get("riscos") or [])[:3]),
+    }
+
+
 def salvar_embedding(contestacao_id: int, embedding: list[float]) -> None:
     """Persiste o embedding semantico (384 dims, sentence-transformers) para uma contestacao.
 
@@ -1044,7 +1095,7 @@ def salvar_embedding(contestacao_id: int, embedding: list[float]) -> None:
     adicionar latencia ao retorno da rota principal.
     """
     _ensure_db_initialized()
-    vec_str = "[" + ",".join(f"{v:.10f}" for v in embedding) + "]"
+    vec_str = _format_pgvector(embedding)
     with _get_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
@@ -1066,7 +1117,7 @@ def buscar_defesas_semanticas(
     So considera contestacoes com status='ok' e fatos_embedding preenchido.
     """
     _ensure_db_initialized()
-    vec_str = "[" + ",".join(f"{v:.10f}" for v in embedding) + "]"
+    vec_str = _format_pgvector(embedding)
     safe_limit = max(1, min(int(limit), 20))
 
     with _get_connection() as connection:
@@ -1094,34 +1145,7 @@ def buscar_defesas_semanticas(
             )
             rows = cursor.fetchall()
 
-    result: list[dict[str, Any]] = []
-    for row in rows:
-        n8n_resp = row[4]
-        minuta: dict = {}
-        if isinstance(n8n_resp, dict):
-            minuta = n8n_resp.get("minuta") or {}
-
-        result.append(
-            {
-                "numero_processo": str(row[0] or ""),
-                "tipo_acao": str(row[1] or ""),
-                "fatos": str(row[2] or ""),
-                "pedido_autor": str(row[3] or ""),
-                "feedback_util": row[5],
-                "criado_em": (
-                    row[6].isoformat()
-                    if hasattr(row[6], "isoformat")
-                    else str(row[6] or "")
-                ),
-                "similarity": float(row[7] or 0.0),
-                "tese_central": str(minuta.get("tese_central") or ""),
-                "resumo_estrategico": str(minuta.get("resumo_estrategico") or ""),
-                "fundamentos_curtos": str(minuta.get("fundamentos") or "")[:1500],
-                "riscos": list((minuta.get("riscos") or [])[:3]),
-            }
-        )
-
-    return result
+    return [_row_to_defesa_semantica(row) for row in rows]
 
 
 def salvar_exemplar(

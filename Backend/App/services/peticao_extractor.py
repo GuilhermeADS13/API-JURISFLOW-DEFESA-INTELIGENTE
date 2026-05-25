@@ -163,6 +163,35 @@ class ExtracaoError(Exception):
     """Falha ao extrair texto do arquivo enviado."""
 
 
+def _extrair_doc_legado(conteudo: bytes) -> str:
+    """Extracao basica de .doc legado (texto ASCII/Latin-1 imprimivel)."""
+    texto = conteudo.decode("latin1", errors="ignore")
+    return "".join(
+        c
+        for c in texto
+        if c in ("\n", "\r", "\t") or 0x20 <= ord(c) <= 0xFFFF
+    )
+
+
+def _despachar_extractor(nome: str, conteudo: bytes) -> str:
+    """Roteia para o extractor certo conforme a extensao do nome do arquivo.
+
+    Ordem importa: ".docx" precisa vir antes de ".doc" (ambos casam em endswith).
+    `_extrair_docx` e `_extrair_pdf` sao definidos abaixo neste modulo — a
+    resolucao acontece no momento da chamada, nao na definicao do mapa.
+    """
+    extractors = (
+        (".docx", _extrair_docx),
+        (".pdf", _extrair_pdf),
+        (".doc", _extrair_doc_legado),
+    )
+    nome_lower = (nome or "").lower().strip()
+    for ext, fn in extractors:
+        if nome_lower.endswith(ext):
+            return fn(conteudo)
+    raise ExtracaoError(f"Extensao nao suportada para extracao: {nome!r}")
+
+
 def extrair_texto_peticao(conteudo: bytes, nome: str) -> str:
     """Extrai texto da peticao inicial. Detecta tipo pela extensao do nome.
 
@@ -173,25 +202,7 @@ def extrair_texto_peticao(conteudo: bytes, nome: str) -> str:
     if not conteudo:
         raise ExtracaoError("Conteudo da peticao vazio.")
 
-    nome_lower = (nome or "").lower().strip()
-
-    if nome_lower.endswith(".docx"):
-        texto = _extrair_docx(conteudo)
-    elif nome_lower.endswith(".pdf"):
-        texto = _extrair_pdf(conteudo)
-    elif nome_lower.endswith(".doc"):
-        # .doc legado — extracao basica de texto legivel ASCII/Latin-1.
-        texto = conteudo.decode("latin1", errors="ignore")
-        # Remove caracteres de controle nao-imprimiveis exceto quebras de linha.
-        texto = "".join(
-            c
-            for c in texto
-            if c == "\n" or c == "\r" or c == "\t" or 0x20 <= ord(c) <= 0xFFFF
-        )
-    else:
-        raise ExtracaoError(f"Extensao nao suportada para extracao: {nome!r}")
-
-    texto = _limpar_texto(texto)
+    texto = _limpar_texto(_despachar_extractor(nome, conteudo))
 
     if len(texto.strip()) < 50:
         raise ExtracaoError(
@@ -199,7 +210,7 @@ def extrair_texto_peticao(conteudo: bytes, nome: str) -> str:
             "Tente converter para DOCX e enviar novamente."
         )
 
-    # PR6: se texto cabe no limite, retorna direto. Se passa, pre-filtra +
+    # PR6: se texto cabe no limite, retorna direto. Senao, pre-filtra +
     # truncamento inteligente preservando comecho e fim.
     if len(texto) <= MAX_TEXTO_PETICAO_CHARS:
         return texto
@@ -269,6 +280,15 @@ def extrair_texto_modelo_base(conteudo_b64: str | None) -> str:
 # ── PR6 #1 — Long Context: pre-filtragem + truncamento inteligente ──────────
 
 
+def _coletar_matches_priorizadas(texto: str) -> list[tuple[int, int, str]]:
+    """Para cada secao em SECOES_PRIORIZADAS, devolve (start, end, nome) de cada hit."""
+    return [
+        (m.start(), m.end(), nome)
+        for regex, nome, _peso in SECOES_PRIORIZADAS
+        for m in regex.finditer(texto)
+    ]
+
+
 def prefiltrar_secoes_juridicas(texto: str) -> dict[str, str]:
     """Identifica secoes priorizadas em uma peticao e retorna por nome.
 
@@ -281,27 +301,16 @@ def prefiltrar_secoes_juridicas(texto: str) -> dict[str, str]:
     if not texto:
         return {}
 
-    secoes_encontradas: dict[str, list[str]] = {}
-
-    # Mapeia (start, end, nome) para todas as secoes priorizadas.
-    matches: list[tuple[int, int, str]] = []
-    for regex, nome, _peso in SECOES_PRIORIZADAS:
-        for m in regex.finditer(texto):
-            matches.append((m.start(), m.end(), nome))
-
+    matches = _coletar_matches_priorizadas(texto)
     if not matches:
         return {}
-
-    # Ordena por posicao para conseguir delimitar fim de cada secao
-    # (proximo cabecalho de secao OU EOF).
-    matches.sort(key=lambda x: x[0])
 
     # Coleta posicoes de TODOS cabecalhos de secao (priorizadas + outras)
     # para saber onde uma secao termina.
     todos_cabecalhos = sorted(set(m.start() for m in RE_FIM_SECAO.finditer(texto)))
 
+    secoes_encontradas: dict[str, list[str]] = {}
     for start, end, nome in matches:
-        # Encontra a proxima posicao de cabecalho apos `end` (fim da secao atual).
         proximo = next((p for p in todos_cabecalhos if p > end), len(texto))
         trecho = texto[start:proximo].strip()
         if trecho:
@@ -380,6 +389,52 @@ def _extrair_docx(conteudo: bytes) -> str:
     return "\n".join(linhas)
 
 
+def _extrair_texto_pypdf(conteudo: bytes) -> str:
+    """Extrai texto via pypdf (PDFs nativos). Levanta ExtracaoError se nao abrir."""
+    try:
+        reader = PdfReader(BytesIO(conteudo))
+    except Exception as error:
+        raise ExtracaoError(
+            f"Falha ao abrir o PDF: {type(error).__name__}: {error}"
+        ) from error
+
+    paginas: list[str] = []
+    # PR6: limite 30 -> 100 paginas. _aplicar_long_context cuida do truncamento depois.
+    for page in reader.pages[:100]:
+        try:
+            paginas.append(page.extract_text() or "")
+        except Exception:
+            paginas.append("")
+    return "\n\n".join(p for p in paginas if p.strip())
+
+
+def _ocr_disponivel(texto_pypdf_len: int) -> bool:
+    """Loga e retorna True se OCR pode rodar agora; False senao."""
+    if not OCR_ENABLED:
+        logger.info(
+            "PDF parece digitalizado (texto pypdf=%d chars) mas OCR_ENABLED=false; retornando vazio.",
+            texto_pypdf_len,
+        )
+        return False
+    if not _OCR_LIBS_DISPONIVEIS:
+        logger.warning(
+            "PDF parece digitalizado mas pytesseract/pdf2image nao instalados; retornando texto curto."
+        )
+        return False
+    return True
+
+
+def _combinar_pypdf_ocr(texto_pypdf: str, texto_ocr: str) -> str:
+    """Concatena pypdf + OCR quando ambos tem conteudo; senao retorna o que existe."""
+    pypdf_tem = bool(texto_pypdf.strip())
+    ocr_tem = bool(texto_ocr.strip())
+    if pypdf_tem and ocr_tem:
+        return texto_pypdf + "\n\n" + texto_ocr
+    if ocr_tem:
+        return texto_ocr
+    return texto_pypdf
+
+
 def _extrair_pdf(conteudo: bytes) -> str:
     """Extrai texto de PDF com fallback OCR (PR6 #3) para PDFs digitalizados.
 
@@ -389,40 +444,12 @@ def _extrair_pdf(conteudo: bytes) -> str:
 
     OCR e desligavel via OCR_ENABLED=false no env para emergencia.
     """
-    try:
-        reader = PdfReader(BytesIO(conteudo))
-    except Exception as error:
-        raise ExtracaoError(
-            f"Falha ao abrir o PDF: {type(error).__name__}: {error}"
-        ) from error
+    texto_pypdf = _extrair_texto_pypdf(conteudo)
 
-    paginas: list[str] = []
-    # PR6: aumentamos o limite de 30 -> 100 paginas. Mesmo assim, _aplicar_long_context
-    # vai filtrar/truncar inteligentemente se o texto extraido exceder MAX_TEXTO_PETICAO_CHARS.
-    for page in reader.pages[:100]:
-        try:
-            paginas.append(page.extract_text() or "")
-        except Exception:
-            paginas.append("")
-
-    texto_pypdf = "\n\n".join(p for p in paginas if p.strip())
-
-    # PR6 #3: se pypdf retornou pouco/nada, tenta OCR (PDF provavelmente
-    # eh imagem digitalizada).
     if len(texto_pypdf.strip()) >= PDF_OCR_FALLBACK_THRESHOLD:
         return texto_pypdf
 
-    if not OCR_ENABLED:
-        logger.info(
-            "PDF parece digitalizado (texto pypdf=%d chars) mas OCR_ENABLED=false; retornando vazio.",
-            len(texto_pypdf),
-        )
-        return texto_pypdf
-
-    if not _OCR_LIBS_DISPONIVEIS:
-        logger.warning(
-            "PDF parece digitalizado mas pytesseract/pdf2image nao instalados; retornando texto curto."
-        )
+    if not _ocr_disponivel(len(texto_pypdf)):
         return texto_pypdf
 
     logger.info(
@@ -443,13 +470,7 @@ def _extrair_pdf(conteudo: bytes) -> str:
         )
         return texto_pypdf
 
-    # Combina pypdf + OCR caso pypdf tenha capturado algo (ex: cabeçalho com
-    # texto nativo + corpo escaneado). Se OCR for vazio, fica com pypdf.
-    if texto_ocr.strip():
-        if texto_pypdf.strip():
-            return texto_pypdf + "\n\n" + texto_ocr
-        return texto_ocr
-    return texto_pypdf
+    return _combinar_pypdf_ocr(texto_pypdf, texto_ocr)
 
 
 def _extrair_pdf_via_ocr(conteudo: bytes) -> str:

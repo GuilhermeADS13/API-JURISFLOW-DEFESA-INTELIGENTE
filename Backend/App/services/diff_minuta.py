@@ -25,6 +25,45 @@ SECOES_DIFFEAVEIS = (
 )
 
 
+def _diff_inalterado() -> dict[str, Any]:
+    """Resposta padrao para uma secao identica (ou ambas vazias)."""
+    return {
+        "alterada": False,
+        "similaridade": 1.0,
+        "adicionado": [],
+        "removido": [],
+    }
+
+
+# Tags do difflib.SequenceMatcher que contribuem com trechos de cada lado.
+_TAGS_ADICIONA = {"insert", "replace"}
+_TAGS_REMOVE = {"delete", "replace"}
+
+
+def _diff_secao_alterada(texto_orig: str, texto_edit: str) -> dict[str, Any]:
+    """Calcula adicionados/removidos/similaridade entre dois textos distintos."""
+    matcher = difflib.SequenceMatcher(None, texto_orig, texto_edit)
+    adicionados: list[str] = []
+    removidos: list[str] = []
+
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag in _TAGS_ADICIONA:
+            trecho = texto_edit[j1:j2].strip()
+            if trecho:
+                adicionados.append(trecho)
+        if tag in _TAGS_REMOVE:
+            trecho = texto_orig[i1:i2].strip()
+            if trecho:
+                removidos.append(trecho)
+
+    return {
+        "alterada": True,
+        "similaridade": round(matcher.ratio(), 4),
+        "adicionado": adicionados,
+        "removido": removidos,
+    }
+
+
 def diff_secoes(
     original: dict[str, Any] | None,
     editada: dict[str, Any] | None,
@@ -45,43 +84,12 @@ def diff_secoes(
         texto_orig = _normalizar(original.get(secao))
         texto_edit = _normalizar(editada.get(secao))
 
-        if not texto_orig and not texto_edit:
-            resultado[secao] = {
-                "alterada": False,
-                "similaridade": 1.0,
-                "adicionado": [],
-                "removido": [],
-            }
-            continue
-
         if texto_orig == texto_edit:
-            resultado[secao] = {
-                "alterada": False,
-                "similaridade": 1.0,
-                "adicionado": [],
-                "removido": [],
-            }
+            # Cobre tanto "ambos vazios" quanto "ambos iguais".
+            resultado[secao] = _diff_inalterado()
             continue
 
-        matcher = difflib.SequenceMatcher(None, texto_orig, texto_edit)
-        adicionados: list[str] = []
-        removidos: list[str] = []
-        for tag, i1, i2, j1, j2 in matcher.get_opcodes():
-            if tag == "insert" or tag == "replace":
-                trecho = texto_edit[j1:j2].strip()
-                if trecho:
-                    adicionados.append(trecho)
-            if tag == "delete" or tag == "replace":
-                trecho = texto_orig[i1:i2].strip()
-                if trecho:
-                    removidos.append(trecho)
-
-        resultado[secao] = {
-            "alterada": True,
-            "similaridade": round(matcher.ratio(), 4),
-            "adicionado": adicionados,
-            "removido": removidos,
-        }
+        resultado[secao] = _diff_secao_alterada(texto_orig, texto_edit)
 
     return resultado
 

@@ -31,6 +31,74 @@ router = APIRouter()
 _FEEDBACK_SCORE = {True: 1.0, False: 0.0, None: 0.5}
 
 
+def _resposta_vazia(status_code: str, detalhe: str) -> dict:
+    return {"status": status_code, "detalhe": detalhe, "casos": [], "total": 0}
+
+
+def _normalizar_input(payload: dict) -> tuple[str, str, str]:
+    """Extrai (tipo_acao, numero_processo, texto_query) do payload n8n."""
+    tipo_acao = str(payload.get("tipo_acao") or "").strip()
+    numero_processo = str(payload.get("numero_processo") or "sem-numero").strip()
+    fatos = str(payload.get("fatos") or "").strip()
+    pedidos_raw = payload.get("pedidos") or []
+    pedidos_str = (
+        " ".join(str(p) for p in pedidos_raw)
+        if isinstance(pedidos_raw, list)
+        else str(pedidos_raw)
+    )
+    texto_query = f"{fatos} {pedidos_str}".strip()
+    return tipo_acao, numero_processo, texto_query
+
+
+def _executar_busca_semantica(
+    embedding: list[float],
+    tipo_acao: str,
+    numero_processo: str,
+    usuario_id: str | None,
+) -> tuple[list[dict] | None, dict | None]:
+    """Executa a busca pgvector. Retorna (rows, None) em sucesso ou (None, resposta_erro)."""
+    try:
+        rows = buscar_defesas_semanticas(
+            embedding=embedding,
+            tipo_acao=tipo_acao,
+            excluir_numero=numero_processo,
+            limit=10,
+        )
+    except Exception as err:
+        logger.error(
+            "Falha na busca semantica pgvector tipo_acao=%s usuario_id=%s erro=%s",
+            tipo_acao,
+            usuario_id,
+            err,
+        )
+        return None, _resposta_vazia("erro_busca", str(err)[:200])
+    return rows, None
+
+
+def _rerankear_e_montar_casos(rows: list[dict]) -> list[dict]:
+    """Aplica reranking (0.6 similarity + 0.4 feedback) e retorna top 3 formatados."""
+    for row in rows:
+        fb_score = _FEEDBACK_SCORE.get(row.get("feedback_util"), 0.5)
+        row["_score"] = 0.6 * row["similarity"] + 0.4 * fb_score
+    rows.sort(key=lambda r: r["_score"], reverse=True)
+
+    return [
+        {
+            "numero_processo": c["numero_processo"],
+            "tipo_acao": c["tipo_acao"],
+            "fatos_resumo": c["fatos"][:500],
+            "pedido_autor_resumo": c["pedido_autor"][:300],
+            "tese_central": c["tese_central"],
+            "resumo_estrategico": c["resumo_estrategico"],
+            "fundamentos_curtos": c["fundamentos_curtos"],
+            "riscos": c["riscos"],
+            "criado_em": c["criado_em"],
+            "similarity": round(c["similarity"], 4),
+        }
+        for c in rows[:3]
+    ]
+
+
 @router.post("/rag/defesas-similares")
 @limiter.limit("30/minute")
 async def buscar_defesas_similares(
@@ -48,15 +116,7 @@ async def buscar_defesas_similares(
         fatos: str            — resumo dos fatos extraidos
         pedidos: str|list     — pedidos do autor (string ou lista)
     """
-    tipo_acao = str(payload.get("tipo_acao") or "").strip()
-    numero_processo = str(payload.get("numero_processo") or "sem-numero").strip()
-    fatos = str(payload.get("fatos") or "").strip()
-    pedidos_raw = payload.get("pedidos") or []
-    pedidos_str = (
-        " ".join(str(p) for p in pedidos_raw)
-        if isinstance(pedidos_raw, list)
-        else str(pedidos_raw)
-    )
+    tipo_acao, numero_processo, texto_query = _normalizar_input(payload)
 
     if not tipo_acao:
         raise HTTPException(
@@ -64,79 +124,35 @@ async def buscar_defesas_similares(
             detail="tipo_acao e obrigatorio.",
         )
 
-    texto_query = f"{fatos} {pedidos_str}".strip()
     if not texto_query:
-        return {
-            "status": "sem_texto",
-            "detalhe": "fatos e pedidos vazios — nao e possivel gerar embedding",
-            "casos": [],
-            "total": 0,
-        }
+        return _resposta_vazia(
+            "sem_texto", "fatos e pedidos vazios — nao e possivel gerar embedding"
+        )
 
     # Gera embedding para a query (input_type='search_query' no Cohere)
     embedding = gerar_embedding_query(texto_query)
     if embedding is None:
-        return {
-            "status": "embedding_indisponivel",
-            "detalhe": (
+        return _resposta_vazia(
+            "embedding_indisponivel",
+            (
                 "Provider de embeddings nao configurado ou chave ausente. "
                 "Configure EMBEDDING_PROVIDER + COHERE_API_KEY (ou OPENAI_API_KEY)."
             ),
-            "casos": [],
-            "total": 0,
-        }
+        )
 
-    try:
-        rows = buscar_defesas_semanticas(
-            embedding=embedding,
-            tipo_acao=tipo_acao,
-            excluir_numero=numero_processo,
-            limit=10,
-        )
-    except Exception as err:
-        logger.error(
-            "Falha na busca semantica pgvector tipo_acao=%s usuario_id=%s erro=%s",
-            tipo_acao,
-            usuario.get("id"),
-            err,
-        )
-        return {
-            "status": "erro_busca",
-            "detalhe": str(err)[:200],
-            "casos": [],
-            "total": 0,
-        }
+    rows, erro = _executar_busca_semantica(
+        embedding, tipo_acao, numero_processo, usuario.get("id")
+    )
+    if erro is not None:
+        return erro
 
     if not rows:
-        return {
-            "status": "sem_resultados",
-            "detalhe": "Nenhuma defesa anterior com embedding para este tipo_acao.",
-            "casos": [],
-            "total": 0,
-        }
+        return _resposta_vazia(
+            "sem_resultados",
+            "Nenhuma defesa anterior com embedding para este tipo_acao.",
+        )
 
-    # Reranking: mesmo peso do TF-IDF (0.6 similaridade + 0.4 feedback)
-    for row in rows:
-        fb_score = _FEEDBACK_SCORE.get(row.get("feedback_util"), 0.5)
-        row["_score"] = 0.6 * row["similarity"] + 0.4 * fb_score
-
-    rows.sort(key=lambda r: r["_score"], reverse=True)
-
-    casos = [
-        {
-            "numero_processo": c["numero_processo"],
-            "tipo_acao": c["tipo_acao"],
-            "fatos_resumo": c["fatos"][:500],
-            "pedido_autor_resumo": c["pedido_autor"][:300],
-            "tese_central": c["tese_central"],
-            "resumo_estrategico": c["resumo_estrategico"],
-            "fundamentos_curtos": c["fundamentos_curtos"],
-            "riscos": c["riscos"],
-            "criado_em": c["criado_em"],
-            "similarity": round(c["similarity"], 4),
-        }
-        for c in rows[:3]
-    ]
+    casos = _rerankear_e_montar_casos(rows)
 
     return {
         "status": "sucesso",
