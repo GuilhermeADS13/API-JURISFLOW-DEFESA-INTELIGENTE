@@ -1,0 +1,12 @@
+{
+  "name": "autojuri-docs-dev",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Scripts de geracao de artefatos da documentacao (screenshots, PDFs).",
+  "scripts": {
+    "screenshots": "node capturar_screenshots.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.52.0"
+  }
+}

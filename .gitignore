@@ -26,3 +26,7 @@ Backend/coverage_html/
 
 # Supabase CLI cache local (criado por `supabase link`)
 supabase/
+
+# Dependencias dos scripts de docs (regerável via npm install)
+docs/_dev/node_modules/
+docs/_dev/playwright-report/

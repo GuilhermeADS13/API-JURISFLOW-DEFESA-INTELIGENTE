@@ -2,6 +2,8 @@
 
 Sistema web fullstack para automacao de contestacoes juridicas. O usuario preenche os dados do processo (numero CNJ, partes, fatos, pedido do autor) e o sistema gera automaticamente uma minuta de contestacao utilizando IA via workflow n8n, com Claude (Anthropic) como motor de IA.
 
+> **Entrega final do Projeto Integrador:** [`docs/ENTREGA_FINAL.md`](docs/ENTREGA_FINAL.md) (consolida visao geral, testes, cobertura, CI/CD, metricas e refatoracoes) — versao PDF em [`docs/ENTREGA_FINAL.pdf`](docs/ENTREGA_FINAL.pdf).
+
 ## Funcionalidades
 
 - **Geracao de contestacoes com IA** — minutas estruturadas (sintese, tese central, fundamentos, pedidos, riscos e observacoes) a partir dos dados do processo (numero CNJ, partes, fatos, pedido do autor e pontos estrategicos).
