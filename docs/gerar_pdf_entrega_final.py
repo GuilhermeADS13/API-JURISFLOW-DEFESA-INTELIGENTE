@@ -278,8 +278,8 @@ story = []
 uw = W - 5*cm  # largura util (descontadas margens 2.5 cm cada lado)
 
 # ── Capa ────────────────────────────────────────────────────────────────────
-story.append(HeaderBanner(uw, 3.3*cm,
-    "AutoJuri / JurisFlow  •  Aluno: GuilhermeADS13  •  Data: 28/05/2026"))
+story.append(HeaderBanner(uw, 3.5*cm,
+    "AutoJuri / JurisFlow  •  Alunos: Guilherme Maciel · Paulo Neto · Julio Cezar  •  28/05/2026"))
 story.append(Spacer(1, 0.30*cm))
 
 story.append(Paragraph(
@@ -684,7 +684,7 @@ doc = SimpleDocTemplate(
     leftMargin=2.5*cm, rightMargin=2.5*cm,
     topMargin=1.8*cm,  bottomMargin=1.1*cm,
     title="Projeto Integrador — Entrega Final — AutoJuri/JurisFlow",
-    author="GuilhermeADS13",
+    author="Guilherme Maciel, Paulo Neto, Julio Cezar",
     subject="Entrega final do Projeto Integrador 2026",
 )
 doc.build(story, onFirstPage=page_bg, onLaterPages=page_bg)

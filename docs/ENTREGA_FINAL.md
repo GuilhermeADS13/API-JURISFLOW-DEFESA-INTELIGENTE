@@ -1,6 +1,6 @@
 # Projeto Integrador — Entrega Final
 
-**Aluno:** Guilherme A. D. S. (GuilhermeADS13)
+**Alunos:** Guilherme Maciel · Paulo Neto · Julio Cezar
 **Projeto:** AutoJuri / JurisFlow — Sistema de automação de contestações jurídicas com IA
 **Repositório:** https://github.com/GuilhermeADS13/API-JURISFLOW-CONTESTA-O
 **Data:** 28 de maio de 2026

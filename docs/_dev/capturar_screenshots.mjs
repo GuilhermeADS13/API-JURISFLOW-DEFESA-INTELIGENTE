@@ -140,8 +140,8 @@ async function main() {
     await shot(page, "05_resultado_minuta.png");
     await page.close();
 
-    // ── 06: n8n workflow canvas ──────────────────────────────────────────────
-    console.log("== 06 n8n workflow ==");
+    // ── 06: n8n workflow canvas (com lacos/conexoes entre nodes) ─────────────
+    console.log("== 06 n8n workflow canvas ==");
     page = await ctx.newPage();
     await page.goto(URLS.n8n, { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
     await pausa(2500);
@@ -162,12 +162,50 @@ async function main() {
             "button:has-text('Entrar')",
             "button:has-text('Sign in')",
         );
-        await pausa(3500);
+        await pausa(4000);
     }
 
-    // Tenta navegar para a lista de workflows
-    await page.goto(`${URLS.n8n}workflows`, { waitUntil: "domcontentloaded", timeout: 15000 }).catch(() => {});
-    await pausa(3000);
+    // Abre direto um workflow conhecido — mostra o canvas com os lacos/conexoes
+    // entre os nodes (Webhook → Code → IF → ... → Respond), que é o que
+    // demonstra visualmente a orquestração.
+    const WF_ID = "WF_AUTOJURI_CONTESTAR_POR_PETICAO";
+    const candidatos = [
+        `${URLS.n8n}workflow/${WF_ID}`,
+        `${URLS.n8n}workflows/${WF_ID}`,
+        `${URLS.n8n}workflow/new?templateId=${WF_ID}`,
+    ];
+    let canvasOk = false;
+    for (const u of candidatos) {
+        try {
+            await page.goto(u, { waitUntil: "domcontentloaded", timeout: 15000 });
+            await pausa(3500);
+            // Confirma que o canvas (SVG dos lacos) renderizou
+            const temCanvas = await page.locator("svg.jtk-connector, .node-view, [data-test-id='canvas']").count();
+            if (temCanvas > 0) {
+                canvasOk = true;
+                console.log(`  canvas detectado via: ${u}`);
+                break;
+            }
+        } catch (e) {
+            console.log(`  tentativa ${u}: ${e.message.slice(0,60)}`);
+        }
+    }
+    if (!canvasOk) {
+        // Fallback: lista de workflows, clica no primeiro
+        await page.goto(`${URLS.n8n}workflows`, { waitUntil: "domcontentloaded", timeout: 15000 }).catch(() => {});
+        await pausa(3000);
+        await safeClick(page, "primeiro workflow da lista",
+            "[data-test-id='workflow-card']:first-child",
+            ".workflows-list .workflow-card:first-child",
+            "tr:has-text('AutoJuri'):first-of-type a",
+            "a:has-text('AutoJuri'):first-of-type",
+            "text=/AutoJuri.*Contestar/i",
+        );
+        await pausa(4000);
+    }
+    // Aguarda animacao do canvas terminar e fecha qualquer tooltip
+    await page.keyboard.press("Escape").catch(() => {});
+    await pausa(1500);
     await shot(page, "06_n8n_workflow.png");
     await page.close();
 
