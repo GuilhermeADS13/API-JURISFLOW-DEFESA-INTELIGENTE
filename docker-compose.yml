@@ -48,7 +48,9 @@ services:
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook/contestacao-claude
       - N8N_EDICAO_WEBHOOK_URL=http://n8n:5678/webhook/editar-contestacao
       - N8N_WEBHOOK_PETICAO=http://n8n:5678/webhook/contestar-por-peticao
-      - N8N_TIMEOUT_SECONDS=${N8N_TIMEOUT_SECONDS:-180}
+      # 240s cobre o fluxo peticao (3 chamadas Claude sequenciais ~150-190s)
+      # com margem. Antes era 180s e cortava pecas longas pela metade.
+      - N8N_TIMEOUT_SECONDS=${N8N_TIMEOUT_SECONDS:-240}
 
       # Sessao
       - SESSION_COOKIE_SAMESITE=${SESSION_COOKIE_SAMESITE:-lax}
@@ -109,6 +111,11 @@ services:
       # ── IA – Claude (Anthropic) ──────────────────────────────────────────
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-sonnet-4-6}
+      # Extracao de dados e verificacao de citacoes sao tarefas simples — usam
+      # Haiku (3-4x mais rapido/barato que Sonnet). So a geracao da peca final
+      # usa Sonnet (qualidade). Reduz o tempo total do fluxo peticao em ~43s.
+      - CLAUDE_EXTRACAO_MODEL=${CLAUDE_EXTRACAO_MODEL:-claude-haiku-4-5}
+      - CLAUDE_VERIFICACAO_MODEL=${CLAUDE_VERIFICACAO_MODEL:-claude-haiku-4-5}
       - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
       - ANTHROPIC_VERSION=${ANTHROPIC_VERSION:-2023-06-01}
       - CLAUDE_MAX_TOKENS=${CLAUDE_MAX_TOKENS:-6000}
