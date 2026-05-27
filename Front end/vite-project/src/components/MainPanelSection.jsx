@@ -607,6 +607,67 @@ export default function MainPanelSection({
 
                       {uploadValidation && <div className="upload-feedback-error">{uploadValidation}</div>}
                     </Col>
+
+                    <Col xs={12}>
+                      <Form.Label>Modelo base do escritorio (papel timbrado / estilo) — opcional</Form.Label>
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        className={`upload-box ${draggingModelo ? "is-dragging" : ""} ${
+                          modeloBaseFile ? "has-file" : ""
+                        }`}
+                        onClick={openModeloBasePicker}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") openModeloBasePicker();
+                        }}
+                        onDragOver={(event) => {
+                          event.preventDefault();
+                          setDraggingModelo(true);
+                        }}
+                        onDragLeave={(event) => {
+                          event.preventDefault();
+                          setDraggingModelo(false);
+                        }}
+                        onDrop={handleModeloBaseDrop}
+                      >
+                        <Upload size={28} className="mb-2" />
+                        <small className="text-secondary">
+                          Anexe um .docx com o cabecalho/estilo do escritorio. A IA preserva o formato.
+                        </small>
+                      </div>
+                      <input
+                        ref={modeloBaseInputRef}
+                        type="file"
+                        accept=".docx"
+                        className="d-none"
+                        onChange={handleModeloBaseInput}
+                      />
+                      {modeloBaseFile && (
+                        <div className="upload-file-summary mt-2">
+                          <div className="d-flex align-items-center gap-2">
+                            <Paperclip />
+                            <div>
+                              <div className="fw-semibold">{modeloBaseFile.name}</div>
+                              <small className="text-secondary">{fileSizeLabel(modeloBaseFile)}</small>
+                            </div>
+                          </div>
+                          <Button
+                            variant="link"
+                            className="upload-remove p-0"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              onRemoveModeloBaseFile?.();
+                            }}
+                          >
+                            <XCircle /> Remover
+                          </Button>
+                        </div>
+                      )}
+                      {modeloBaseError && (
+                        <div className="upload-feedback-error">{modeloBaseError}</div>
+                      )}
+                    </Col>
                   </Row>
 
                   <div className="d-flex flex-wrap gap-2 mt-4">

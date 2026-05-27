@@ -1,4 +1,6 @@
 # Rotas HTTP de contestacoes: envio ao n8n e consulta de resumo do dashboard.
+import base64
+import binascii
 import logging
 import os
 import time
@@ -16,6 +18,7 @@ from App.limiter import limiter
 from App.models.processo import Processo
 from App.security import get_authenticated_user
 from App.services.n8n_service import N8NServiceError, enviar_para_n8n
+from App.services.peticao_extractor import ExtracaoError, extrair_texto_peticao
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +29,38 @@ router = APIRouter()
 # podem definir "2/minute" no .env.
 RATE_LIMIT_CONTESTACAO = os.getenv("RATE_LIMIT_CONTESTACAO", "10/minute")
 RATE_LIMIT_DASHBOARD = os.getenv("RATE_LIMIT_DASHBOARD", "30/minute")
+
+
+def _extrair_texto_arquivo(
+    base64_content: str | None,
+    nome: str,
+    usuario_id: str,
+    rotulo: str,
+) -> str:
+    """Decodifica base64 e extrai texto via peticao_extractor (PDF/DOCX/.doc).
+
+    Retorna string vazia se: campo ausente, base64 invalido, ou extracao falhar.
+    Falhas sao logadas mas nao bloqueiam o fluxo — o n8n tem fallback proprio.
+    """
+    if not base64_content:
+        return ""
+    try:
+        bytes_ = base64.b64decode(base64_content, validate=False)
+    except (binascii.Error, ValueError):
+        logger.warning(
+            "[%s] base64 invalido usuario_id=%s nome=%s", rotulo, usuario_id, nome
+        )
+        return ""
+    if not bytes_:
+        return ""
+    try:
+        return extrair_texto_peticao(bytes_, nome)
+    except ExtracaoError as error:
+        logger.warning(
+            "[%s] falha na extracao usuario_id=%s nome=%s erro=%s",
+            rotulo, usuario_id, nome, error,
+        )
+        return ""
 
 
 @router.post("/gerar-contestacao")
@@ -41,6 +76,26 @@ async def gerar_contestacao(
     payload["usuario_nome"] = usuario.get("nome", "")
     payload["usuario_email"] = usuario.get("email", "")
     payload["auth_provider"] = usuario.get("auth_provider", "legacy")
+
+    # PR10 - Extrai texto do arquivo base (peticao inicial) e do modelo base
+    # (peca timbrada do escritorio) ANTES de enviar ao n8n. O sandbox JS do n8n
+    # nao consegue ler PDF/DOCX (binarios ZIP+XML); por isso o backend faz a
+    # extracao via peticao_extractor (pypdf + python-docx + Tesseract OCR fallback)
+    # e injeta os campos `arquivo_base_conteudo_texto` e `modelo_mae_texto`
+    # no payload, que o node "Validar Campos" do workflow contestacao-claude
+    # le diretamente sem tentar extrair texto de novo.
+    payload["arquivo_base_conteudo_texto"] = _extrair_texto_arquivo(
+        payload.get("arquivo_base_conteudo_base64"),
+        payload.get("arquivo_base_nome") or "peticao.pdf",
+        usuario["id"],
+        rotulo="arquivo_base",
+    )
+    payload["modelo_mae_texto"] = _extrair_texto_arquivo(
+        payload.get("modelo_base_base64"),
+        payload.get("modelo_base_nome") or "modelo_base.docx",
+        usuario["id"],
+        rotulo="modelo_base",
+    )
 
     try:
         # PR8 P3.1 — mede o tempo end-to-end da chamada ao n8n para observabilidade.

@@ -1468,6 +1468,11 @@ export default function App() {
       }
 
       const arquivoConteudoBase64 = await readFileAsBase64(uploadedFile);
+      // PR10: peca base do escritorio (papel timbrado/estilo) tambem no modo manual.
+      // O backend extrai o texto e injeta como modelo_mae_texto no payload do n8n.
+      const modeloBaseBase64Manual = modeloBaseFile
+        ? await readFileAsBase64(modeloBaseFile)
+        : null;
       const payload = {
         numero_processo: form.processo.trim(),
         autor: form.autor.trim(),
@@ -1482,6 +1487,8 @@ export default function App() {
         arquivo_base_mime_type: uploadedFile?.type || "application/octet-stream",
         arquivo_base_tamanho_bytes: uploadedFile?.size || 0,
         arquivo_base_conteudo_base64: arquivoConteudoBase64,
+        modelo_base_base64: modeloBaseBase64Manual,
+        modelo_base_nome: modeloBaseFile?.name || null,
         texto_editado_ao_vivo: (liveDraft.trim() || generatedDraftText).trim(),
       };
 

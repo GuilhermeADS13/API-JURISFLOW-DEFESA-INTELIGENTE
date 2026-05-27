@@ -39,6 +39,11 @@ class Processo(BaseModel):
     arquivo_base_mime_type: str | None = None
     arquivo_base_tamanho_bytes: int | None = None
 
+    # Peca base do escritorio (papel timbrado / template) — DOCX opcional.
+    # O backend extrai o texto e injeta como `modelo_mae_texto` no payload n8n.
+    modelo_base_base64: str | None = None
+    modelo_base_nome: str | None = None
+
     # Campo opcional para edicao humana da minuta.
     texto_editado_ao_vivo: str | None = None
 
