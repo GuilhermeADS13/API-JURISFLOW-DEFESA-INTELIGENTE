@@ -7,8 +7,8 @@
 # Cada bloco tem um comentário (#) explicando o que aquele teste valida
 # e logo abaixo o comando pronto para copiar e colar no terminal.
 #
-# Pré-requisito: abrir o terminal na pasta raiz do projeto:
-#   C:\Users\Guilh\OneDrive\Área de Trabalho\PROJETO API-CONTESTACAO
+# Os comandos usam CAMINHO ABSOLUTO para funcionar de qualquer lugar
+# (não importa em que pasta o terminal foi aberto).
 #
 # =====================================================================
 
@@ -25,7 +25,7 @@
 #
 # Usa o Python do .venv direto (evita o shim quebrado do WindowsApps).
 #
-cd "API-CONTESTACAO\Backend"
+cd "C:\Users\Guilh\OneDrive\Área de Trabalho\PROJETO API-CONTESTACAO\API-CONTESTACAO\Backend"
 .venv\Scripts\python.exe -m pytest --tb=short
 
 
@@ -33,12 +33,12 @@ cd "API-CONTESTACAO\Backend"
 # 2) FRONTEND  —  vitest (React / Vite)
 # =====================================================================
 #
-# Roda os 149 testes do frontend com cobertura V8: utilitários
+# Roda os 159 testes do frontend com cobertura V8: utilitários
 # (validators, cases, html, files, storage), cliente Supabase e
-# componente AuthModal. Resultado esperado: 149 passed,
-# cobertura ≈ 84% statements / 92% branches / 96% funcs.
+# componente AuthModal. Resultado esperado: 159 passed,
+# cobertura ≈ 86% statements / 93% branches / 96% funcs.
 #
-cd "API-CONTESTACAO\Front end\vite-project"
+cd "C:\Users\Guilh\OneDrive\Área de Trabalho\PROJETO API-CONTESTACAO\API-CONTESTACAO\Front end\vite-project"
 npm run test:coverage
 
 
@@ -50,7 +50,7 @@ npm run test:coverage
 # exponencial em `_enviar_com_retry` (PR8 P1.1) — tolera cold-start
 # do n8n sem derrubar o produto; (b) schema da resposta `N8NResponse`
 # filtra campos desconhecidos para prevenir injeção de dados arbitrários
-# vindos do workflow. Resultado esperado: 12 passed.
+# vindos do workflow. Resultado esperado: 9 passed.
 #
-cd "API-CONTESTACAO\Backend"
+cd "C:\Users\Guilh\OneDrive\Área de Trabalho\PROJETO API-CONTESTACAO\API-CONTESTACAO\Backend"
 .venv\Scripts\python.exe -m pytest tests/test_n8n_retry.py tests/test_n8n_schema.py -v
