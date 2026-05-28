@@ -256,10 +256,13 @@ def extrair_e_consolidar_textos(
 
 
 def extrair_texto_modelo_base(conteudo_b64: str | None) -> str:
-    """Extrai texto do modelo base .docx (opcional).
+    """Extrai texto do modelo base .docx (opcional) ja normalizado em Markdown.
 
     Retorna string vazia em ausencia/erro — o modelo base e opcional e nao deve
     bloquear o fluxo da geracao.
+
+    O texto sai como Markdown (## cabecalhos romanos, ### itens A/B/1/2) para
+    que o Claude consiga mimetizar a estrutura do modelo na minuta gerada.
     """
     if not conteudo_b64:
         return ""
@@ -270,11 +273,119 @@ def extrair_texto_modelo_base(conteudo_b64: str | None) -> str:
         return ""
 
     try:
-        texto = _extrair_docx(conteudo)
+        texto = _extrair_docx_com_estilos(conteudo)
     except ExtracaoError:
         return ""
 
-    return _limpar_texto(texto)[:MAX_TEXTO_MODELO_BASE_CHARS]
+    texto_md = _normalizar_modelo_markdown(_limpar_texto(texto))
+    return texto_md[:MAX_TEXTO_MODELO_BASE_CHARS]
+
+
+# ── Normalizacao Markdown do modelo base ────────────────────────────────────
+# Aplicada APENAS ao modelo base (nao a peticao do autor), porque queremos que
+# o Claude mimetize a estrutura do modelo na peca gerada. A peticao do autor
+# fica como texto plano — sua estrutura nao precisa ser preservada.
+
+_RE_HEADING_ROMANO = re.compile(
+    r"^\s*([IVX]{1,5})\s*[-–—.):]\s*([A-ZÁÉÍÓÚÂÊÔÃÕÇ][^\n]{2,120})\s*$"
+)
+_RE_HEADING_LETRA_PAREN = re.compile(
+    r"^\s*([A-Z])\)\s*([A-ZÁÉÍÓÚÂÊÔÃÕÇ][^\n]{2,120})\s*$"
+)
+_RE_HEADING_NUMERO = re.compile(
+    r"^\s*(\d{1,3})[.)]\s+([A-ZÁÉÍÓÚÂÊÔÃÕÇ][^\n]{2,120})\s*$"
+)
+_RE_LINHA_TODA_CAIXA_ALTA = re.compile(
+    r"^\s*([A-ZÁÉÍÓÚÂÊÔÃÕÇ][A-ZÁÉÍÓÚÂÊÔÃÕÇ\s\-–—,./()0-9]{4,100})\s*$"
+)
+
+
+def _normalizar_modelo_markdown(texto: str) -> str:
+    """Converte linhas que parecem titulos em headings Markdown.
+
+    Regras (na ordem):
+    1. Linha que ja comeca com '#' fica inalterada (DOCX heading style).
+    2. 'I -', 'II.', 'III)' seguido de titulo em maiusculas → '## I - TITULO'
+    3. 'A)' seguido de titulo em maiusculas → '### A) TITULO'
+    4. '1.', '2)' seguido de titulo em maiusculas → '### 1. TITULO'
+    5. Linha curta toda em CAIXA ALTA (provavel titulo) → '## LINHA'
+
+    Tudo que nao casa fica como esta. Sem regex agressivo — em duvida, deixa
+    como paragrafo.
+    """
+    if not texto:
+        return ""
+
+    linhas_out: list[str] = []
+    for linha in texto.split("\n"):
+        if linha.lstrip().startswith("#"):
+            linhas_out.append(linha)
+            continue
+
+        m = _RE_HEADING_ROMANO.match(linha)
+        if m:
+            linhas_out.append(f"## {m.group(1)} - {m.group(2).strip()}")
+            continue
+
+        m = _RE_HEADING_LETRA_PAREN.match(linha)
+        if m:
+            linhas_out.append(f"### {m.group(1)}) {m.group(2).strip()}")
+            continue
+
+        m = _RE_HEADING_NUMERO.match(linha)
+        if m:
+            linhas_out.append(f"### {m.group(1)}. {m.group(2).strip()}")
+            continue
+
+        m = _RE_LINHA_TODA_CAIXA_ALTA.match(linha)
+        if m and len(linha.strip()) <= 100:
+            linhas_out.append(f"## {m.group(1).strip()}")
+            continue
+
+        linhas_out.append(linha)
+
+    return "\n".join(linhas_out)
+
+
+def _extrair_docx_com_estilos(conteudo: bytes) -> str:
+    """Como _extrair_docx, mas preserva paragraph.style.name como heading Markdown.
+
+    Paragrafos com style 'Heading 1' viram '# Texto', 'Heading 2' viram '## Texto',
+    etc. Util para modelos .docx tipados profissionalmente. Quando o autor nao
+    usa heading styles (manualmente em negrito), as linhas voltam normais e
+    `_normalizar_modelo_markdown` cuida da deteccao por padrao textual.
+    """
+    try:
+        doc = Document(BytesIO(conteudo))
+    except Exception as error:
+        raise ExtracaoError(
+            f"Falha ao abrir o .docx: {type(error).__name__}: {error}"
+        ) from error
+
+    linhas: list[str] = []
+    for paragraph in doc.paragraphs:
+        texto_par = paragraph.text
+        if not texto_par:
+            continue
+        style_name = (getattr(paragraph.style, "name", "") or "").lower()
+        if "heading 1" in style_name or "titulo 1" in style_name:
+            linhas.append(f"# {texto_par}")
+        elif "heading 2" in style_name or "titulo 2" in style_name:
+            linhas.append(f"## {texto_par}")
+        elif "heading 3" in style_name or "titulo 3" in style_name:
+            linhas.append(f"### {texto_par}")
+        elif "heading" in style_name or "titulo" in style_name:
+            linhas.append(f"#### {texto_par}")
+        else:
+            linhas.append(texto_par)
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for paragraph in cell.paragraphs:
+                    if paragraph.text:
+                        linhas.append(paragraph.text)
+
+    return "\n".join(linhas)
 
 
 # ── PR6 #1 — Long Context: pre-filtragem + truncamento inteligente ──────────
