@@ -7,6 +7,9 @@
 # Cada bloco tem um comentário (#) explicando o que aquele teste valida
 # e logo abaixo o comando pronto para copiar e colar no terminal.
 #
+# Pré-requisito: abrir o terminal na pasta raiz do projeto:
+#   C:\Users\Guilh\OneDrive\Área de Trabalho\PROJETO API-CONTESTACAO
+#
 # =====================================================================
 
 
@@ -20,8 +23,10 @@
 # load_env). Confirma que TODA a refatoração da Etapa 5 preservou o
 # comportamento — resultado esperado: 267 passed, 2 skipped.
 #
-cd Backend
-python -m pytest --tb=short
+# Usa o Python do .venv direto (evita o shim quebrado do WindowsApps).
+#
+cd "API-CONTESTACAO\Backend"
+.venv\Scripts\python.exe -m pytest --tb=short
 
 
 # =====================================================================
@@ -33,7 +38,7 @@ python -m pytest --tb=short
 # componente AuthModal. Resultado esperado: 149 passed,
 # cobertura ≈ 84% statements / 92% branches / 96% funcs.
 #
-cd "Front end/vite-project"
+cd "API-CONTESTACAO\Front end\vite-project"
 npm run test:coverage
 
 
@@ -47,5 +52,5 @@ npm run test:coverage
 # filtra campos desconhecidos para prevenir injeção de dados arbitrários
 # vindos do workflow. Resultado esperado: 12 passed.
 #
-cd Backend
-python -m pytest tests/test_n8n_retry.py tests/test_n8n_schema.py -v
+cd "API-CONTESTACAO\Backend"
+.venv\Scripts\python.exe -m pytest tests/test_n8n_retry.py tests/test_n8n_schema.py -v
