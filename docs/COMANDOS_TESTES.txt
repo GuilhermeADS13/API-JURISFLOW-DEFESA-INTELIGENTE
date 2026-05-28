@@ -1,208 +1,51 @@
 # =====================================================================
-# COMANDOS DE TESTE — PROJETO API CONTESTAÇÃO (Backend/)
+# COMANDOS DE TESTE — PROJETO API CONTESTAÇÃO
 # Etapa 5 — Refatoração Orientada a Testes
 # =====================================================================
 #
-# Como usar:
-#   1. Abra o terminal (PowerShell ou bash).
-#   2. Rode UMA vez o comando de setup abaixo para entrar na pasta certa.
-#   3. Copie e cole qualquer um dos comandos abaixo para rodar o teste
-#      correspondente. Cada bloco tem um comentário (#) explicando o que
-#      aquele teste valida.
-#
-# Flags usadas:
-#   -v          mostra o nome de cada teste individualmente
-#   --tb=short  exibe traceback curto em caso de falha
+# 3 testes principais (1 backend, 1 frontend, 1 n8n).
+# Cada bloco tem um comentário (#) explicando o que aquele teste valida
+# e logo abaixo o comando pronto para copiar e colar no terminal.
 #
 # =====================================================================
 
 
-# ─────────────────────────────────────────────────────────────────────
-# SETUP — rode UMA vez antes de qualquer teste
-# Entra na pasta do backend (todos os comandos abaixo assumem esse cwd).
-# ─────────────────────────────────────────────────────────────────────
+# =====================================================================
+# 1) BACKEND  —  pytest (Python / FastAPI)
+# =====================================================================
+#
+# Roda os 267 testes do backend de uma vez (≈ 18s):
+# modelos Pydantic, rotas HTTP, serviços de IA, integração com n8n,
+# segurança (path traversal, MIME, rate limit, headers) e infra (DB,
+# load_env). Confirma que TODA a refatoração da Etapa 5 preservou o
+# comportamento — resultado esperado: 267 passed, 2 skipped.
+#
 cd Backend
-
-
-# =====================================================================
-# 1) SUÍTE COMPLETA — roda os 267 testes de uma vez (≈ 18s)
-# =====================================================================
-
-# Executa todos os 26 arquivos de teste, mostra um ponto por sucesso e
-# resumo final com totais (passed/failed/skipped/tempo).
 python -m pytest --tb=short
 
-# Mesma coisa, porém em modo verboso (mostra o nome de cada teste).
-python -m pytest -v --tb=short
+
+# =====================================================================
+# 2) FRONTEND  —  vitest (React / Vite)
+# =====================================================================
+#
+# Roda os 149 testes do frontend com cobertura V8: utilitários
+# (validators, cases, html, files, storage), cliente Supabase e
+# componente AuthModal. Resultado esperado: 149 passed,
+# cobertura ≈ 84% statements / 92% branches / 96% funcs.
+#
+cd "Front end/vite-project"
+npm run test:coverage
 
 
 # =====================================================================
-# 2) MODELOS PYDANTIC — validação de schemas de entrada
+# 3) n8n  —  retry + schema (integração)
 # =====================================================================
-
-# Schema `Usuario` / `UsuarioCadastro` / `UsuarioLogin` — valida nome,
-# e-mail, senha forte (5 classes de caracteres) e id.
-python -m pytest tests/test_usuario_model.py -v
-
-# Schema `Processo` — cenários válidos e inválidos do cadastro de processo.
-python -m pytest tests/test_processo_model.py -v
-
-# Schema de Suporte/Contato — validação de assunto, categoria, mensagem.
-python -m pytest tests/test_suporte_model.py -v
-
-# Schema `ContestacaoPorPeticao` (Guia Técnico v2 — PR1) — payload da
-# rota de geração por petição, incluindo regras de tamanho de anexos.
-python -m pytest tests/test_models_contestacao_por_peticao.py -v
-
-
-# =====================================================================
-# 3) ROTAS HTTP (FastAPI) — testes de endpoint
-# =====================================================================
-
-# POST /api/contestacao — fluxo manual de geração de contestação.
-python -m pytest tests/test_routes_contestacao.py -v
-
-# POST /api/contestar-por-peticao (Guia v2 — PR2) — fluxo automático com
-# extração de petição + n8n + DOCX. Cobre o caminho refatorado nesta etapa.
-python -m pytest tests/test_routes_contestacao_peticao.py -v
-
-# POST /api/editar-contestacao (Fase 1 — PR2) — edição cirúrgica de DOCX
-# via n8n + python-docx.
-python -m pytest tests/test_routes_edicao.py -v
-
-# POST /api/contestacoes/{id}/feedback + admin de exemplares —
-# feedback do advogado pós-edição (golden dataset PR5).
-python -m pytest tests/test_routes_feedback.py -v
-
-# POST /api/suporte — envio de reclamação por e-mail (SMTP).
-python -m pytest tests/test_routes_suporte.py -v
-
-# POST /api/cadastrar | /login | /logout — autenticação de usuário.
-python -m pytest tests/test_routes_usuario.py -v
-
-
-# =====================================================================
-# 4) SERVIÇOS — lógica de negócio isolada
-# =====================================================================
-
-# Hash e verificação de senha (bcrypt) usados pelo auth_service.
-python -m pytest tests/test_auth_service.py -v
-
-# `diff_minuta` (PR5 Observabilidade) — diff entre minuta gerada pela
-# IA e minuta editada pelo humano (golden dataset).
-python -m pytest tests/test_diff_minuta.py -v
-
-# Editor cirúrgico de DOCX — fixtures montadas em memória com python-docx
-# (não depende de binários commitados no repo).
-python -m pytest tests/test_docx_editor.py -v
-
-# PR6 #1 Long Context — pré-filtragem de seções jurídicas + truncamento
-# inteligente quando texto excede limite do Claude.
-python -m pytest tests/test_long_context.py -v
-
-# PR6 #3 OCR Fallback (Guia v3 §2.7) — quando pypdf extrai pouco texto
-# de um PDF digitalizado, cai para Tesseract automaticamente.
-python -m pytest tests/test_ocr_fallback.py -v
-
-# PR6 #4 RAG Semântico (Guia v3 §2.3) — busca semântica de defesas
-# similares; default = provider 'local' (sentence-transformers, 384 dims).
-# Cohere/OpenAI testados como caminhos opcionais.
-python -m pytest tests/test_rag_semantico.py -v
-
-
-# =====================================================================
-# 5) INTEGRAÇÃO COM n8n — retry, schema e configuração
-# =====================================================================
-
-# PR8 P1.1 — retry com backoff exponencial no `_enviar_com_retry`.
-# Garante que cold-start/reinício do n8n não derruba o produto.
-python -m pytest tests/test_n8n_retry.py -v
-
-# Quest 2 — schema da resposta n8n (`N8NResponse`) filtra campos
-# desconhecidos para prevenir injeção de dados arbitrários.
-python -m pytest tests/test_n8n_schema.py -v
-
-
-# =====================================================================
-# 6) SEGURANÇA — defesa em profundidade
-# =====================================================================
-
-# Utilitários de segurança/autenticação — get_current_user, validação de
-# JWT Supabase, hash legacy. (Cobertura subiu de 52% para 72% nesta etapa.)
-python -m pytest tests/test_security.py -v
-
-# Quest 3 — varredura ATIVA de vulnerabilidades. PASS = vetor mitigado;
-# FAIL = vulnerabilidade confirmada com evidência.
-python -m pytest tests/test_security_audit.py -v
-
-# Quest 2 — confirma presença dos security headers (CSP, HSTS,
-# X-Content-Type-Options, etc.) em TODAS as responses.
-python -m pytest tests/test_security_headers.py -v
-
-# Quest 2 — sanitização de path traversal em nomes de arquivo enviados
-# pelo usuário (ataque "..\..\windows\system32\...").
-python -m pytest tests/test_path_traversal.py -v
-
-# Quest 2 — validação de MIME via magic bytes (não apenas pelo nome do
-# arquivo — usuário pode renomear .exe para .pdf).
-python -m pytest tests/test_mime_validation.py -v
-
-# Quest 2 — rate limiting nos endpoints que antes não tinham proteção
-# (login, suporte, contestar-por-peticao, etc.).
-python -m pytest tests/test_rate_limit.py -v
-
-
-# =====================================================================
-# 7) INFRAESTRUTURA — configuração e migrations
-# =====================================================================
-
-# PR9 P1.2 — migration da tabela `configuracoes` (chave/valor) e suas
-# operações de leitura/escrita.
-python -m pytest tests/test_database_configuracoes.py -v
-
-# PR8 P1.4 — garante que `load_env_file` NÃO sobrescreve variáveis de
-# ambiente já definidas pelo sistema (precedência correta em produção).
-python -m pytest tests/test_load_env_file.py -v
-
-
-# =====================================================================
-# 8) MÉTRICAS DE QUALIDADE — gates da Etapa 5
-# =====================================================================
-
-# Cobertura de código com pytest-cov (HTML + terminal).
-# Resultado esperado: TOTAL 74% (era 71% antes da refatoração).
-# Relatório HTML detalhado: Backend/coverage_html/index.html
-python -m pytest --cov=App --cov-report=term --cov-report=html:coverage_html
-
-# Complexidade ciclomática — média global do projeto.
-# Resultado esperado: Average complexity: A (3.86)
-python -m radon cc App -a -s
-
-# Hotspots restantes (apenas rank >= C).
-# Resultado esperado: 0 funções rank D, ~9 funções rank C.
-python -m radon cc App -nC -s
-
-# Índice de manutenibilidade (MI) por arquivo.
-# Resultado esperado: TODOS os arquivos rank A.
-python -m radon mi App -s
-
-# LOC, SLOC, LLOC e densidade de comentários.
-python -m radon raw App -s
-
-
-# =====================================================================
-# 9) FILTROS ÚTEIS — quando você quer rodar só uma parte
-# =====================================================================
-
-# Roda APENAS testes que casam com uma substring (-k).
-# Exemplo: tudo que envolve "peticao".
-python -m pytest -v -k "peticao"
-
-# Para o teste assim que UM falhar (debugging rápido).
-python -m pytest -x --tb=long
-
-# Mostra os 10 testes mais LENTOS da suíte.
-python -m pytest --durations=10
-
-# Re-roda apenas os testes que falharam na última execução.
-python -m pytest --lf -v
+#
+# Valida o contrato entre backend e n8n: (a) retry com backoff
+# exponencial em `_enviar_com_retry` (PR8 P1.1) — tolera cold-start
+# do n8n sem derrubar o produto; (b) schema da resposta `N8NResponse`
+# filtra campos desconhecidos para prevenir injeção de dados arbitrários
+# vindos do workflow. Resultado esperado: 12 passed.
+#
+cd Backend
+python -m pytest tests/test_n8n_retry.py tests/test_n8n_schema.py -v
