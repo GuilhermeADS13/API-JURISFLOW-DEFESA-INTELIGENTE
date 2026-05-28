@@ -106,7 +106,9 @@ services:
     environment:
       # ── Task Runner (obrigatorio no n8n >= 1.x) ──────────────────────────
       - N8N_RUNNERS_ENABLED=true
-      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      # PR9 P2.1 — Bloquear acesso direto a variaveis de ambiente nos Code nodes.
+      # Em producao: true (seguro). Em dev: false (conveniente para debug).
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=${N8N_BLOCK_ENV_ACCESS_IN_NODE:-true}
 
       # ── IA – Claude (Anthropic) ──────────────────────────────────────────
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
@@ -131,6 +133,9 @@ services:
       # ── Banco do n8n — SQLite no volume Docker (sem conflito com Supabase) ──
       # Para producao com multiplos workers, troque para postgresdb em schema
       # separado e aponte para um banco dedicado (nao o mesmo do backend).
+      # IMPORTANTE: Backupear n8n_data regularmente (contem workflows, credenciais).
+      # Comando backup: docker run --rm -v autojuri_n8n_data:/data -v $(pwd):/backup \
+      #   busybox tar czf /backup/n8n_backup_$(date +%Y%m%d_%H%M%S).tar.gz -C /data .
       - DB_TYPE=sqlite
       - DB_SQLITE_DATABASE=/home/node/.n8n/database.sqlite
 
