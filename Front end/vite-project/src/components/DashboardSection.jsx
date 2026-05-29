@@ -1,17 +1,34 @@
 // Secao de dashboard com indicadores de automacao e historico de contestacoes.
-import React from "react";
-import { Badge, Card, Col, Container, ProgressBar, Row, Table } from "react-bootstrap";
+import React, { useState } from "react";
+import { Badge, Button, Card, Col, Container, Dropdown, ProgressBar, Row, Spinner, Table } from "react-bootstrap";
 import StatusBadge from "./ui/StatusBadge";
 
 /**
  * Dashboard com cards de indicadores, barras de status e historico de casos.
+ *
+ * Props:
+ * - onBaixarPeca?: (contestacaoId: number) => Promise<void>
+ *   Callback opcional pra baixar o DOCX de uma peca pronta (status=ok).
+ *   Quando definido, mostra coluna "Acao" com botao "Baixar".
  */
 export default function DashboardSection({
   history,
   automationStatus,
   dashboardCards = [],
   loading = false,
+  onBaixarPeca,
 }) {
+  const [baixandoId, setBaixandoId] = useState(null);
+
+  const handleBaixar = async (contestacaoId, formato = "docx") => {
+    if (!onBaixarPeca || !contestacaoId) return;
+    setBaixandoId(contestacaoId);
+    try {
+      await onBaixarPeca(contestacaoId, formato);
+    } finally {
+      setBaixandoId(null);
+    }
+  };
   return (
     <section id="dashboard" className="py-5">
       <Container>
@@ -85,13 +102,14 @@ export default function DashboardSection({
                         <th>Tipo</th>
                         <th>Data</th>
                         <th>Status</th>
+                        {onBaixarPeca && <th>Acao</th>}
                       </tr>
                     </thead>
 
                     <tbody>
                       {history.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="text-secondary">
+                          <td colSpan={onBaixarPeca ? 6 : 5} className="text-secondary">
                             {loading
                               ? "Carregando historico do banco de dados..."
                               : "Nenhum caso encontrado no banco para este usuario."}
@@ -107,6 +125,43 @@ export default function DashboardSection({
                             <td>
                               <StatusBadge status={item.status} />
                             </td>
+                            {onBaixarPeca && (
+                              <td>
+                                {item.statusRaw === "ok" && item.contestacao_id ? (
+                                  <Dropdown>
+                                    <Dropdown.Toggle
+                                      size="sm"
+                                      variant="outline-primary"
+                                      disabled={baixandoId === item.contestacao_id}
+                                    >
+                                      {baixandoId === item.contestacao_id ? (
+                                        <Spinner animation="border" size="sm" />
+                                      ) : (
+                                        "Baixar"
+                                      )}
+                                    </Dropdown.Toggle>
+                                    <Dropdown.Menu>
+                                      <Dropdown.Item
+                                        onClick={() =>
+                                          handleBaixar(item.contestacao_id, "docx")
+                                        }
+                                      >
+                                        DOCX (Word)
+                                      </Dropdown.Item>
+                                      <Dropdown.Item
+                                        onClick={() =>
+                                          handleBaixar(item.contestacao_id, "pdf")
+                                        }
+                                      >
+                                        PDF (via impressao)
+                                      </Dropdown.Item>
+                                    </Dropdown.Menu>
+                                  </Dropdown>
+                                ) : (
+                                  <span className="text-secondary small">—</span>
+                                )}
+                              </td>
+                            )}
                           </tr>
                         ))
                       )}

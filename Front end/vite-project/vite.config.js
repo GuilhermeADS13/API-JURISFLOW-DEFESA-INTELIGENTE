@@ -5,6 +5,11 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  server: {
+    // Aceita Host header de qualquer dominio (necessario para tuneis tipo
+    // cloudflared/ngrok exporem o frontend pra extensoes externas).
+    allowedHosts: true,
+  },
   test: {
     globals: true,
     environment: 'happy-dom',

@@ -96,12 +96,34 @@ def _escrever_secoes_minuta(doc: Document, minuta: dict[str, Any]) -> None:
         _escrever_secao_texto(doc, titulo, minuta.get(chave))
 
 
+def _strip_markdown(texto: Any) -> str:
+    """Remove ## ### **bold** __underline__ pra texto plano legivel.
+
+    Usado pelo programatico (sem template) — evita Markdown literal aparecendo
+    como '## I - PRELIMINARMENTE' no .docx final.
+    """
+    if not texto:
+        return ""
+    s = str(texto)
+    out = []
+    for linha in s.split("\n"):
+        stripped = linha.lstrip()
+        if stripped.startswith("#"):
+            out.append(stripped.lstrip("#").lstrip())
+        else:
+            out.append(linha)
+    s = "\n".join(out)
+    s = _RE_INLINE_BOLD.sub(r"\1", s)
+    s = re.sub(r"__(.+?)__", r"\1", s)
+    return s
+
+
 def _escrever_secao_texto(doc: Document, titulo: str, conteudo: Any) -> None:
     """Adiciona heading + paragrafo justificado se conteudo for verdadeiro."""
     if not conteudo:
         return
     doc.add_heading(titulo, level=2)
-    _add_paragraph(doc, str(conteudo), justify=True)
+    _add_paragraph(doc, _strip_markdown(conteudo), justify=True)
 
 
 def _escrever_impugnacao_pedidos(doc: Document, impugnacoes: Any) -> None:
@@ -113,7 +135,7 @@ def _escrever_impugnacao_pedidos(doc: Document, impugnacoes: Any) -> None:
         paragrafo = doc.add_paragraph()
         run = paragrafo.add_run(f"Pedido: {pedido}")
         run.bold = True
-        _add_paragraph(doc, str(resposta or ""), justify=True)
+        _add_paragraph(doc, _strip_markdown(resposta), justify=True)
 
 
 def _escrever_rodape(doc: Document, minuta: dict[str, Any]) -> None:

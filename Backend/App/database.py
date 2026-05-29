@@ -359,6 +359,14 @@ def init_db() -> None:
                 cursor.execute(
                     "ALTER TABLE contestacoes ADD COLUMN IF NOT EXISTS feedback_em TIMESTAMPTZ"
                 )
+                # Persiste modelo .docx do escritorio para regerar peca depois
+                # (endpoint /baixar precisa, senao cai no fallback sem timbre).
+                cursor.execute(
+                    "ALTER TABLE contestacoes ADD COLUMN IF NOT EXISTS modelo_base_b64 TEXT"
+                )
+                cursor.execute(
+                    "ALTER TABLE contestacoes ADD COLUMN IF NOT EXISTS modelo_base_nome TEXT"
+                )
                 cursor.execute(
                     """
                     CREATE INDEX IF NOT EXISTS idx_contestacoes_tipo_feedback
@@ -696,6 +704,11 @@ def save_contestacao(
     nome, conteudo, mime_type, tamanho = _extrair_metadados_arquivo(payload)
     confianca = float(dados_confianca) if dados_confianca is not None else None
 
+    # Modelo do escritorio (.docx com timbre/template) — persiste para
+    # regenerar o DOCX depois via /contestacoes/{id}/baixar.
+    modelo_b64 = str(payload.get("modelo_base_b64") or "")
+    modelo_nome = str(payload.get("modelo_base_nome") or "")
+
     params = (
         str(payload.get("usuario_id") or ""),
         str(payload.get("numero_processo", "")),
@@ -715,6 +728,8 @@ def save_contestacao(
         bool(requer_revisao_humana),
         confianca,
         _adaptar_json_pg(minuta_json_original),
+        modelo_b64,
+        modelo_nome,
     )
 
     with _get_connection() as connection:
@@ -739,9 +754,11 @@ def save_contestacao(
                     origem,
                     requer_revisao_humana,
                     dados_confianca,
-                    minuta_json_original
+                    minuta_json_original,
+                    modelo_base_b64,
+                    modelo_base_nome
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
                 params,
@@ -811,10 +828,12 @@ def list_contestacoes_por_usuario(
         history.append(
             {
                 "id": _format_case_id(contestacao_id, criado_em),
+                "contestacao_id": contestacao_id,
                 "naturezaCaso": natureza_caso,
                 "tipo": tipo_label,
                 "data": display_date,
                 "status": status_label,
+                "statusRaw": status_raw,
                 "numeroProcesso": numero_processo,
             }
         )
@@ -960,6 +979,44 @@ def get_contestacao(contestacao_id: int, usuario_id: str) -> dict[str, Any] | No
         "autor": str(row[10] or ""),
         "reu": str(row[11] or ""),
         "tipo_acao": str(row[12] or ""),
+    }
+
+
+def get_contestacao_para_download(
+    contestacao_id: int, usuario_id: str
+) -> dict[str, Any] | None:
+    """Busca contestacao incluindo arquivo_base (modelo .docx) para regerar DOCX.
+
+    Usada pelo endpoint GET /contestacoes/{id}/baixar quando o frontend perde a
+    response inicial (timeout/abort) mas a peca ja foi processada e salva.
+    IDOR-safe: filtra por usuario_id.
+    """
+    _ensure_db_initialized()
+    with _get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id, n8n_resposta, modelo_base_b64, numero_processo,
+                       autor, reu, tipo_acao, status, minuta_json_editada
+                FROM contestacoes
+                WHERE id = %s AND usuario_id = %s
+                LIMIT 1
+                """,
+                (contestacao_id, usuario_id),
+            )
+            row = cursor.fetchone()
+    if row is None:
+        return None
+    return {
+        "id": int(row[0]),
+        "n8n_resposta": row[1] or {},
+        "modelo_base_b64": row[2],
+        "numero_processo": str(row[3] or ""),
+        "autor": str(row[4] or ""),
+        "reu": str(row[5] or ""),
+        "tipo_acao": str(row[6] or ""),
+        "status": str(row[7] or ""),
+        "minuta_json_editada": row[8],
     }
 
 

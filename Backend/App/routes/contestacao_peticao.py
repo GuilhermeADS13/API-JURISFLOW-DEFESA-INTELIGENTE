@@ -39,6 +39,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Path, Request, stat
 from App.database import (
     atualizar_contestacao_pos_revisao,
     get_contestacao,
+    get_contestacao_para_download,
     salvar_embedding,
     salvar_minuta_editada,
     save_contestacao,
@@ -234,6 +235,9 @@ def _montar_save_payload(
         "arquivo_base_mime_type": payload.arquivo_peticao_mime_type,
         "arquivo_base_tamanho_bytes": len(peticao_bytes),
         "texto_editado_ao_vivo": "",
+        # Persiste o modelo do escritorio pra regenerar o DOCX depois
+        "modelo_base_b64": payload.modelo_base_base64 or "",
+        "modelo_base_nome": payload.modelo_base_nome or "",
     }
 
 
@@ -540,6 +544,65 @@ def _carregar_contestacao_em_revisao(contestacao_id: int, usuario_id: str) -> di
             detail="Esta contestacao nao esta em revisao humana.",
         )
     return contestacao
+
+
+@router.get("/contestacoes/{contestacao_id}/baixar")
+@limiter.limit("30/minute")
+async def baixar_contestacao(
+    request: Request,
+    contestacao_id: int = Path(..., gt=0),
+    usuario: dict[str, str] = Depends(get_authenticated_user),
+) -> dict:
+    """Regenera o DOCX de uma contestacao a partir do banco e retorna em base64.
+
+    Usado quando o frontend perde a resposta inicial (timeout/abort) mas a
+    peca foi salva com sucesso. Reconstroi o .docx on-the-fly a partir do
+    `n8n_resposta` (com `dados_extraidos` + `minuta`) e do `arquivo_base`
+    (modelo do escritorio, opcional).
+    """
+    usuario_id = usuario["id"]
+    contestacao = get_contestacao_para_download(contestacao_id, usuario_id)
+    if contestacao is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Contestacao nao encontrada ou nao pertence ao usuario.",
+        )
+    if contestacao["status"] not in ("ok",):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Contestacao em status '{contestacao['status']}' — nao ha peca"
+                " pronta para baixar."
+            ),
+        )
+
+    n8n_resp = contestacao["n8n_resposta"] or {}
+    dados_extraidos = n8n_resp.get("dados_extraidos") or {}
+    # Se o usuario editou a minuta, prioriza a versao editada
+    minuta = contestacao.get("minuta_json_editada") or n8n_resp.get("minuta") or {}
+    if not minuta:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Minuta vazia — nada para renderizar.",
+        )
+
+    # Fallback de dados_extraidos a partir das colunas raiz, caso o JSON
+    # esteja parcial (preserva ID do processo / partes pelo menos).
+    dados_extraidos.setdefault(
+        "numero_processo", contestacao["numero_processo"]
+    )
+    dados_extraidos.setdefault("autor", contestacao["autor"])
+    dados_extraidos.setdefault("reu", contestacao["reu"])
+    dados_extraidos.setdefault("tipo_acao", contestacao["tipo_acao"])
+
+    docx_bytes = _montar_docx(
+        modelo_b64=contestacao.get("modelo_base_b64") or None,
+        dados_extraidos=dados_extraidos,
+        minuta=minuta,
+        usuario_id=usuario_id,
+        contexto=f"download contestacao_id={contestacao_id}",
+    )
+    return _resposta_docx(docx_bytes, dados_extraidos)
 
 
 def _montar_payload_revisao(

@@ -1142,6 +1142,113 @@ export default function App() {
     }
   };
 
+  /**
+   * Baixa a peca de uma contestacao ja salva (regenera via /baixar).
+   * - formato='docx': dispara download do .docx (com template/timbre se salvo)
+   * - formato='pdf':  abre nova aba com versao imprimivel + window.print()
+   *                   o usuario salva como PDF pelo dialogo do navegador
+   */
+  const handleBaixarContestacao = async (contestacaoId, formato = "docx") => {
+    try {
+      const accessToken = await getSupabaseAccessToken();
+      const url = new URL(
+        `/api/contestacoes/${contestacaoId}/baixar`,
+        PETICAO_API_URL,
+      ).toString();
+      const resp = await fetch(url, {
+        method: "GET",
+        credentials: "include",
+        headers: {
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+      });
+      if (!resp.ok) {
+        const msg = await getApiErrorMessage(resp, `Falha HTTP ${resp.status}.`);
+        setFeedback({
+          variant: "danger",
+          text: `Nao foi possivel baixar a peca: ${msg}`,
+        });
+        return;
+      }
+      const data = await resp.json();
+      const b64 = data?.arquivo_editado_base64 || "";
+      const nome = data?.arquivo_editado_nome || `contestacao_${contestacaoId}.docx`;
+      if (!b64) {
+        setFeedback({ variant: "warning", text: "Resposta sem arquivo." });
+        return;
+      }
+
+      if (formato === "pdf") {
+        // Abre o DOCX numa nova aba usando docx-preview no client e
+        // dispara window.print() pro usuario salvar como PDF.
+        abrirParaImpressaoPdf(b64, nome);
+        return;
+      }
+      autoDownloadDocx(b64, nome);
+    } catch (err) {
+      console.error("[handleBaixarContestacao] falhou:", err);
+      setFeedback({
+        variant: "danger",
+        text: `Erro ao baixar a peca: ${err.message || err}`,
+      });
+    }
+  };
+
+  /**
+   * Abre uma nova aba com o DOCX renderizado em HTML (via docx-preview)
+   * e dispara window.print() — o usuario salva como PDF pelo dialogo do browser.
+   * Fallback: se popup foi bloqueado, baixa direto como .docx.
+   */
+  const abrirParaImpressaoPdf = (docxB64, docxNome) => {
+    try {
+      const blob = base64ToBlob(
+        docxB64,
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      );
+      const blobUrl = URL.createObjectURL(blob);
+      const printableHtml = `<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <title>${docxNome.replace(/\.docx$/i, "")} — PDF</title>
+    <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"><\/script>
+    <script src="https://unpkg.com/docx-preview@0.3.5/dist/docx-preview.js"><\/script>
+    <style>
+      body { font-family: 'Times New Roman', Times, serif; margin: 0; padding: 24px; }
+      .actions { position: fixed; top: 12px; right: 12px; z-index: 100; }
+      .actions button { padding: 10px 16px; font-size: 14px; cursor: pointer; }
+      @media print { .actions { display: none; } body { padding: 0; } }
+    </style>
+  </head>
+  <body>
+    <div class="actions">
+      <button onclick="window.print()">Imprimir / Salvar como PDF</button>
+    </div>
+    <div id="docx-container"></div>
+    <script>
+      fetch("${blobUrl}").then(r => r.blob()).then(b => {
+        return docx.renderAsync(b, document.getElementById("docx-container"));
+      }).then(() => { setTimeout(() => window.print(), 800); })
+      .catch(err => { document.body.innerText = "Erro ao renderizar: " + err; });
+    <\/script>
+  </body>
+</html>`;
+      const htmlBlob = new Blob([printableHtml], { type: "text/html;charset=utf-8" });
+      const htmlUrl = URL.createObjectURL(htmlBlob);
+      const w = window.open(htmlUrl, "_blank");
+      if (!w) {
+        setFeedback({
+          variant: "warning",
+          text: "Popup bloqueado. Salvamos como DOCX — voce pode abrir no Word e salvar como PDF (Arquivo -> Exportar).",
+        });
+        autoDownloadDocx(docxB64, docxNome);
+      }
+    } catch (err) {
+      console.error("[abrirParaImpressaoPdf] falhou:", err);
+      autoDownloadDocx(docxB64, docxNome);
+    }
+  };
+
   const handleSubmitPeticao = async () => {
     if (!authUser) {
       setFeedback({
@@ -1181,6 +1288,25 @@ export default function App() {
         return;
       }
 
+      // Pre-ping no backend: confirma que /health responde em ate 3s antes
+      // de comecar a serializar 3MB de base64. Evita travar o botao em
+      // "Processando..." quando o backend esta off ou o browser bloqueia.
+      try {
+        const healthUrl = new URL("/health", PETICAO_API_URL).toString();
+        const pingCtrl = new AbortController();
+        const pingTimer = setTimeout(() => pingCtrl.abort(), 3000);
+        const pingResp = await fetch(healthUrl, { method: "GET", signal: pingCtrl.signal });
+        clearTimeout(pingTimer);
+        if (!pingResp.ok) throw new Error(`backend nao saudavel (HTTP ${pingResp.status})`);
+      } catch (pingErr) {
+        setLoading(false);
+        setFeedback({
+          variant: "danger",
+          text: `Backend nao responde em http://localhost:8000. Verifique se a stack esta no ar (docker compose up -d) antes de gerar. Detalhe: ${pingErr.message || pingErr}`,
+        });
+        return;
+      }
+
       const peticaoBase64 = await readFileAsBase64(peticaoFile);
       const modeloBaseBase64 = modeloBaseFile
         ? await readFileAsBase64(modeloBaseFile)
@@ -1206,15 +1332,46 @@ export default function App() {
         arquivos_anexos: anexosSerializados,
       };
 
-      const response = await fetch(PETICAO_API_URL, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        },
-        body: JSON.stringify(payload),
-      });
+      // Avisa o usuario se o payload eh grande (modelo .docx vira ~2-3MB
+      // em base64); ajuda a calibrar expectativa de tempo de upload.
+      const payloadStr = JSON.stringify(payload);
+      const payloadMB = (payloadStr.length / (1024 * 1024)).toFixed(2);
+      if (payloadStr.length > 5 * 1024 * 1024) {
+        console.warn(`[peticao] payload de ${payloadMB}MB pode demorar pra fazer upload`);
+      }
+
+      // AbortController com timeout de 9 minutos. Fluxo n8n (Claude Sonnet)
+      // costuma levar ~5-6min; backend gasta +10-30s salvando+embedding.
+      // 9min dá margem confortavel sem trancar o usuario pra sempre.
+      const submitCtrl = new AbortController();
+      const HARD_TIMEOUT_MS = 9 * 60 * 1000; // 9min - margem sobre N8N_TIMEOUT_SECONDS=360
+      const submitTimer = setTimeout(() => submitCtrl.abort(), HARD_TIMEOUT_MS);
+
+      let response;
+      try {
+        response = await fetch(PETICAO_API_URL, {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          },
+          body: payloadStr,
+          signal: submitCtrl.signal,
+        });
+      } catch (fetchErr) {
+        clearTimeout(submitTimer);
+        setLoading(false);
+        const abortado = fetchErr.name === "AbortError";
+        setFeedback({
+          variant: "danger",
+          text: abortado
+            ? `Timeout (${Math.round(HARD_TIMEOUT_MS / 60000)}min) — o backend nao respondeu a tempo. Pode ser bloqueio do browser/extensao, ou o n8n demorou demais. Tente novamente ou veja os logs.`
+            : `Falha de rede ao enviar a peticao: ${fetchErr.message}. Verifique se o backend esta no ar e se nao ha extensao bloqueando POST grandes (payload de ${payloadMB}MB).`,
+        });
+        return;
+      }
+      clearTimeout(submitTimer);
 
       if (!response.ok) {
         const errorMessage = await getApiErrorMessage(
@@ -1802,16 +1959,11 @@ export default function App() {
             automationStatus={automationStatus}
             dashboardCards={dashboardCards}
             loading={dashboardLoading}
+            onBaixarPeca={handleBaixarContestacao}
           />
           <section className="pb-5">
             <div className="container">
               <div className="d-flex flex-wrap gap-2">
-                <Button variant="dark" onClick={handleDownloadDoc} disabled={!submitted}>
-                  Baixar DOCX
-                </Button>
-                <Button variant="outline-dark" onClick={handleDownloadPdf} disabled={!submitted}>
-                  Baixar PDF
-                </Button>
                 <Button variant="outline-secondary" onClick={() => handleNavigate("painel")}>
                   Voltar para edicao
                 </Button>
