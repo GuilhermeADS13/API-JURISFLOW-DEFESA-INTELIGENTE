@@ -104,6 +104,8 @@ function parseMinutaSecoes(texto) {
     PRELIMINARES: "preliminares",
     "MERITO": "merito",
     "MÉRITO": "merito",
+    "IMPUGNACAO DOS PEDIDOS": "impugnacao_pedidos",
+    "IMPUGNAÇÃO DOS PEDIDOS": "impugnacao_pedidos",
     FUNDAMENTOS: "fundamentos",
     PEDIDOS: "pedidos",
     OBSERVACOES: "observacoes",
@@ -1270,9 +1272,16 @@ export default function App() {
       }));
 
       // Coloca o texto da minuta no editor ao vivo.
+      const impugPedidos = minuta.impugnacao_pedidos && typeof minuta.impugnacao_pedidos === "object"
+        ? Object.entries(minuta.impugnacao_pedidos)
+            .map(([pedido, resposta]) => `${pedido}\n${resposta}`)
+            .join("\n\n")
+        : null;
       const partesMinuta = [
         minuta.tese_central && `TESE CENTRAL\n${minuta.tese_central}`,
+        minuta.preliminares && `PRELIMINARES\n${minuta.preliminares}`,
         minuta.merito && `MERITO\n${minuta.merito}`,
+        impugPedidos && `IMPUGNACAO DOS PEDIDOS\n${impugPedidos}`,
         minuta.fundamentos && `FUNDAMENTOS\n${minuta.fundamentos}`,
         minuta.pedidos && `PEDIDOS\n${minuta.pedidos}`,
       ].filter(Boolean);
@@ -1371,9 +1380,16 @@ export default function App() {
         fatos: dadosCorrigidos.fatos_resumo || prev.fatos,
       }));
 
+      const impugPedidos = minuta.impugnacao_pedidos && typeof minuta.impugnacao_pedidos === "object"
+        ? Object.entries(minuta.impugnacao_pedidos)
+            .map(([pedido, resposta]) => `${pedido}\n${resposta}`)
+            .join("\n\n")
+        : null;
       const partesMinuta = [
         minuta.tese_central && `TESE CENTRAL\n${minuta.tese_central}`,
+        minuta.preliminares && `PRELIMINARES\n${minuta.preliminares}`,
         minuta.merito && `MERITO\n${minuta.merito}`,
+        impugPedidos && `IMPUGNACAO DOS PEDIDOS\n${impugPedidos}`,
         minuta.fundamentos && `FUNDAMENTOS\n${minuta.fundamentos}`,
         minuta.pedidos && `PEDIDOS\n${minuta.pedidos}`,
       ].filter(Boolean);
