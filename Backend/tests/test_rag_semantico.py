@@ -258,6 +258,7 @@ class TestDatabaseEmbedding:
                 embedding=[0.1] * 384,
                 tipo_acao="Trabalhista",
                 excluir_numero="0001",
+                usuario_id="USR-TESTE",
                 limit=5,
             )
 
@@ -296,6 +297,7 @@ class TestDatabaseEmbedding:
                 embedding=[0.1] * 384,
                 tipo_acao="Trabalhista",
                 excluir_numero="0001",
+                usuario_id="USR-TESTE",
             )
 
         assert len(resultado) == 1

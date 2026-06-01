@@ -307,8 +307,12 @@ def _resposta_docx(docx_bytes: bytes, dados_extraidos: dict) -> dict:
 # ─────────────────────────────── Rotas ───────────────────────────────────────
 
 
+# Cada call custa ~US$0.24 e usa 5 min do task runner do n8n. Para limitar
+# cost amplification e DoS por usuario autenticado, estreitamos a janela
+# minuto e adicionamos teto horario. Pilha: a regra mais restritiva ganha.
 @router.post("/contestar-por-peticao")
-@limiter.limit("10/minute")
+@limiter.limit("30/hour")
+@limiter.limit("5/minute")
 async def contestar_por_peticao(
     request: Request,
     payload: ContestacaoPorPeticao = Body(...),

@@ -24,6 +24,7 @@ from contextvars import ContextVar
 from copy import deepcopy
 from datetime import datetime
 from io import BytesIO
+from types import MappingProxyType
 from typing import Any, Callable
 
 from docx import Document
@@ -57,9 +58,16 @@ _ESTILO_ATIVO: ContextVar[dict[str, Any]] = ContextVar(
 )
 
 
-def _estilo() -> dict[str, Any]:
-    """Retorna o estilo ativo (do modelo base) ou o default."""
-    return _ESTILO_ATIVO.get() or _ESTILO_PADRAO
+def _estilo() -> Any:
+    """Retorna view read-only do estilo ativo (do modelo base) ou do default.
+
+    Usa MappingProxyType pra impedir mutacao acidental que poluiria o
+    _ESTILO_PADRAO module-level entre requests.
+    """
+    valor = _ESTILO_ATIVO.get()
+    if valor is None:
+        valor = _ESTILO_PADRAO
+    return MappingProxyType(valor)
 
 
 def _extrair_estilo_modelo(doc: Any) -> dict[str, Any]:
@@ -83,25 +91,31 @@ def _extrair_estilo_modelo(doc: Any) -> dict[str, Any]:
     for paragrafo in doc.paragraphs:
         if not paragrafo.text.strip():
             continue
-        for run in paragrafo.runs:
-            if getattr(run.font, "name", None):
-                estilo["font_name"] = run.font.name
-                break
-        for run in paragrafo.runs:
-            if getattr(run.font, "size", None):
-                estilo["font_size_pt"] = float(run.font.size.pt)
-                break
-        pf = paragrafo.paragraph_format
-        if pf.line_spacing:
-            try:
-                estilo["line_spacing"] = float(pf.line_spacing)
-            except (TypeError, ValueError):
-                pass
-        if pf.space_after:
-            try:
-                estilo["space_after_pt"] = float(pf.space_after.pt)
-            except (AttributeError, TypeError):
-                pass
+        # Cada paragrafo eh envelopado em try/except: template degenerado
+        # com runs/paragraph_format invalidos nao deve quebrar a geracao.
+        try:
+            for run in paragrafo.runs:
+                if getattr(run.font, "name", None):
+                    estilo["font_name"] = run.font.name
+                    break
+            for run in paragrafo.runs:
+                if getattr(run.font, "size", None):
+                    estilo["font_size_pt"] = float(run.font.size.pt)
+                    break
+            pf = paragrafo.paragraph_format
+            ls = pf.line_spacing
+            # ls pode ser float (multiplicador) ou WD_LINE_SPACING enum (int).
+            # So aceita valores numericos positivos plausiveis (0.5–3.0).
+            if isinstance(ls, (int, float)) and 0.5 <= float(ls) <= 3.0:
+                estilo["line_spacing"] = float(ls)
+            if pf.space_after:
+                try:
+                    estilo["space_after_pt"] = float(pf.space_after.pt)
+                except (AttributeError, TypeError):
+                    pass
+        except Exception as err:  # noqa: BLE001 — paragrafo corrompido, ignora
+            logger.debug("Paragrafo do template ignorado: %s", err)
+            continue
         # Maior tab stop = TAB grande do "01.- texto" do escritorio
         maior_tab = 0.0
         for tab in pf.tab_stops:
@@ -837,37 +851,28 @@ def _add_text_para_com_indent(doc: Any, texto: str) -> None:
 
 
 def _tipograficar_aspas(texto: str) -> str:
-    """Substitui aspas planas por curvas tipograficas (estilo modelo G. Trindade).
+    """Substitui aspas duplas planas por curvas tipograficas (estilo G. Trindade).
 
-    Regras simples: " no inicio de palavra/apos espaco vira "; " seguinte vira ".
-    Idem para apostrofes ' '. Mantem aspas dentro de codigo/escape intactas via
-    deteccao de contexto. Idempotente: se ja for tipografica, nao mexe.
+    So toca aspas DUPLAS (\" → “/”). Apostrofes (') sao deixadas intactas —
+    em PT-BR juridico sao raras e o pareamento heuristico falharia em
+    contracoes isoladas (ex: 'd'agua', 'p'ra').
+
+    Heuristica baseada em PAREAMENTO: a 1a \" abre (“), a 2a fecha (”),
+    alternando. Reseta o estado a cada quebra de linha para que aspa nao
+    fechada num paragrafo nao contamine o seguinte. Idempotente — aspas
+    tipograficas pre-existentes nao sao tocadas.
     """
-    if not texto or ('"' not in texto and "'" not in texto):
+    if not texto or '"' not in texto:
         return texto
     out = []
     in_double = False
-    in_single = False
-    for i, ch in enumerate(texto):
-        if ch == '"':
-            prev = texto[i - 1] if i > 0 else " "
-            if in_double or prev.isalnum() or prev in ".,;:!?)]}":
-                out.append("”")  # "
-                in_double = False
-            else:
-                out.append("“")  # "
-                in_double = True
-        elif ch == "'":
-            prev = texto[i - 1] if i > 0 else " "
-            nxt = texto[i + 1] if i + 1 < len(texto) else " "
-            if prev.isalpha() and nxt.isalpha():
-                out.append("'")  # apostrofe interna (raro PT-BR)
-            elif in_single or prev.isalnum() or prev in ".,;:!?)]}":
-                out.append("’")  # '
-                in_single = False
-            else:
-                out.append("‘")  # '
-                in_single = True
+    for ch in texto:
+        if ch == "\n":
+            in_double = False
+            out.append(ch)
+        elif ch == '"':
+            out.append("”" if in_double else "“")
+            in_double = not in_double
         else:
             out.append(ch)
     return "".join(out)

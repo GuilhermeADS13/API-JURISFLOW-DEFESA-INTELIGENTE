@@ -50,7 +50,10 @@ services:
       - N8N_WEBHOOK_PETICAO=http://n8n:5678/webhook/contestar-por-peticao
       # 300s cobre o fluxo peticao (Extrator Sonnet + Gerador 16k tokens +
       # Self-Correction). Gerador de peca completa pode levar ~150s sozinho.
-      - N8N_TIMEOUT_SECONDS=${N8N_TIMEOUT_SECONDS:-300}
+      # Alinhado com N8N_RUNNERS_TASK_TIMEOUT=600 (n8n runner). Se subir aqui,
+      # subir la tambem — caso contrario o backend estoura timeout antes do
+      # n8n responder e o usuario ve erro com pipeline ainda rodando.
+      - N8N_TIMEOUT_SECONDS=${N8N_TIMEOUT_SECONDS:-600}
 
       # Sessao
       - SESSION_COOKIE_SAMESITE=${SESSION_COOKIE_SAMESITE:-lax}

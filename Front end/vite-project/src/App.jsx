@@ -152,15 +152,20 @@ function getDashboardRefreshIntervalMs() {
 
 // Etapas do pipeline IA com tempo esperado em segundos.
 // Os tempos saem de medicoes reais dos logs do n8n (Sonnet 4.6).
-// O frontend usa essa tabela para mostrar onde o pipeline esta no momento.
-const ETAPAS_GERACAO = [
-  { id: "preprocesso",      titulo: "Preparando upload",                    inicio: 0,   fim: 5    },
-  { id: "extrator",         titulo: "Extraindo dados da peticao (Claude)",  inicio: 5,   fim: 55   },
-  { id: "rag",              titulo: "Buscando defesas similares no RAG",    inicio: 55,  fim: 65   },
-  { id: "gerador",          titulo: "Gerando contestacao (Claude Sonnet)",  inicio: 65,  fim: 295  },
-  { id: "verificacao",      titulo: "Verificando citacoes (Claude Haiku)",  inicio: 295, fim: 310  },
-  { id: "docx",             titulo: "Montando arquivo .docx",               inicio: 310, fim: 320  },
-];
+// Object.freeze impede mutacao acidental do array module-level.
+const ETAPAS_GERACAO = Object.freeze([
+  Object.freeze({ id: "preprocesso",  titulo: "Preparando upload",                    inicio: 0,   fim: 5    }),
+  Object.freeze({ id: "extrator",     titulo: "Extraindo dados da peticao (Claude)",  inicio: 5,   fim: 55   }),
+  Object.freeze({ id: "rag",          titulo: "Buscando defesas similares no RAG",    inicio: 55,  fim: 65   }),
+  Object.freeze({ id: "gerador",      titulo: "Gerando contestacao (Claude Sonnet)",  inicio: 65,  fim: 295  }),
+  Object.freeze({ id: "verificacao",  titulo: "Verificando citacoes (Claude Haiku)",  inicio: 295, fim: 310  }),
+  Object.freeze({ id: "docx",         titulo: "Montando arquivo .docx",               inicio: 310, fim: 320  }),
+]);
+
+// Margem visual: passou de ETAPAS_GERACAO total mas backend ainda processa
+// (N8N_TIMEOUT_SECONDS=600). Cap a barra em 95% e mostra mensagem de espera.
+const TOTAL_ESTIMADO_S = ETAPAS_GERACAO[ETAPAS_GERACAO.length - 1].fim;
+const TIMEOUT_HARD_S = 600;
 
 function etapaAtualParaSegundos(segundos) {
   for (let i = 0; i < ETAPAS_GERACAO.length; i++) {
@@ -172,8 +177,12 @@ function etapaAtualParaSegundos(segundos) {
 function ProgressoGeracao({ ativo, segundos }) {
   if (!ativo) return null;
   const etapaIdx = etapaAtualParaSegundos(segundos);
-  const totalEstimado = ETAPAS_GERACAO[ETAPAS_GERACAO.length - 1].fim;
-  const pct = Math.min(100, Math.round((segundos / totalEstimado) * 100));
+  const passouEstimado = segundos > TOTAL_ESTIMADO_S;
+  // Apos o tempo estimado, cap em 95% — usuario sabe que ainda esta rodando
+  // mesmo sem barra batendo 100% e ficando parada (UX confunde com travado).
+  const pct = passouEstimado
+    ? 95
+    : Math.min(95, Math.round((segundos / TOTAL_ESTIMADO_S) * 100));
   const mm = Math.floor(segundos / 60);
   const ss = String(segundos % 60).padStart(2, "0");
   return (
@@ -212,7 +221,7 @@ function ProgressoGeracao({ ativo, segundos }) {
                 {concluida ? "✓" : corrente ? "•" : "○"}
               </span>
               <span>{etapa.titulo}</span>
-              {corrente && (
+              {corrente && !passouEstimado && (
                 <span style={{ marginLeft: "auto", fontFamily: "monospace", fontSize: 12 }}>
                   ~{Math.max(0, etapa.fim - segundos)}s
                 </span>
@@ -221,8 +230,10 @@ function ProgressoGeracao({ ativo, segundos }) {
           );
         })}
       </ol>
-      <div style={{ marginTop: 12, fontSize: 12, color: "#6c757d" }}>
-        Tempo medio total: ~5min. Aguarde — nao feche a aba.
+      <div style={{ marginTop: 12, fontSize: 12, color: passouEstimado ? "#fd7e14" : "#6c757d" }}>
+        {passouEstimado
+          ? `Finalizando... pode levar ate ${Math.floor(TIMEOUT_HARD_S / 60)}min em casos longos. Nao feche a aba.`
+          : "Tempo medio total: ~5min. Aguarde — nao feche a aba."}
       </div>
     </div>
   );
@@ -242,7 +253,8 @@ export default function App() {
   // Progresso visivel ao usuario enquanto o pipeline IA roda (~5 min).
   // Etapas com tempos esperados baseados no timing real do workflow n8n:
   //   Extrator: ~45-50s | RAG: ~2s | Gerador: ~4-5min | Self-Correction: ~10s
-  const [progresso, setProgresso] = useState({ ativo: false, etapaIdx: 0, segundos: 0 });
+  // Single source of truth = segundos; etapa eh derivada via etapaAtualParaSegundos.
+  const [progresso, setProgresso] = useState({ ativo: false, segundos: 0 });
   const [lastCaseId, setLastCaseId] = useState(null);
   // `authUser`: perfil autenticado em memoria + storage local seguro (sem token).
   const [authUser, setAuthUser] = useState(readValidSession);
@@ -418,8 +430,7 @@ export default function App() {
     const interval = setInterval(() => {
       setProgresso((p) => {
         if (!p.ativo) return p;
-        const proxSeg = p.segundos + 1;
-        return { ...p, segundos: proxSeg, etapaIdx: etapaAtualParaSegundos(proxSeg) };
+        return { ...p, segundos: p.segundos + 1 };
       });
     }, 1000);
     return () => clearInterval(interval);
@@ -1375,7 +1386,7 @@ export default function App() {
     setFeedback(null);
     setLastCaseId(null);
     setAutomationStatus({ webhook: 100, ia: 32, validacao: 18 });
-    setProgresso({ ativo: true, etapaIdx: 0, segundos: 0 });
+    setProgresso({ ativo: true, segundos: 0 });
 
     try {
       const accessToken = await getSupabaseAccessToken();
@@ -1728,7 +1739,7 @@ export default function App() {
     setFeedback(null);
     setLastCaseId(null);
     setAutomationStatus({ webhook: 100, ia: 32, validacao: 18 });
-    setProgresso({ ativo: true, etapaIdx: 0, segundos: 0 });
+    setProgresso({ ativo: true, segundos: 0 });
 
     try {
       const accessToken = await getSupabaseAccessToken();

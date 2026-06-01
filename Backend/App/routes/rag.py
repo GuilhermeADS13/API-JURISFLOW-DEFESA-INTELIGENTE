@@ -62,6 +62,7 @@ def _executar_busca_semantica(
             embedding=embedding,
             tipo_acao=tipo_acao,
             excluir_numero=numero_processo,
+            usuario_id=usuario_id,
             limit=10,
         )
     except Exception as err:

@@ -1167,22 +1167,41 @@ def buscar_defesas_semanticas(
     embedding: list[float],
     tipo_acao: str,
     excluir_numero: str,
+    *,
+    usuario_id: str | None,
     limit: int = 10,
 ) -> list[dict[str, Any]]:
     """Busca contestacoes anteriores similares via distancia coseno (pgvector <=>).
 
     Retorna lista de dicts com metadados e score de similaridade [0, 1].
     So considera contestacoes com status='ok' e fatos_embedding preenchido.
+
+    Multi-tenant: filtra por usuario_id para nao vazar defesas entre escritorios.
+    Exemplares marcados como 'humano' em engine_ia.provider sao COMPARTILHADOS
+    (visiveis a todos os usuarios) — sao a base de conhecimento curada do
+    sistema. Se usuario_id for None, so retorna exemplares humanos.
     """
     _ensure_db_initialized()
+
+    # Guard: tipo_acao vazio ou whitespace nao deve casar com tudo via ILIKE '%'.
+    if not tipo_acao or not tipo_acao.strip():
+        return []
+
     vec_str = _format_pgvector(embedding)
     safe_limit = max(1, min(int(limit), 20))
 
-    # Casa "Trabalhista" com "Trabalhista - Horas Extras e Verbas Rescisorias"
-    # e similares: usa ILIKE com prefixo derivado da primeira palavra da raiz
-    # do tipo_acao (antes de hifen/traco), ou prefix completo se nao houver.
+    # Casa "Trabalhista" com "Trabalhista - Horas Extras e Verbas Rescisorias":
+    # extrai a raiz antes do hifen/traco e escapa wildcards LIKE para evitar
+    # injecao de padrao quando tipo_acao vem de fonte nao confiavel (IA).
     raiz_tipo = tipo_acao.split("-", 1)[0].strip()
-    pattern_tipo = f"{raiz_tipo}%" if raiz_tipo else f"{tipo_acao}%"
+    raiz_segura = (
+        raiz_tipo.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    )
+    if not raiz_segura:
+        # tipo_acao malformado (so contem hifen, e.g. '-' ou '- foo'). Sem raiz
+        # confiavel, abandona a busca para nao retornar resultados aleatorios.
+        return []
+    pattern_tipo = f"{raiz_segura}%"
 
     with _get_connection() as connection:
         with connection.cursor() as cursor:
@@ -1199,8 +1218,12 @@ def buscar_defesas_semanticas(
                     1 - (fatos_embedding <=> %s::vector) AS similarity
                 FROM contestacoes
                 WHERE status = 'ok'
-                  AND tipo_acao ILIKE %s
+                  AND tipo_acao ILIKE %s ESCAPE '\\'
                   AND fatos_embedding IS NOT NULL
+                  AND (
+                    usuario_id = %s
+                    OR (n8n_resposta::jsonb->'engine_ia'->>'provider' = 'humano')
+                  )
                   AND (
                     numero_processo != %s
                     OR (n8n_resposta::jsonb->'engine_ia'->>'provider' = 'humano')
@@ -1208,7 +1231,14 @@ def buscar_defesas_semanticas(
                 ORDER BY fatos_embedding <=> %s::vector ASC
                 LIMIT %s
                 """,
-                (vec_str, pattern_tipo, excluir_numero, vec_str, safe_limit),
+                (
+                    vec_str,
+                    pattern_tipo,
+                    usuario_id or "__sem_usuario__",
+                    excluir_numero,
+                    vec_str,
+                    safe_limit,
+                ),
             )
             rows = cursor.fetchall()
 
