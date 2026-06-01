@@ -18,13 +18,14 @@ import base64
 import binascii
 import logging
 import re
+from copy import deepcopy
 from datetime import datetime
 from io import BytesIO
 from typing import Any, Callable
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Pt
+from docx.shared import Cm, Pt
 from docxtpl import DocxTemplate, RichText
 
 logger = logging.getLogger(__name__)
@@ -189,9 +190,6 @@ def _build_docx_from_template(
     modelo_bytes: bytes, dados: dict[str, Any], minuta: dict[str, Any]
 ) -> bytes:
     """Implementacao do montar_docx_com_modelo (separada pro _safe_step)."""
-    from copy import deepcopy
-    from docx.oxml.ns import qn
-
     doc = Document(BytesIO(modelo_bytes))
 
     # 1) Limpa body preservando sectPr (config de pagina/secoes)
@@ -321,28 +319,33 @@ def _build_docx_from_template(
 
 # ── Helpers de baixo nivel (criam paragraphs com a tipografia do escritorio) ─
 
-def _font_default(run) -> None:
+def _font_default(run: Any) -> None:
     """Aplica Arial 11 a um run — fonte padrao do escritorio G. Trindade."""
     run.font.name = "Arial"
     run.font.size = Pt(11)
 
 
-def _aplicar_espacamento_padrao(p) -> None:
+def _aplicar_espacamento_padrao(p: Any) -> None:
     """Espaco antes/depois (mimetiza o espacamento generoso do modelo VR)."""
     pf = p.paragraph_format
     pf.space_after = Pt(6)
     pf.space_before = Pt(0)
 
 
-def _aplicar_tab_stop_grande(p) -> None:
+def _aplicar_tab_stop_grande(p: Any) -> None:
     """Tab stop em 1.5cm — mimica o TAB largo entre '01.-' e o texto no modelo VR."""
-    from docx.shared import Cm
     pf = p.paragraph_format
     pf.tab_stops.add_tab_stop(Cm(1.5))
 
 
-def _run(p, texto: str, bold: bool = False, underline: bool = False,
-         italic: bool = False) -> None:
+def _run(
+    p: Any,
+    texto: str,
+    *,
+    bold: bool = False,
+    underline: bool = False,
+    italic: bool = False,
+) -> None:
     """Adiciona um run a `p` com formatacao Arial 11 + negrito/sublinhado/italico."""
     r = p.add_run(texto)
     r.bold = bold
@@ -351,8 +354,13 @@ def _run(p, texto: str, bold: bool = False, underline: bool = False,
     _font_default(r)
 
 
-def _add_para_simples(doc, texto: str, negrito: bool = False,
-                       alinhamento: str = "justify") -> None:
+def _add_para_simples(
+    doc: Document,
+    texto: str,
+    *,
+    negrito: bool = False,
+    alinhamento: str = "justify",
+) -> None:
     """Adiciona um paragrafo simples (sem Markdown) com alinhamento."""
     p = doc.add_paragraph()
     if alinhamento == "center":
@@ -362,7 +370,7 @@ def _add_para_simples(doc, texto: str, negrito: bool = False,
     _run(p, texto, bold=negrito)
 
 
-def _add_heading(doc, texto: str, nivel: int) -> None:
+def _add_heading(doc: Document, texto: str, *, nivel: int) -> None:
     """Adiciona cabecalho com negrito + sublinhado (estilo G. Trindade)."""
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.LEFT
@@ -372,7 +380,9 @@ def _add_heading(doc, texto: str, nivel: int) -> None:
     _run(p, texto_limpo, bold=True, underline=True)
 
 
-def _add_text_para(doc, texto: str, contador: dict[str, int], numerar: bool) -> None:
+def _add_text_para(
+    doc: Document, texto: str, contador: dict[str, int], *, numerar: bool
+) -> None:
     """Adiciona paragrafo de texto justificado com numeracao opcional, bold e underline inline.
 
     Suporta:
@@ -390,8 +400,14 @@ def _add_text_para(doc, texto: str, contador: dict[str, int], numerar: bool) -> 
     _render_inline_markdown(p, texto_join)
 
 
-def _add_secao(doc, texto: Any, contador: dict[str, int], numerar: bool,
-                cabecalho_padrao: str | None) -> None:
+def _add_secao(
+    doc: Document,
+    texto: Any,
+    contador: dict[str, int],
+    *,
+    numerar: bool,
+    cabecalho_padrao: str | None,
+) -> None:
     """Renderiza uma secao do Claude (texto Markdown) como sequencia de paragrafos.
 
     Se o texto NAO comeca com '##' ou '#', adiciona o cabecalho_padrao antes.
@@ -433,26 +449,25 @@ def _add_secao(doc, texto: Any, contador: dict[str, int], numerar: bool,
             doc.add_paragraph("")
             resto = bloco.split("\n", 1)[1].strip() if "\n" in bloco else ""
             if resto:
-                _add_text_para(doc, resto, contador, numerar)
+                _add_text_para(doc, resto, contador, numerar=numerar)
                 doc.add_paragraph("")
         elif m1:
             _add_heading(doc, m1.group(1), nivel=1)
             doc.add_paragraph("")
             resto = bloco.split("\n", 1)[1].strip() if "\n" in bloco else ""
             if resto:
-                _add_text_para(doc, resto, contador, numerar)
+                _add_text_para(doc, resto, contador, numerar=numerar)
                 doc.add_paragraph("")
         else:
-            _add_text_para(doc, bloco, contador, numerar)
+            _add_text_para(doc, bloco, contador, numerar=numerar)
             doc.add_paragraph("")
 
 
-def _add_quote_para(doc, bloco: str) -> None:
+def _add_quote_para(doc: Document, bloco: str) -> None:
     """Renderiza um bloco '> texto' como paragrafo recuado em italico.
 
     Mimetiza o estilo do modelo G. Trindade pra citacoes de lei/sumula.
     """
-    from docx.shared import Cm
     linhas = []
     for l in bloco.split("\n"):
         m = _RE_QUOTE_LINE.match(l)
@@ -479,8 +494,13 @@ def _add_quote_para(doc, bloco: str) -> None:
         _run(p, texto[pos:], italic=True)
 
 
-def _add_secao_dict(doc, impugnacoes: Any, contador: dict[str, int],
-                     cabecalho: str) -> None:
+def _add_secao_dict(
+    doc: Document,
+    impugnacoes: Any,
+    contador: dict[str, int],
+    *,
+    cabecalho: str,
+) -> None:
     """Renderiza o dict de impugnacao_pedidos com cabecalho + items numerados."""
     _add_heading(doc, cabecalho, nivel=1)
     doc.add_paragraph("")
@@ -614,7 +634,7 @@ def _adv_padrao(dados: dict[str, Any], campo: str) -> str:
     return ""
 
 
-def _add_text_para_com_indent(doc, texto: str) -> None:
+def _add_text_para_com_indent(doc: Document, texto: str) -> None:
     """Paragrafo de identificacao processual: indentado com TAB e bold inline.
 
     Texto vem do Claude no formato 'TEXTO **negrito** e __sublinhado__'.
@@ -627,7 +647,7 @@ def _add_text_para_com_indent(doc, texto: str) -> None:
     _render_inline_markdown(p, texto_join)
 
 
-def _render_inline_markdown(p, texto: str) -> None:
+def _render_inline_markdown(p: Any, texto: str) -> None:
     """Renderiza **bold** e __underline__ inline num paragrafo existente.
 
     Processa o texto sequencialmente: cada match de **...** vira run em

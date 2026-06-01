@@ -263,6 +263,7 @@ def _persistir_contestacao(usuario_id: str, contexto: str, **kwargs) -> int:
 
 def _montar_docx(
     modelo_b64: str | None,
+    *,
     dados_extraidos: dict,
     minuta: dict,
     usuario_id: str,
@@ -428,7 +429,10 @@ def _fluxo_ok(
 ) -> dict:
     """Monta DOCX, persiste e devolve resposta de minuta pronta."""
     docx_bytes = _montar_docx(
-        payload.modelo_base_base64, dados_extraidos, minuta, usuario_id
+        payload.modelo_base_base64,
+        dados_extraidos=dados_extraidos,
+        minuta=minuta,
+        usuario_id=usuario_id,
     )
 
     contestacao_id = _persistir_contestacao(
@@ -491,9 +495,9 @@ async def confirmar_extracao(
 
     docx_bytes = _montar_docx(
         payload.modelo_base_base64,
-        dados_corrigidos,
-        minuta_nova,
-        usuario_id,
+        dados_extraidos=dados_corrigidos,
+        minuta=minuta_nova,
+        usuario_id=usuario_id,
         contexto="pos-revisao",
     )
 
@@ -567,7 +571,7 @@ async def baixar_contestacao(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Contestacao nao encontrada ou nao pertence ao usuario.",
         )
-    if contestacao["status"] not in ("ok",):
+    if contestacao["status"] != "ok":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
@@ -588,12 +592,8 @@ async def baixar_contestacao(
 
     # Fallback de dados_extraidos a partir das colunas raiz, caso o JSON
     # esteja parcial (preserva ID do processo / partes pelo menos).
-    dados_extraidos.setdefault(
-        "numero_processo", contestacao["numero_processo"]
-    )
-    dados_extraidos.setdefault("autor", contestacao["autor"])
-    dados_extraidos.setdefault("reu", contestacao["reu"])
-    dados_extraidos.setdefault("tipo_acao", contestacao["tipo_acao"])
+    for campo in ("numero_processo", "autor", "reu", "tipo_acao"):
+        dados_extraidos.setdefault(campo, contestacao[campo])
 
     docx_bytes = _montar_docx(
         modelo_b64=contestacao.get("modelo_base_b64") or None,
