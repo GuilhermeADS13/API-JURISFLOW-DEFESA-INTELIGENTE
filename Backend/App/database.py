@@ -1178,6 +1178,12 @@ def buscar_defesas_semanticas(
     vec_str = _format_pgvector(embedding)
     safe_limit = max(1, min(int(limit), 20))
 
+    # Casa "Trabalhista" com "Trabalhista - Horas Extras e Verbas Rescisorias"
+    # e similares: usa ILIKE com prefixo derivado da primeira palavra da raiz
+    # do tipo_acao (antes de hifen/traco), ou prefix completo se nao houver.
+    raiz_tipo = tipo_acao.split("-", 1)[0].strip()
+    pattern_tipo = f"{raiz_tipo}%" if raiz_tipo else f"{tipo_acao}%"
+
     with _get_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
@@ -1193,13 +1199,16 @@ def buscar_defesas_semanticas(
                     1 - (fatos_embedding <=> %s::vector) AS similarity
                 FROM contestacoes
                 WHERE status = 'ok'
-                  AND tipo_acao = %s
-                  AND numero_processo != %s
+                  AND tipo_acao ILIKE %s
                   AND fatos_embedding IS NOT NULL
+                  AND (
+                    numero_processo != %s
+                    OR (n8n_resposta::jsonb->'engine_ia'->>'provider' = 'humano')
+                  )
                 ORDER BY fatos_embedding <=> %s::vector ASC
                 LIMIT %s
                 """,
-                (vec_str, tipo_acao, excluir_numero, vec_str, safe_limit),
+                (vec_str, pattern_tipo, excluir_numero, vec_str, safe_limit),
             )
             rows = cursor.fetchall()
 

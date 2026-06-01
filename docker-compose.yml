@@ -106,6 +106,10 @@ services:
     environment:
       # ── Task Runner (obrigatorio no n8n >= 1.x) ──────────────────────────
       - N8N_RUNNERS_ENABLED=true
+      # Timeout do task runner em segundos. Default n8n = 300s (5min).
+      # Sonnet 4.6 gerando minuta completa com 7 preliminares + RAG enfatizado
+      # passa de 5min; subimos para 10min para margem confortavel.
+      - N8N_RUNNERS_TASK_TIMEOUT=${N8N_RUNNERS_TASK_TIMEOUT:-600}
       # PR9 P2.1 — Bloquear acesso direto a variaveis de ambiente nos Code nodes.
       # Em producao: true (seguro). Em dev: false (conveniente para debug).
       - N8N_BLOCK_ENV_ACCESS_IN_NODE=${N8N_BLOCK_ENV_ACCESS_IN_NODE:-true}

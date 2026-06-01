@@ -150,6 +150,84 @@ function getDashboardRefreshIntervalMs() {
   return Math.max(30000, rawInterval);
 }
 
+// Etapas do pipeline IA com tempo esperado em segundos.
+// Os tempos saem de medicoes reais dos logs do n8n (Sonnet 4.6).
+// O frontend usa essa tabela para mostrar onde o pipeline esta no momento.
+const ETAPAS_GERACAO = [
+  { id: "preprocesso",      titulo: "Preparando upload",                    inicio: 0,   fim: 5    },
+  { id: "extrator",         titulo: "Extraindo dados da peticao (Claude)",  inicio: 5,   fim: 55   },
+  { id: "rag",              titulo: "Buscando defesas similares no RAG",    inicio: 55,  fim: 65   },
+  { id: "gerador",          titulo: "Gerando contestacao (Claude Sonnet)",  inicio: 65,  fim: 295  },
+  { id: "verificacao",      titulo: "Verificando citacoes (Claude Haiku)",  inicio: 295, fim: 310  },
+  { id: "docx",             titulo: "Montando arquivo .docx",               inicio: 310, fim: 320  },
+];
+
+function etapaAtualParaSegundos(segundos) {
+  for (let i = 0; i < ETAPAS_GERACAO.length; i++) {
+    if (segundos < ETAPAS_GERACAO[i].fim) return i;
+  }
+  return ETAPAS_GERACAO.length - 1;
+}
+
+function ProgressoGeracao({ ativo, segundos }) {
+  if (!ativo) return null;
+  const etapaIdx = etapaAtualParaSegundos(segundos);
+  const totalEstimado = ETAPAS_GERACAO[ETAPAS_GERACAO.length - 1].fim;
+  const pct = Math.min(100, Math.round((segundos / totalEstimado) * 100));
+  const mm = Math.floor(segundos / 60);
+  const ss = String(segundos % 60).padStart(2, "0");
+  return (
+    <div style={{ background: "#f8f9fa", border: "1px solid #dee2e6", borderRadius: 8, padding: 16, marginTop: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+        <strong>Gerando contestacao...</strong>
+        <span style={{ fontFamily: "monospace", color: "#495057" }}>{mm}:{ss}</span>
+      </div>
+      <div style={{ background: "#e9ecef", borderRadius: 4, height: 8, overflow: "hidden", marginBottom: 12 }}>
+        <div
+          style={{
+            background: "linear-gradient(90deg, #0d6efd, #6610f2)",
+            height: "100%",
+            width: `${pct}%`,
+            transition: "width 0.5s ease",
+          }}
+        />
+      </div>
+      <ol style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 14 }}>
+        {ETAPAS_GERACAO.map((etapa, idx) => {
+          const concluida = idx < etapaIdx;
+          const corrente = idx === etapaIdx;
+          const futura = idx > etapaIdx;
+          return (
+            <li
+              key={etapa.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                padding: "4px 0",
+                color: futura ? "#adb5bd" : corrente ? "#0d6efd" : "#198754",
+                fontWeight: corrente ? 600 : 400,
+              }}
+            >
+              <span style={{ marginRight: 8, minWidth: 20 }}>
+                {concluida ? "✓" : corrente ? "•" : "○"}
+              </span>
+              <span>{etapa.titulo}</span>
+              {corrente && (
+                <span style={{ marginLeft: "auto", fontFamily: "monospace", fontSize: 12 }}>
+                  ~{Math.max(0, etapa.fim - segundos)}s
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+      <div style={{ marginTop: 12, fontSize: 12, color: "#6c757d" }}>
+        Tempo medio total: ~5min. Aguarde — nao feche a aba.
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   // `draftSeed`: snapshot inicial do rascunho recuperado do navegador.
   const [draftSeed] = useState(readDraftFromStorage);
@@ -161,6 +239,10 @@ export default function App() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  // Progresso visivel ao usuario enquanto o pipeline IA roda (~5 min).
+  // Etapas com tempos esperados baseados no timing real do workflow n8n:
+  //   Extrator: ~45-50s | RAG: ~2s | Gerador: ~4-5min | Self-Correction: ~10s
+  const [progresso, setProgresso] = useState({ ativo: false, etapaIdx: 0, segundos: 0 });
   const [lastCaseId, setLastCaseId] = useState(null);
   // `authUser`: perfil autenticado em memoria + storage local seguro (sem token).
   const [authUser, setAuthUser] = useState(readValidSession);
@@ -329,6 +411,26 @@ export default function App() {
       email: prev.email || authUser?.email || "",
     }));
   }, [authUser]);
+
+  // Timer da barra de progresso: avanca 1s a cada segundo enquanto ativo.
+  useEffect(() => {
+    if (!progresso.ativo) return undefined;
+    const interval = setInterval(() => {
+      setProgresso((p) => {
+        if (!p.ativo) return p;
+        const proxSeg = p.segundos + 1;
+        return { ...p, segundos: proxSeg, etapaIdx: etapaAtualParaSegundos(proxSeg) };
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [progresso.ativo]);
+
+  // Quando loading sai de true para false, desliga a barra de progresso.
+  useEffect(() => {
+    if (!loading && progresso.ativo) {
+      setProgresso((p) => ({ ...p, ativo: false }));
+    }
+  }, [loading, progresso.ativo]);
 
   useEffect(() => {
     let isActive = true;
@@ -1273,6 +1375,7 @@ export default function App() {
     setFeedback(null);
     setLastCaseId(null);
     setAutomationStatus({ webhook: 100, ia: 32, validacao: 18 });
+    setProgresso({ ativo: true, etapaIdx: 0, segundos: 0 });
 
     try {
       const accessToken = await getSupabaseAccessToken();
@@ -1625,6 +1728,7 @@ export default function App() {
     setFeedback(null);
     setLastCaseId(null);
     setAutomationStatus({ webhook: 100, ia: 32, validacao: 18 });
+    setProgresso({ ativo: true, etapaIdx: 0, segundos: 0 });
 
     try {
       const accessToken = await getSupabaseAccessToken();
@@ -1950,6 +2054,14 @@ export default function App() {
           onAdicionarAnexo={handleAdicionarAnexo}
           onRemoverAnexo={handleRemoverAnexo}
         />
+      )}
+
+      {currentPage === "painel" && progresso.ativo && (
+        <section className="pb-4">
+          <div className="container" style={{ maxWidth: 720 }}>
+            <ProgressoGeracao ativo={progresso.ativo} segundos={progresso.segundos} />
+          </div>
+        </section>
       )}
 
       {currentPage === "dashboard" && (

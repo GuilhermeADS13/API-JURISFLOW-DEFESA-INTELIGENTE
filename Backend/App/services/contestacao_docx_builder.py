@@ -20,6 +20,7 @@ import base64
 import binascii
 import logging
 import re
+from contextvars import ContextVar
 from copy import deepcopy
 from datetime import datetime
 from io import BytesIO
@@ -30,6 +31,112 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Cm, Pt
 
 logger = logging.getLogger(__name__)
+
+
+# ──────────────────────── Estilo dinamico do template ─────────────────────────
+# Em vez de hardcodar fonte/espaco/tab para o modelo G. Trindade, extraimos
+# essas propriedades do modelo base que o usuario subiu. Os helpers leem essas
+# configs via ContextVar (thread-safe para requests concorrentes).
+
+_ESTILO_PADRAO: dict[str, Any] = {
+    "font_name": "Arial",
+    "font_size_pt": 11.0,
+    "line_spacing": 1.25,
+    "space_after_pt": 6.0,
+    "space_before_secao1_pt": 18.0,
+    "space_before_secao2_pt": 12.0,
+    # Tab stop default do Word eh ~1.27cm. Modelo G. Trindade nao define
+    # tab_stops customizados — usa 'NN.- TAB ESPACO TAB' (gera ~2-3cm).
+    "tab_stop_cm": 1.27,
+    # Recuo do blockquote (citacoes de lei/sumula): 3cm igual ao modelo.
+    "quote_left_indent_cm": 3.0,
+}
+
+_ESTILO_ATIVO: ContextVar[dict[str, Any]] = ContextVar(
+    "_ESTILO_ATIVO", default=_ESTILO_PADRAO
+)
+
+
+def _estilo() -> dict[str, Any]:
+    """Retorna o estilo ativo (do modelo base) ou o default."""
+    return _ESTILO_ATIVO.get() or _ESTILO_PADRAO
+
+
+def _extrair_estilo_modelo(doc: Any) -> dict[str, Any]:
+    """Inspeciona o template e extrai fonte/espacamento dominantes.
+
+    Estrategia:
+    1. Le style 'Normal' (fallback do template).
+    2. Sobrescreve com o primeiro paragrafo do body que tenha texto.
+    3. Em caso de ausencia, retorna defaults conservadores (Arial 11, 1.25, 6pt).
+    """
+    estilo = dict(_ESTILO_PADRAO)
+    try:
+        normal = doc.styles["Normal"]
+        if getattr(normal.font, "name", None):
+            estilo["font_name"] = normal.font.name
+        if getattr(normal.font, "size", None):
+            estilo["font_size_pt"] = float(normal.font.size.pt)
+    except Exception as err:  # noqa: BLE001 — template estranho, segue com default
+        logger.debug("Sem acesso ao style Normal do template: %s", err)
+
+    for paragrafo in doc.paragraphs:
+        if not paragrafo.text.strip():
+            continue
+        for run in paragrafo.runs:
+            if getattr(run.font, "name", None):
+                estilo["font_name"] = run.font.name
+                break
+        for run in paragrafo.runs:
+            if getattr(run.font, "size", None):
+                estilo["font_size_pt"] = float(run.font.size.pt)
+                break
+        pf = paragrafo.paragraph_format
+        if pf.line_spacing:
+            try:
+                estilo["line_spacing"] = float(pf.line_spacing)
+            except (TypeError, ValueError):
+                pass
+        if pf.space_after:
+            try:
+                estilo["space_after_pt"] = float(pf.space_after.pt)
+            except (AttributeError, TypeError):
+                pass
+        # Maior tab stop = TAB grande do "01.- texto" do escritorio
+        maior_tab = 0.0
+        for tab in pf.tab_stops:
+            if tab.position:
+                try:
+                    cm = float(tab.position.cm)
+                    if cm > maior_tab:
+                        maior_tab = cm
+                except (AttributeError, TypeError):
+                    continue
+        if maior_tab > 0:
+            estilo["tab_stop_cm"] = maior_tab
+        break
+
+    # Procura recuo de blockquote em paragrafos com left_indent (citacoes de lei)
+    for paragrafo in doc.paragraphs:
+        pf = paragrafo.paragraph_format
+        if pf.left_indent:
+            try:
+                cm = float(pf.left_indent.cm)
+                if 1.0 < cm < 6.0:  # filtro: recuo razoavel
+                    estilo["quote_left_indent_cm"] = cm
+                    break
+            except (AttributeError, TypeError):
+                continue
+
+    logger.info(
+        "Estilo extraido do template: font=%s %.1fpt, line=%.2f, after=%.1fpt, tab=%.1fcm",
+        estilo["font_name"],
+        estilo["font_size_pt"],
+        estilo["line_spacing"],
+        estilo["space_after_pt"],
+        estilo["tab_stop_cm"],
+    )
+    return estilo
 
 
 # ─────────────────────── Geracao programatica do .docx ───────────────────────
@@ -82,17 +189,24 @@ _SECOES_TEXTO = (
     ("merito", "III — DO MERITO"),
 )
 _SECOES_FINAIS = (
-    ("fundamentos", "V — FUNDAMENTOS JURIDICOS"),
-    ("pedidos", "VI — PEDIDOS"),
+    ("fundamentos", "IV — FUNDAMENTOS JURIDICOS"),
+    ("pedidos", "V — PEDIDOS"),
 )
 
 
 def _escrever_secoes_minuta(doc: Any, minuta: dict[str, Any]) -> None:
-    """Itera secoes da minuta na ordem definida em _SECOES_TEXTO."""
+    """Itera secoes da minuta na ordem definida em _SECOES_TEXTO.
+
+    impugnacao_pedidos NAO eh renderizada como secao romana separada:
+    o merito ja deve conter as impugnacoes. Se vier dict nao-vazio,
+    aparece como subsecao do merito (III.Z).
+    """
     for chave, titulo in _SECOES_TEXTO:
         _escrever_secao_texto(doc, titulo, minuta.get(chave))
 
-    _escrever_impugnacao_pedidos(doc, minuta.get("impugnacao_pedidos"))
+    impugnacoes = minuta.get("impugnacao_pedidos")
+    if isinstance(impugnacoes, dict) and impugnacoes:
+        _escrever_impugnacao_pedidos(doc, impugnacoes)
 
     for chave, titulo in _SECOES_FINAIS:
         _escrever_secao_texto(doc, titulo, minuta.get(chave))
@@ -129,10 +243,15 @@ def _escrever_secao_texto(doc: Any, titulo: str, conteudo: Any) -> None:
 
 
 def _escrever_impugnacao_pedidos(doc: Any, impugnacoes: Any) -> None:
-    """Renderiza impugnacao por pedido (dict) como blocos pedido+resposta."""
+    """Renderiza impugnacao por pedido (dict) como SUBSECAO do merito.
+
+    Antes era secao IV separada — agora aparece como III.Z dentro do
+    merito, evitando duplicacao com as impugnacoes ja embutidas em III.A,
+    III.B... do texto principal.
+    """
     if not isinstance(impugnacoes, dict) or not impugnacoes:
         return
-    doc.add_heading("IV — IMPUGNACAO DOS PEDIDOS", level=2)
+    doc.add_heading("III.Z — SINTESE DAS IMPUGNACOES ESPECIFICAS", level=3)
     for pedido, resposta in impugnacoes.items():
         paragrafo = doc.add_paragraph()
         run = paragrafo.add_run(f"Pedido: {pedido}")
@@ -168,11 +287,14 @@ def montar_docx_com_modelo(
     paragrafos novos com a estrutura completa da contestacao no estilo do
     escritorio G. Trindade:
     - cabecalho com identificacao das partes (negrito em entidades-chave)
-    - I PRELIMINARMENTE com subsecoes A/B/C/D/E (negrito + sublinhado)
-    - II MERITO com subsecoes
-    - III IMPUGNACAO, IV FUNDAMENTOS, V AUTENTICIDADE, VI PEDIDOS
-    - numeracao 01.- 02.- ... global
-    - Arial 11 justificado
+    - I — PRELIMINARMENTE com subsecoes A/B/C/D/E (negrito + sublinhado)
+    - II — MERITO com subsecoes (cada uma ja contem a impugnacao do pedido)
+    - III — DOS FUNDAMENTOS JURIDICOS
+    - IV — DA AUTENTICIDADE DOS DOCUMENTOS
+    - V — DOS PEDIDOS
+    - numeracao 01.- 02.- ... global (renderer adiciona; IA so escreve texto puro)
+    - Arial 11 justificado, aspas tipograficas curvas
+    - travessao em dash (—) nos cabecalhos de secao
     - encerramento + assinatura
 
     Retorna None em qualquer falha (caller faz fallback pro programatico).
@@ -192,6 +314,21 @@ def _build_docx_from_template(
 ) -> bytes:
     """Implementacao do montar_docx_com_modelo (separada pro _safe_step)."""
     doc = Document(BytesIO(modelo_bytes))
+
+    # 0) ADAPTACAO DINAMICA: extrai fonte/espaco/tab do template ANTES de
+    # limpar o body. Os helpers vao ler isso via ContextVar.
+    estilo_extraido = _extrair_estilo_modelo(doc)
+    token_estilo = _ESTILO_ATIVO.set(estilo_extraido)
+    try:
+        return _build_docx_from_template_inner(doc, dados, minuta)
+    finally:
+        _ESTILO_ATIVO.reset(token_estilo)
+
+
+def _build_docx_from_template_inner(
+    doc: Any, dados: dict[str, Any], minuta: dict[str, Any]
+) -> bytes:
+    """Lado pesado de _build_docx_from_template (apos extrair estilo)."""
 
     # 1) Limpa body preservando sectPr (config de pagina/secoes)
     body = doc.element.body
@@ -244,18 +381,59 @@ def _build_docx_from_template(
                 "razões expostas a seguir:")
         doc.add_paragraph("")
 
-    # 4) Conteudo principal das secoes (cada uma com cabecalho + Markdown)
+    # 4) Conteudo das secoes — numeracao romana DINAMICA conforme presenca de
+    # secoes opcionais (Litigancia, Danos Morais, Fundamentos). I e II sao
+    # fixos (Preliminares e Merito); demais sao renumeradas em sequencia.
+    _ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"]
     _add_secao(doc, minuta.get("preliminares"), contador, numerar=True,
                cabecalho_padrao=None)
     _add_secao(doc, minuta.get("merito"), contador, numerar=True,
-               cabecalho_padrao="II - MERITO.")
-    _add_secao_dict(doc, minuta.get("impugnacao_pedidos"), contador,
-                    cabecalho="III - DA IMPUGNACAO ESPECIFICA DOS PEDIDOS.")
-    _add_secao(doc, minuta.get("fundamentos"), contador, numerar=True,
-               cabecalho_padrao="IV - DOS FUNDAMENTOS JURIDICOS.")
+               cabecalho_padrao="II — MERITO.")
 
-    # V - AUTENTICIDADE (texto vem do Claude com base legal correta — CLT vs CPC)
-    _add_heading(doc, "V - DA AUTENTICIDADE DOS DOCUMENTOS.", nivel=1)
+    # impugnacao_pedidos = subsecao do merito (II.Z), nao secao romana propria.
+    impugnacoes = minuta.get("impugnacao_pedidos")
+    if isinstance(impugnacoes, dict) and impugnacoes:
+        _add_secao_dict(doc, impugnacoes, contador,
+                        cabecalho="II.Z) DA SINTESE DAS IMPUGNACOES.")
+
+    secao_idx = 3  # proxima apos II
+    litigancia = minuta.get("litigancia_ma_fe")
+    if litigancia and str(litigancia).strip():
+        litigancia_norm = re.sub(
+            r"^##\s*[IVXLCDM]+\s*[—\-]?\s*",
+            f"## {_ROMAN[secao_idx]} — ",
+            str(litigancia).strip(),
+            count=1, flags=re.MULTILINE,
+        )
+        if not litigancia_norm.lstrip().startswith("##"):
+            litigancia_norm = (
+                f"## {_ROMAN[secao_idx]} — DA LITIGANCIA DE MA-FE.\n\n{litigancia_norm}"
+            )
+        _add_secao(doc, litigancia_norm, contador, numerar=True, cabecalho_padrao=None)
+        secao_idx += 1
+
+    danos = minuta.get("danos_morais")
+    if danos and str(danos).strip():
+        danos_norm = re.sub(
+            r"^##\s*[IVXLCDM]+\s*[—\-]?\s*",
+            f"## {_ROMAN[secao_idx]} — ",
+            str(danos).strip(),
+            count=1, flags=re.MULTILINE,
+        )
+        if not danos_norm.lstrip().startswith("##"):
+            danos_norm = (
+                f"## {_ROMAN[secao_idx]} — DA IMPROCEDENCIA DO PEDIDO DE INDENIZACAO POR DANOS MORAIS.\n\n{danos_norm}"
+            )
+        _add_secao(doc, danos_norm, contador, numerar=True, cabecalho_padrao=None)
+        secao_idx += 1
+
+    if minuta.get("fundamentos"):
+        _add_secao(doc, minuta["fundamentos"], contador, numerar=True,
+                   cabecalho_padrao=f"{_ROMAN[secao_idx]} — DOS FUNDAMENTOS JURIDICOS.")
+        secao_idx += 1
+
+    # AUTENTICIDADE (sempre presente)
+    _add_heading(doc, f"{_ROMAN[secao_idx]} — DA AUTENTICIDADE DOS DOCUMENTOS.", nivel=1)
     doc.add_paragraph("")
     autenticidade_texto = minuta.get("autenticidade_documentos") or (
         "Nos termos do art. 830 da CLT, o patrono que subscreve a presente peça "
@@ -263,10 +441,11 @@ def _build_docx_from_template(
     )
     _add_text_para(doc, str(autenticidade_texto), contador, numerar=True)
     doc.add_paragraph("")
+    secao_idx += 1
 
-    # VI - Pedidos
+    # PEDIDOS (ultima secao)
     _add_secao(doc, minuta.get("pedidos"), contador, numerar=False,
-               cabecalho_padrao="VI - DOS PEDIDOS.")
+               cabecalho_padrao=f"{_ROMAN[secao_idx]} — DOS PEDIDOS.")
 
     # Encerramento adicional (Claude tem que entregar com base legal correta)
     encerramento_texto = minuta.get("encerramento")
@@ -321,22 +500,30 @@ def _build_docx_from_template(
 # ── Helpers de baixo nivel (criam paragraphs com a tipografia do escritorio) ─
 
 def _font_default(run: Any) -> None:
-    """Aplica Arial 11 a um run — fonte padrao do escritorio G. Trindade."""
-    run.font.name = "Arial"
-    run.font.size = Pt(11)
+    """Aplica fonte do template (default Arial 11).
+
+    Le do contextvar _ESTILO_ATIVO que foi populado por _extrair_estilo_modelo
+    quando o modelo base do escritorio foi inspecionado.
+    """
+    estilo = _estilo()
+    run.font.name = estilo["font_name"]
+    run.font.size = Pt(estilo["font_size_pt"])
 
 
 def _aplicar_espacamento_padrao(p: Any) -> None:
-    """Espaco antes/depois (mimetiza o espacamento generoso do modelo VR)."""
+    """Espacamento alinhado ao template (line_spacing + space_after lidos do modelo)."""
+    estilo = _estilo()
     pf = p.paragraph_format
-    pf.space_after = Pt(6)
+    pf.space_after = Pt(estilo["space_after_pt"])
     pf.space_before = Pt(0)
+    pf.line_spacing = estilo["line_spacing"]
 
 
 def _aplicar_tab_stop_grande(p: Any) -> None:
-    """Tab stop em 1.5cm — mimica o TAB largo entre '01.-' e o texto no modelo VR."""
+    """Tab stop com o tamanho dominante do modelo (entre '01.-' e o texto)."""
+    estilo = _estilo()
     pf = p.paragraph_format
-    pf.tab_stops.add_tab_stop(Cm(1.5))
+    pf.tab_stops.add_tab_stop(Cm(estilo["tab_stop_cm"]))
 
 
 def _run(
@@ -372,9 +559,22 @@ def _add_para_simples(
 
 
 def _add_heading(doc: Any, texto: str, *, nivel: int) -> None:
-    """Adiciona cabecalho com negrito + sublinhado (estilo G. Trindade)."""
+    """Adiciona cabecalho com negrito + sublinhado.
+
+    Espacamento antes e line_spacing lidos do template:
+    - nivel 1 (I, II, III...): respiracao maior (default 18pt)
+    - nivel 2/3 (A, B, C...):  respiracao menor (default 12pt)
+    """
+    estilo = _estilo()
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    pf = p.paragraph_format
+    pf.space_before = Pt(
+        estilo["space_before_secao1_pt"] if nivel == 1
+        else estilo["space_before_secao2_pt"]
+    )
+    pf.space_after = Pt(estilo["space_after_pt"])
+    pf.line_spacing = estilo["line_spacing"]
     texto_limpo = _RE_INLINE_BOLD.sub(r"\1", texto)
     if nivel == 1:
         texto_limpo = texto_limpo.upper()
@@ -397,7 +597,9 @@ def _add_text_para(
     if numerar:
         _aplicar_tab_stop_grande(p)
         contador["n"] += 1
-        _run(p, f"{contador['n']:02d}.-\t")
+        # Padrao do modelo G. Trindade: 'NN.- TAB ESPACO TAB' produz o espaco
+        # largo entre o numero do paragrafo e o texto. Reproduzimos identico.
+        _run(p, f"{contador['n']:02d}.-\t \t")
     _render_inline_markdown(p, texto_join)
 
 
@@ -477,7 +679,8 @@ def _add_quote_para(doc: Any, bloco: str) -> None:
     texto = " ".join(l for l in linhas if l)
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-    p.paragraph_format.left_indent = Cm(2.0)
+    # Recuo do blockquote lido do modelo (default 3.0cm)
+    p.paragraph_format.left_indent = Cm(_estilo()["quote_left_indent_cm"])
     p.paragraph_format.right_indent = Cm(0.5)
     _aplicar_espacamento_padrao(p)
     # Texto em italico — bold inline ainda funciona dentro do quote
@@ -633,12 +836,51 @@ def _add_text_para_com_indent(doc: Any, texto: str) -> None:
     _render_inline_markdown(p, texto_join)
 
 
+def _tipograficar_aspas(texto: str) -> str:
+    """Substitui aspas planas por curvas tipograficas (estilo modelo G. Trindade).
+
+    Regras simples: " no inicio de palavra/apos espaco vira "; " seguinte vira ".
+    Idem para apostrofes ' '. Mantem aspas dentro de codigo/escape intactas via
+    deteccao de contexto. Idempotente: se ja for tipografica, nao mexe.
+    """
+    if not texto or ('"' not in texto and "'" not in texto):
+        return texto
+    out = []
+    in_double = False
+    in_single = False
+    for i, ch in enumerate(texto):
+        if ch == '"':
+            prev = texto[i - 1] if i > 0 else " "
+            if in_double or prev.isalnum() or prev in ".,;:!?)]}":
+                out.append("”")  # "
+                in_double = False
+            else:
+                out.append("“")  # "
+                in_double = True
+        elif ch == "'":
+            prev = texto[i - 1] if i > 0 else " "
+            nxt = texto[i + 1] if i + 1 < len(texto) else " "
+            if prev.isalpha() and nxt.isalpha():
+                out.append("'")  # apostrofe interna (raro PT-BR)
+            elif in_single or prev.isalnum() or prev in ".,;:!?)]}":
+                out.append("’")  # '
+                in_single = False
+            else:
+                out.append("‘")  # '
+                in_single = True
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
 def _render_inline_markdown(p: Any, texto: str) -> None:
     """Renderiza **bold** e __underline__ inline num paragrafo existente.
 
     Processa o texto sequencialmente: cada match de **...** vira run em
     negrito, __...__ vira run sublinhado, resto fica como texto plano.
+    Aspas planas sao convertidas em tipograficas curvas (estilo escritorio).
     """
+    texto = _tipograficar_aspas(texto)
     # Combina os 2 regex em um soh: alterna marcadores
     _RE_COMBO = re.compile(r"\*\*(.+?)\*\*|__(.+?)__")
     pos = 0
