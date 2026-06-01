@@ -30,3 +30,7 @@ supabase/
 # Dependencias dos scripts de docs (regerável via npm install)
 docs/_dev/node_modules/
 docs/_dev/playwright-report/
+
+# Agent skills baixadas via `npx skills add` (tooling externo, regeravel)
+.agents/
+skills-lock.json
