@@ -1,15 +1,17 @@
 """Constroi o .docx final da contestacao a partir da minuta JSON do agente.
 
 Dois caminhos:
-- `montar_docx_com_modelo`: usa docxtpl com placeholders Jinja2 ({{ campo }})
-  quando o escritorio enviou um modelo base. Preserva 100% da formatacao.
-- `montar_docx_programatico`: gera um .docx do zero com python-docx,
-  estruturado em secoes (CONTESTACAO, TESE, PRELIMINARES, MERITO, IMPUGNACAO,
-  FUNDAMENTOS, PEDIDOS). Usado quando nao ha modelo base.
+- `montar_docx_com_modelo`: abre o modelo base do escritorio com python-docx,
+  limpa o body preservando headers/footers/watermark/sectPr e insere paragrafos
+  novos com a tipografia do escritorio (Arial 11 justificado, numeracao 01.-,
+  headings negrito+sublinhado, Markdown inline **bold**/__underline__/quote).
+- `montar_docx_programatico`: gera um .docx do zero com python-docx quando nao
+  ha modelo base, estruturado em secoes (CONTESTACAO, TESE, PRELIMINARES,
+  MERITO, IMPUGNACAO, FUNDAMENTOS, PEDIDOS).
 
-Refatorado na Etapa 5: extrai cada secao em helper proprio para reduzir CC.
-- `montar_docx_programatico` CC 17 C -> 4 A (loop sobre tabela de secoes)
-- `montar_docx_com_modelo`     CC 21 D -> 5 A (separa decode, contexto e render)
+Historico: na Etapa 5 separaram-se helpers para reduzir CC. No PR de download
+de peca (commit b78a2a0) o caminho com modelo migrou de docxtpl Subdoc (que
+duplicava conteudo) para python-docx puro com renderer de Markdown proprio.
 """
 
 from __future__ import annotations
@@ -26,7 +28,6 @@ from typing import Any, Callable
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Cm, Pt
-from docxtpl import DocxTemplate, RichText
 
 logger = logging.getLogger(__name__)
 
@@ -52,13 +53,13 @@ def montar_docx_programatico(dados: dict[str, Any], minuta: dict[str, Any]) -> b
     return out.getvalue()
 
 
-def _aplicar_estilo_base(doc: Document) -> None:
+def _aplicar_estilo_base(doc: Any) -> None:
     style = doc.styles["Normal"]
     style.font.name = "Arial"
     style.font.size = Pt(12)
 
 
-def _escrever_cabecalho(doc: Document, dados: dict[str, Any]) -> None:
+def _escrever_cabecalho(doc: Any, dados: dict[str, Any]) -> None:
     """Titulo + identificacao das partes."""
     titulo = doc.add_heading("CONTESTACAO", level=0)
     titulo.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -86,7 +87,7 @@ _SECOES_FINAIS = (
 )
 
 
-def _escrever_secoes_minuta(doc: Document, minuta: dict[str, Any]) -> None:
+def _escrever_secoes_minuta(doc: Any, minuta: dict[str, Any]) -> None:
     """Itera secoes da minuta na ordem definida em _SECOES_TEXTO."""
     for chave, titulo in _SECOES_TEXTO:
         _escrever_secao_texto(doc, titulo, minuta.get(chave))
@@ -119,7 +120,7 @@ def _strip_markdown(texto: Any) -> str:
     return s
 
 
-def _escrever_secao_texto(doc: Document, titulo: str, conteudo: Any) -> None:
+def _escrever_secao_texto(doc: Any, titulo: str, conteudo: Any) -> None:
     """Adiciona heading + paragrafo justificado se conteudo for verdadeiro."""
     if not conteudo:
         return
@@ -127,7 +128,7 @@ def _escrever_secao_texto(doc: Document, titulo: str, conteudo: Any) -> None:
     _add_paragraph(doc, _strip_markdown(conteudo), justify=True)
 
 
-def _escrever_impugnacao_pedidos(doc: Document, impugnacoes: Any) -> None:
+def _escrever_impugnacao_pedidos(doc: Any, impugnacoes: Any) -> None:
     """Renderiza impugnacao por pedido (dict) como blocos pedido+resposta."""
     if not isinstance(impugnacoes, dict) or not impugnacoes:
         return
@@ -139,14 +140,14 @@ def _escrever_impugnacao_pedidos(doc: Document, impugnacoes: Any) -> None:
         _add_paragraph(doc, _strip_markdown(resposta), justify=True)
 
 
-def _escrever_rodape(doc: Document, minuta: dict[str, Any]) -> None:
+def _escrever_rodape(doc: Any, minuta: dict[str, Any]) -> None:
     partes = [datetime.now().strftime("%Y-%m-%d %H:%M")]
     if minuta.get("observacoes"):
         partes.append(str(minuta["observacoes"]))
     _add_paragraph(doc, f"[{' | '.join(partes)}]")
 
 
-def _add_paragraph(doc: Document, texto: str, *, justify: bool = False) -> None:
+def _add_paragraph(doc: Any, texto: str, *, justify: bool = False) -> None:
     paragrafo = doc.add_paragraph(texto)
     if justify:
         paragrafo.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
@@ -355,7 +356,7 @@ def _run(
 
 
 def _add_para_simples(
-    doc: Document,
+    doc: Any,
     texto: str,
     *,
     negrito: bool = False,
@@ -370,7 +371,7 @@ def _add_para_simples(
     _run(p, texto, bold=negrito)
 
 
-def _add_heading(doc: Document, texto: str, *, nivel: int) -> None:
+def _add_heading(doc: Any, texto: str, *, nivel: int) -> None:
     """Adiciona cabecalho com negrito + sublinhado (estilo G. Trindade)."""
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.LEFT
@@ -381,7 +382,7 @@ def _add_heading(doc: Document, texto: str, *, nivel: int) -> None:
 
 
 def _add_text_para(
-    doc: Document, texto: str, contador: dict[str, int], *, numerar: bool
+    doc: Any, texto: str, contador: dict[str, int], *, numerar: bool
 ) -> None:
     """Adiciona paragrafo de texto justificado com numeracao opcional, bold e underline inline.
 
@@ -401,7 +402,7 @@ def _add_text_para(
 
 
 def _add_secao(
-    doc: Document,
+    doc: Any,
     texto: Any,
     contador: dict[str, int],
     *,
@@ -463,7 +464,7 @@ def _add_secao(
             doc.add_paragraph("")
 
 
-def _add_quote_para(doc: Document, bloco: str) -> None:
+def _add_quote_para(doc: Any, bloco: str) -> None:
     """Renderiza um bloco '> texto' como paragrafo recuado em italico.
 
     Mimetiza o estilo do modelo G. Trindade pra citacoes de lei/sumula.
@@ -495,7 +496,7 @@ def _add_quote_para(doc: Document, bloco: str) -> None:
 
 
 def _add_secao_dict(
-    doc: Document,
+    doc: Any,
     impugnacoes: Any,
     contador: dict[str, int],
     *,
@@ -537,31 +538,16 @@ def _decodificar_modelo_b64(modelo_b64: str) -> bytes | None:
         return None
 
 
-def _abrir_template(modelo_bytes: bytes) -> DocxTemplate | None:
-    return _safe_step(
-        "abrir modelo base como DocxTemplate", DocxTemplate, BytesIO(modelo_bytes)
-    )
-
-
-def _salvar_template(doc: DocxTemplate) -> bytes | None:
-    out = BytesIO()
-    if not _safe_void_step("salvar .docx renderizado", doc.save, out):
-        return None
-    return out.getvalue()
-
-
 def _safe_step(descricao: str, func: Callable, *args, **kwargs):
     """Roda `func(*args, **kwargs)` mapeando excecoes do docx para None+log.
 
-    Centraliza o tratamento uniforme das tres falhas possiveis (abrir/render/
-    salvar) sem repetir try/except — substitui o `except Exception:` solto que
-    o relatorio de metricas marcou em `services/contestacao_docx_builder.py`.
+    Centraliza o tratamento uniforme das falhas possiveis no `_build_docx_from_template`
+    (abrir bytes, manipular XML do body, salvar) sem repetir try/except.
 
-    A lib `docxtpl` levanta varios subtipos (`jinja2.TemplateError`,
-    `PackageNotFoundError`, `KeyError` em runs partidos). Aqui usamos
-    `(OSError, ValueError, RuntimeError, KeyError, Exception)` mas registramos
-    o nome real da excecao em log — assim diagnostico em producao mostra o
-    tipo real ao inves de `Exception` generico.
+    `python-docx` levanta varios subtipos (`PackageNotFoundError`, `KeyError` em
+    runs partidos, `OSError`). Capturamos `Exception` mas registramos o nome
+    real da excecao em log — diagnostico mostra o tipo real ao inves de
+    `Exception` generico.
     """
     try:
         return func(*args, **kwargs)
@@ -575,7 +561,7 @@ def _safe_step(descricao: str, func: Callable, *args, **kwargs):
 def _safe_void_step(descricao: str, func: Callable, *args, **kwargs) -> bool:
     """Como _safe_step, mas para chamadas que NAO retornam valor.
 
-    docxtpl `doc.render()` e `doc.save()` retornam None em sucesso. Usar
+    Funcoes como `python-docx` `doc.save()` retornam None em sucesso. Usar
     `_safe_step` com elas resulta em falso negativo (None confunde com falha).
     Este helper retorna True em sucesso e False em excecao.
     """
@@ -634,7 +620,7 @@ def _adv_padrao(dados: dict[str, Any], campo: str) -> str:
     return ""
 
 
-def _add_text_para_com_indent(doc: Document, texto: str) -> None:
+def _add_text_para_com_indent(doc: Any, texto: str) -> None:
     """Paragrafo de identificacao processual: indentado com TAB e bold inline.
 
     Texto vem do Claude no formato 'TEXTO **negrito** e __sublinhado__'.

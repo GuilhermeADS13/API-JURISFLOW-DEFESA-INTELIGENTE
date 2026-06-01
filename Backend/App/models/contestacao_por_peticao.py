@@ -81,8 +81,8 @@ class ContestacaoPorPeticao(BaseModel):
     """Payload para POST /api/contestar-por-peticao.
 
     Recebe a peticao inicial (obrigatoria) e, opcionalmente, um modelo base
-    .docx do escritorio com placeholders Jinja2 do tipo {{ campo }} para
-    preenchimento automatico via docxtpl.
+    .docx do escritorio com placeholders do tipo {{ campo }} para
+    preenchimento automatico via python-docx.
     """
 
     model_config = ConfigDict(extra="ignore")

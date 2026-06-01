@@ -8,7 +8,7 @@ Fluxo principal (`POST /contestar-por-peticao`):
 5. **PR5 HiL**: se `dados_extraidos.confianca < CONFIANCA_THRESHOLD`, NAO gera DOCX,
    marca status `requer_revisao_humana` e retorna apenas dados extraidos para o
    advogado revisar antes de gerar a minuta.
-6. Caso contrario, monta DOCX (docxtpl com modelo base ou programatico).
+6. Caso contrario, monta DOCX (python-docx com modelo base ou programatico).
 7. Backend persiste em `contestacoes` com origem='peticao'.
 8. Retorna JSON com dados extraidos + minuta + DOCX em base64 (ou flag de revisao).
 
