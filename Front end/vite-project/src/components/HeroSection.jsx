@@ -4,10 +4,10 @@ import { Badge, Button, Card, Col, Container, Row } from "react-bootstrap";
 import {
   Activity,
   ArrowRight,
-  Cpu,
-  Diagram3,
+  FileEarmarkArrowUp,
   FileEarmarkRuled,
   FileEarmarkCheck,
+  Search,
   ShieldCheck,
 } from "react-bootstrap-icons";
 
@@ -86,31 +86,33 @@ export default function HeroSection({ onNavigate }) {
                     </p>
                   </div>
                   <div className="console-score">
-                    <strong>96%</strong>
-                    <span>aderencia</span>
+                    <strong>~5min</strong>
+                    <span>tempo medio</span>
                   </div>
                 </div>
 
                 <div className="d-grid gap-3">
                   <div className="feature-row">
                     <div className="feature-icon">
-                      <Diagram3 />
+                      <FileEarmarkArrowUp />
                     </div>
                     <div>
-                      <div className="fw-semibold">Entrada estruturada do caso</div>
-                      <small className="text-secondary">Formulario guiado por processo, parte e tese</small>
+                      <div className="fw-semibold">Upload da peticao</div>
+                      <small className="text-secondary">
+                        PDF ou DOCX — os dados do processo sao extraidos automaticamente
+                      </small>
                     </div>
                     <span className="feature-state">Step 01</span>
                   </div>
 
                   <div className="feature-row">
                     <div className="feature-icon">
-                      <Cpu />
+                      <Search />
                     </div>
                     <div>
-                      <div className="fw-semibold">Agente juridico de apoio</div>
+                      <div className="fw-semibold">Busca por defesa similar</div>
                       <small className="text-secondary">
-                        Ajusta estrutura e linguagem da defesa com base no seu envio
+                        Consulta semantica nos casos anteriores do escritorio
                       </small>
                     </div>
                     <span className="feature-state">Step 02</span>
@@ -121,9 +123,9 @@ export default function HeroSection({ onNavigate }) {
                       <ShieldCheck />
                     </div>
                     <div>
-                      <div className="fw-semibold">Governanca e seguranca juridica</div>
+                      <div className="fw-semibold">Geracao com citacoes verificadas</div>
                       <small className="text-secondary">
-                        Regras para reduzir inconsistencias e manter controle da equipe
+                        Cada jurisprudencia e artigo sao checados antes da entrega
                       </small>
                     </div>
                     <span className="feature-state">Step 03</span>
@@ -134,8 +136,10 @@ export default function HeroSection({ onNavigate }) {
                       <FileEarmarkCheck />
                     </div>
                     <div>
-                      <div className="fw-semibold">Edicao ao vivo e exportacao</div>
-                      <small className="text-secondary">Visualize e ajuste antes de baixar DOC/PDF</small>
+                      <div className="fw-semibold">Download no estilo do escritorio</div>
+                      <small className="text-secondary">
+                        Fonte, espacamento e cabecalho copiados do modelo enviado
+                      </small>
                     </div>
                     <span className="feature-state">Step 04</span>
                   </div>
@@ -144,13 +148,13 @@ export default function HeroSection({ onNavigate }) {
                 <div className="console-mini-grid mt-4">
                   <div className="console-mini-card">
                     <Activity className="console-mini-icon" />
-                    <div className="console-mini-value">14</div>
-                    <div className="console-mini-label">fluxos ativos</div>
+                    <div className="console-mini-value">~5min</div>
+                    <div className="console-mini-label">fluxos rapidos</div>
                   </div>
                   <div className="console-mini-card">
                     <FileEarmarkRuled className="console-mini-icon" />
-                    <div className="console-mini-value">22</div>
-                    <div className="console-mini-label">pecas prontas</div>
+                    <div className="console-mini-value">DOCX</div>
+                    <div className="console-mini-label">pronto pra baixar</div>
                   </div>
                 </div>
 

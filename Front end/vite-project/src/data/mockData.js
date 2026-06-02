@@ -3,23 +3,23 @@
 export const stats = [
   {
     label: "Tempo medio por defesa",
-    value: "3m42s",
-    detail: "Do envio ao texto inicial pronto para revisao",
+    value: "~5 min",
+    detail: "Do upload da peticao ao DOCX pronto pra baixar",
   },
   {
-    label: "Capacidade por equipe",
-    value: "+240%",
-    detail: "Mais casos tratados sem ampliar a operacao",
+    label: "Citacoes verificadas",
+    value: "100%",
+    detail: "Toda jurisprudencia e artigo sao checados antes da entrega",
   },
   {
-    label: "Conformidade da peca",
-    value: "96%",
-    detail: "Saidas alinhadas ao padrao juridico do escritorio",
+    label: "Estilo adaptativo",
+    value: "DOCX",
+    detail: "Fonte, espacamento e cabecalho copiados do modelo enviado",
   },
   {
-    label: "Fluxos em producao",
-    value: "32",
-    detail: "Operacoes juridicas ativas na plataforma",
+    label: "Aprendizado continuo",
+    value: "RAG",
+    detail: "Cada peca aprovada enriquece a base de defesas do escritorio",
   },
 ];
 
