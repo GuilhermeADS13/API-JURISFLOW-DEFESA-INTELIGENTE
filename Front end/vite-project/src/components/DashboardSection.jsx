@@ -1,6 +1,6 @@
 // Secao de dashboard com indicadores de automacao e historico de contestacoes.
 import React, { useState } from "react";
-import { Badge, Button, Card, Col, Container, Dropdown, ProgressBar, Row, Spinner, Table } from "react-bootstrap";
+import { Badge, Button, Card, Col, Container, ProgressBar, Row, Spinner, Table } from "react-bootstrap";
 import StatusBadge from "./ui/StatusBadge";
 
 /**
@@ -129,38 +129,33 @@ export default function DashboardSection({
                             {onBaixarPeca && (
                               <td>
                                 {item.statusRaw === "ok" && item.contestacao_id ? (
-                                  <div className="d-flex gap-2 align-items-center">
-                                    <Dropdown>
-                                      <Dropdown.Toggle
-                                        size="sm"
-                                        variant="outline-primary"
-                                        disabled={
-                                          baixandoId === item.contestacao_id
-                                        }
-                                      >
-                                        {baixandoId === item.contestacao_id ? (
-                                          <Spinner animation="border" size="sm" />
-                                        ) : (
-                                          "Baixar"
-                                        )}
-                                      </Dropdown.Toggle>
-                                      <Dropdown.Menu>
-                                        <Dropdown.Item
-                                          onClick={() =>
-                                            handleBaixar(item.contestacao_id, "docx")
-                                          }
-                                        >
-                                          DOCX (Word)
-                                        </Dropdown.Item>
-                                        <Dropdown.Item
-                                          onClick={() =>
-                                            handleBaixar(item.contestacao_id, "pdf")
-                                          }
-                                        >
-                                          PDF (via impressao)
-                                        </Dropdown.Item>
-                                      </Dropdown.Menu>
-                                    </Dropdown>
+                                  <div className="d-flex gap-2 align-items-center flex-nowrap">
+                                    <Button
+                                      size="sm"
+                                      variant="primary"
+                                      disabled={baixandoId === item.contestacao_id}
+                                      onClick={() =>
+                                        handleBaixar(item.contestacao_id, "docx")
+                                      }
+                                      title="Baixar como DOCX (Word)"
+                                    >
+                                      {baixandoId === item.contestacao_id ? (
+                                        <Spinner animation="border" size="sm" />
+                                      ) : (
+                                        "DOCX"
+                                      )}
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline-primary"
+                                      disabled={baixandoId === item.contestacao_id}
+                                      onClick={() =>
+                                        handleBaixar(item.contestacao_id, "pdf")
+                                      }
+                                      title="Baixar como PDF (via impressão)"
+                                    >
+                                      PDF
+                                    </Button>
                                     {onExcluirPeca && (
                                       <Button
                                         size="sm"
