@@ -1600,11 +1600,9 @@ export default function App() {
       setShowResultModal(true);
       setAutomationStatus({ webhook: 100, ia: 86, validacao: 92 });
 
-      const providerLabel =
-        engine?.provider === "claude" ? "Claude (Anthropic)" : "Agente IA";
       setFeedback({
         variant: "success",
-        text: `Contestacao gerada por ${providerLabel} a partir da peticao inicial. Revise antes de protocolar.`,
+        text: "Contestação gerada a partir da petição inicial. Revise antes de protocolar.",
       });
       await loadDashboardData({ silent: true });
       setCurrentPage("dashboard");
@@ -1854,12 +1852,9 @@ export default function App() {
       setShowResultModal(true);
       setAutomationStatus({ webhook: 100, ia: 86, validacao: 92 });
 
-      const providerLabel =
-        engine?.provider === "claude" ? "Claude (Anthropic)" : "Agente IA";
-
       setFeedback({
         variant: "success",
-        text: `Defesa gerada por ${providerLabel}${defesasConsultadas > 0 ? ` com ${defesasConsultadas} defesa(s) anterior(es) consultada(s)` : ""}. Pronta para revisao.`,
+        text: "Defesa gerada e pronta para revisão.",
       });
       await loadDashboardData({ silent: true });
       setCurrentPage("dashboard");
