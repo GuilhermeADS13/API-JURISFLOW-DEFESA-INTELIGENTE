@@ -218,9 +218,7 @@ def _escrever_secoes_minuta(doc: Any, minuta: dict[str, Any]) -> None:
     for chave, titulo in _SECOES_TEXTO:
         _escrever_secao_texto(doc, titulo, minuta.get(chave))
 
-    impugnacoes = minuta.get("impugnacao_pedidos")
-    if isinstance(impugnacoes, dict) and impugnacoes:
-        _escrever_impugnacao_pedidos(doc, impugnacoes)
+    # impugnacao_pedidos eh referencia interna do prompt — nao vai na peca.
 
     for chave, titulo in _SECOES_FINAIS:
         _escrever_secao_texto(doc, titulo, minuta.get(chave))
@@ -417,11 +415,9 @@ def _build_docx_from_template_inner(
     _add_secao(doc, minuta.get("merito"), contador, numerar=True,
                cabecalho_padrao="II — MERITO.")
 
-    # impugnacao_pedidos = subsecao do merito (II.Z), nao secao romana propria.
-    impugnacoes = minuta.get("impugnacao_pedidos")
-    if isinstance(impugnacoes, dict) and impugnacoes:
-        _add_secao_dict(doc, impugnacoes, contador,
-                        cabecalho="II.Z) DA SINTESE DAS IMPUGNACOES.")
+    # impugnacao_pedidos NAO eh renderizado na peca final — fica como
+    # referencia interna do prompt (keys snake_case nao saem para o cliente).
+    # A IA ja deve incluir as impugnacoes nas subsecoes II.A, II.B... do merito.
 
     secao_idx = 3  # proxima apos II
     litigancia = minuta.get("litigancia_ma_fe")
@@ -621,6 +617,9 @@ def _add_text_para(
     p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     _aplicar_espacamento_padrao(p)
     texto_join = " ".join(line.strip() for line in texto.split("\n") if line.strip())
+    # Strip prefixos 'NN.-' / 'NN.- NN.- ' que a IA as vezes inclui no inicio do
+    # texto. Evita duplicacao com a numeracao automatica do renderer.
+    texto_join = re.sub(r"^(?:\d{1,3}[\.\-]+\s+)+", "", texto_join).strip()
     if numerar:
         _aplicar_tab_stop_grande(p)
         contador["n"] += 1
