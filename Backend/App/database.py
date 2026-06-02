@@ -824,7 +824,11 @@ def list_contestacoes_por_usuario(
         criado_em = row[3] if isinstance(row[3], datetime) else None
         numero_processo = str(row[4] or "").strip()
         status_label, tipo_label = _map_dashboard_status(status_raw)
-        display_date = (criado_em or datetime.now()).strftime("%d/%m/%Y")
+        # Converte para fuso Brasil (UTC-3). criado_em vem aware do Postgres.
+        from datetime import timedelta, timezone
+        tz_br = timezone(timedelta(hours=-3))
+        criado_local = (criado_em or datetime.now(tz_br)).astimezone(tz_br) if criado_em else datetime.now(tz_br)
+        display_date = criado_local.strftime("%d/%m/%Y %H:%M")
 
         history.append(
             {

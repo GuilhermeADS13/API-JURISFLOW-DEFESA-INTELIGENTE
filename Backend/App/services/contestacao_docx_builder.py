@@ -361,15 +361,28 @@ def _build_docx_from_template_inner(
     cabecalho_claude = minuta.get("cabecalho_processual")
     if cabecalho_claude:
         vara_str = dados.get("vara") or ""
-        # Linha do "Excelentíssimo Senhor Doutor Juiz..." se Claude nao incluir, adiciona
-        if "Excelent" not in str(cabecalho_claude):
-            _add_para_simples(
-                doc,
-                f"Excelentíssimo Senhor Doutor Juiz da {vara_str}.",
-                negrito=True, alinhamento="justify",
-            )
+        texto_cab = str(cabecalho_claude).strip()
+        # Detecta separacao "Excelentissimo... <linha em branco> CONTEC..." e
+        # renderiza como DOIS paragrafos distintos (alinhado ao modelo humano
+        # do escritorio). Se Claude vier num bloco unico, faz split heuristico.
+        partes = re.split(r"\n\s*\n", texto_cab, maxsplit=1)
+        if len(partes) == 2 and "Excelent" in partes[0]:
+            excelent_txt, partes_txt = partes[0].strip(), partes[1].strip()
+        elif "Excelent" in texto_cab:
+            # bloco unico — separa apos o primeiro ponto final
+            m = re.search(r"(Excelent[^.]+\.)\s*(.*)", texto_cab, re.DOTALL)
+            if m:
+                excelent_txt, partes_txt = m.group(1).strip(), m.group(2).strip()
+            else:
+                excelent_txt, partes_txt = "", texto_cab
+        else:
+            excelent_txt = f"Excelentíssimo Senhor Doutor Juiz da {vara_str}."
+            partes_txt = texto_cab
+        if excelent_txt:
+            _add_para_simples(doc, excelent_txt, negrito=True, alinhamento="justify")
             doc.add_paragraph("")
-        _add_text_para_com_indent(doc, str(cabecalho_claude))
+        if partes_txt:
+            _add_text_para_com_indent(doc, partes_txt)
         doc.add_paragraph("")
     else:
         # Fallback: cabecalho default (caso o Claude nao gere — versao antiga)
