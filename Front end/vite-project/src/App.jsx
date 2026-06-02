@@ -1285,7 +1285,7 @@ export default function App() {
     if (!contestacaoId) return;
     if (
       !window.confirm(
-        "Tem certeza que deseja excluir esta peca? Esta acao nao pode ser desfeita.",
+        "Tem certeza que deseja excluir esta peça? Esta ação não pode ser desfeita.",
       )
     ) {
       return;
@@ -1307,19 +1307,19 @@ export default function App() {
         const msg = await getApiErrorMessage(resp, `Falha HTTP ${resp.status}.`);
         setFeedback({
           variant: "danger",
-          text: `Nao foi possivel excluir: ${msg}`,
+          text: `Não foi possível excluir: ${msg}`,
         });
         return;
       }
       setHistory((prev) =>
         prev.filter((p) => p.contestacao_id !== contestacaoId),
       );
-      setFeedback({ variant: "success", text: "Peca excluida com sucesso." });
+      setFeedback({ variant: "success", text: "Peça excluída com sucesso." });
     } catch (err) {
       console.error("[handleExcluirContestacao] falhou:", err);
       setFeedback({
         variant: "danger",
-        text: `Erro ao excluir a peca: ${err.message || err}`,
+        text: `Erro ao excluir a peça: ${err.message || err}`,
       });
     }
   };

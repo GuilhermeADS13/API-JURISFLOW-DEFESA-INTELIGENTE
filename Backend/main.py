@@ -90,7 +90,7 @@ app.add_middleware(
     allow_origins=parse_frontend_origins(),
     # Necessario para trafegar cookie HTTPOnly de sessao entre front e backend.
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
 
