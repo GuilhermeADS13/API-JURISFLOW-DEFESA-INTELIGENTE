@@ -150,92 +150,66 @@ function getDashboardRefreshIntervalMs() {
   return Math.max(30000, rawInterval);
 }
 
-// Etapas do pipeline IA com tempo esperado em segundos.
-// Os tempos saem de medicoes reais dos logs do n8n (Sonnet 4.6).
-// Object.freeze impede mutacao acidental do array module-level.
-const ETAPAS_GERACAO = Object.freeze([
-  Object.freeze({ id: "preprocesso",  titulo: "Preparando upload",                    inicio: 0,   fim: 5    }),
-  Object.freeze({ id: "extrator",     titulo: "Extraindo dados da peticao (Claude)",  inicio: 5,   fim: 55   }),
-  Object.freeze({ id: "rag",          titulo: "Buscando defesas similares no RAG",    inicio: 55,  fim: 65   }),
-  Object.freeze({ id: "gerador",      titulo: "Gerando contestacao (Claude Sonnet)",  inicio: 65,  fim: 295  }),
-  Object.freeze({ id: "verificacao",  titulo: "Verificando citacoes (Claude Haiku)",  inicio: 295, fim: 310  }),
-  Object.freeze({ id: "docx",         titulo: "Montando arquivo .docx",               inicio: 310, fim: 320  }),
-]);
-
-// Margem visual: passou de ETAPAS_GERACAO total mas backend ainda processa
-// (N8N_TIMEOUT_SECONDS=600). Cap a barra em 95% e mostra mensagem de espera.
-const TOTAL_ESTIMADO_S = ETAPAS_GERACAO[ETAPAS_GERACAO.length - 1].fim;
+// Tempo medio medido em producao (Sonnet 4.6, pipeline completo n8n).
+// Cap a barra em 95% apos esse limite e troca a copy — feedback ao usuario
+// de que ainda esta rodando, sem barra batendo 100% e ficando travada.
+const TOTAL_ESTIMADO_S = 320;
 const TIMEOUT_HARD_S = 600;
 
-function etapaAtualParaSegundos(segundos) {
-  for (let i = 0; i < ETAPAS_GERACAO.length; i++) {
-    if (segundos < ETAPAS_GERACAO[i].fim) return i;
-  }
-  return ETAPAS_GERACAO.length - 1;
-}
-
 function ProgressoGeracao({ ativo, segundos }) {
-  if (!ativo) return null;
-  const etapaIdx = etapaAtualParaSegundos(segundos);
   const passouEstimado = segundos > TOTAL_ESTIMADO_S;
-  // Apos o tempo estimado, cap em 95% — usuario sabe que ainda esta rodando
-  // mesmo sem barra batendo 100% e ficando parada (UX confunde com travado).
   const pct = passouEstimado
     ? 95
     : Math.min(95, Math.round((segundos / TOTAL_ESTIMADO_S) * 100));
   const mm = Math.floor(segundos / 60);
   const ss = String(segundos % 60).padStart(2, "0");
   return (
-    <div style={{ background: "#f8f9fa", border: "1px solid #dee2e6", borderRadius: 8, padding: 16, marginTop: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-        <strong>Gerando contestacao...</strong>
-        <span style={{ fontFamily: "monospace", color: "#495057" }}>{mm}:{ss}</span>
-      </div>
-      <div style={{ background: "#e9ecef", borderRadius: 4, height: 8, overflow: "hidden", marginBottom: 12 }}>
+    <Modal
+      show={ativo}
+      centered
+      backdrop="static"
+      keyboard={false}
+      dialogClassName="progresso-modal"
+    >
+      <Modal.Body className="text-center px-4 py-4">
+        <h5 className="mb-3" style={{ color: "#1a2332", fontWeight: 600 }}>
+          Preparando peca...
+        </h5>
+        <div
+          className="mb-3"
+          style={{
+            background: "#e9ecef",
+            borderRadius: 6,
+            height: 12,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              background: "#c5a572",
+              height: "100%",
+              width: `${pct}%`,
+              transition: "width 0.5s ease",
+            }}
+          />
+        </div>
         <div
           style={{
-            background: "linear-gradient(90deg, #0d6efd, #6610f2)",
-            height: "100%",
-            width: `${pct}%`,
-            transition: "width 0.5s ease",
+            fontFamily: "monospace",
+            fontSize: 18,
+            color: "#1a2332",
+            letterSpacing: 1,
           }}
-        />
-      </div>
-      <ol style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 14 }}>
-        {ETAPAS_GERACAO.map((etapa, idx) => {
-          const concluida = idx < etapaIdx;
-          const corrente = idx === etapaIdx;
-          const futura = idx > etapaIdx;
-          return (
-            <li
-              key={etapa.id}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                padding: "4px 0",
-                color: futura ? "#adb5bd" : corrente ? "#0d6efd" : "#198754",
-                fontWeight: corrente ? 600 : 400,
-              }}
-            >
-              <span style={{ marginRight: 8, minWidth: 20 }}>
-                {concluida ? "✓" : corrente ? "•" : "○"}
-              </span>
-              <span>{etapa.titulo}</span>
-              {corrente && !passouEstimado && (
-                <span style={{ marginLeft: "auto", fontFamily: "monospace", fontSize: 12 }}>
-                  ~{Math.max(0, etapa.fim - segundos)}s
-                </span>
-              )}
-            </li>
-          );
-        })}
-      </ol>
-      <div style={{ marginTop: 12, fontSize: 12, color: passouEstimado ? "#fd7e14" : "#6c757d" }}>
-        {passouEstimado
-          ? `Finalizando... pode levar ate ${Math.floor(TIMEOUT_HARD_S / 60)}min em casos longos. Nao feche a aba.`
-          : "Tempo medio total: ~5min. Aguarde — nao feche a aba."}
-      </div>
-    </div>
+        >
+          {mm}:{ss}
+        </div>
+        <small className="text-muted d-block mt-2">
+          {passouEstimado
+            ? `Finalizando... pode levar ate ${Math.floor(TIMEOUT_HARD_S / 60)}min em casos longos.`
+            : "Tempo medio: ~5min"}
+        </small>
+      </Modal.Body>
+    </Modal>
   );
 }
 
@@ -1307,6 +1281,49 @@ export default function App() {
     }
   };
 
+  const handleExcluirContestacao = async (contestacaoId) => {
+    if (!contestacaoId) return;
+    if (
+      !window.confirm(
+        "Tem certeza que deseja excluir esta peca? Esta acao nao pode ser desfeita.",
+      )
+    ) {
+      return;
+    }
+    try {
+      const accessToken = await getSupabaseAccessToken();
+      const url = new URL(
+        `/api/contestacoes/${contestacaoId}`,
+        PETICAO_API_URL,
+      ).toString();
+      const resp = await fetch(url, {
+        method: "DELETE",
+        credentials: "include",
+        headers: {
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+      });
+      if (!resp.ok) {
+        const msg = await getApiErrorMessage(resp, `Falha HTTP ${resp.status}.`);
+        setFeedback({
+          variant: "danger",
+          text: `Nao foi possivel excluir: ${msg}`,
+        });
+        return;
+      }
+      setHistory((prev) =>
+        prev.filter((p) => p.contestacao_id !== contestacaoId),
+      );
+      setFeedback({ variant: "success", text: "Peca excluida com sucesso." });
+    } catch (err) {
+      console.error("[handleExcluirContestacao] falhou:", err);
+      setFeedback({
+        variant: "danger",
+        text: `Erro ao excluir a peca: ${err.message || err}`,
+      });
+    }
+  };
+
   /**
    * Abre uma nova aba com o DOCX renderizado em HTML (via docx-preview)
    * e dispara window.print() — o usuario salva como PDF pelo dialogo do browser.
@@ -2067,13 +2084,7 @@ export default function App() {
         />
       )}
 
-      {currentPage === "painel" && progresso.ativo && (
-        <section className="pb-4">
-          <div className="container" style={{ maxWidth: 720 }}>
-            <ProgressoGeracao ativo={progresso.ativo} segundos={progresso.segundos} />
-          </div>
-        </section>
-      )}
+      <ProgressoGeracao ativo={progresso.ativo} segundos={progresso.segundos} />
 
       {currentPage === "dashboard" && (
         <>
@@ -2083,6 +2094,7 @@ export default function App() {
             dashboardCards={dashboardCards}
             loading={dashboardLoading}
             onBaixarPeca={handleBaixarContestacao}
+            onExcluirPeca={handleExcluirContestacao}
           />
           <section className="pb-5">
             <div className="container">
@@ -2154,19 +2166,6 @@ export default function App() {
         </Modal.Header>
 
         <Modal.Body>
-          <p className="mb-2">
-            Contestacao processada por{" "}
-            <strong>
-              {iaResult?.engine?.provider === "claude"
-                ? `Claude (${iaResult.engine.model || "Anthropic"})`
-                : "Agente IA (fallback local)"}
-            </strong>
-            {iaResult?.defesasConsultadas > 0 && (
-              <span className="text-muted">
-                {" "}— {iaResult.defesasConsultadas} defesa(s) anterior(es) consultada(s)
-              </span>
-            )}
-          </p>
           {iaResult?.riscos?.length > 0 && (
             <div className="mt-2">
               <small className="text-warning fw-semibold">Pontos de atencao:</small>

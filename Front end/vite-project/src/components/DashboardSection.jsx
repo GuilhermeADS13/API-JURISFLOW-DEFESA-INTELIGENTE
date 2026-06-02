@@ -17,6 +17,7 @@ export default function DashboardSection({
   dashboardCards = [],
   loading = false,
   onBaixarPeca,
+  onExcluirPeca,
 }) {
   const [baixandoId, setBaixandoId] = useState(null);
 
@@ -155,6 +156,22 @@ export default function DashboardSection({
                                       >
                                         PDF (via impressao)
                                       </Dropdown.Item>
+                                      {onExcluirPeca && (
+                                        <>
+                                          <Dropdown.Divider />
+                                          <Dropdown.Item
+                                            onClick={() =>
+                                              onExcluirPeca(item.contestacao_id)
+                                            }
+                                            className="text-danger"
+                                            disabled={
+                                              baixandoId === item.contestacao_id
+                                            }
+                                          >
+                                            Excluir
+                                          </Dropdown.Item>
+                                        </>
+                                      )}
                                     </Dropdown.Menu>
                                   </Dropdown>
                                 ) : (

@@ -1025,6 +1025,22 @@ def get_contestacao_para_download(
     }
 
 
+def excluir_contestacao(contestacao_id: int, usuario_id: str) -> bool:
+    """Deleta contestacao do usuario. IDOR-safe via WHERE usuario_id = %s.
+
+    Retorna True se deletou 1 registro, False se nao encontra (id inexistente
+    OU pertence a outro usuario — o caller traduz para HTTP 404).
+    """
+    _ensure_db_initialized()
+    with _get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM contestacoes WHERE id = %s AND usuario_id = %s",
+                (contestacao_id, usuario_id),
+            )
+            return cursor.rowcount > 0
+
+
 def atualizar_contestacao_pos_revisao(
     contestacao_id: int,
     usuario_id: str,

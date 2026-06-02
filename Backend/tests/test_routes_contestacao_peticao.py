@@ -634,3 +634,51 @@ def test_patch_minuta_recusa_payload_vazio():
     """Pelo menos 1 campo obrigatorio (validador do MinutaEditada)."""
     with pytest.raises(Exception):  # ValidationError
         peticao_route.MinutaEditada.model_validate({})
+
+
+# ── DELETE /contestacoes/{id} ─────────────────────────────────────────────
+
+
+def test_delete_contestacao_sucesso(monkeypatch):
+    """DELETE retorna 200 + payload quando rowcount=1."""
+    chamadas = {}
+
+    def fake_excluir(cid, uid):
+        chamadas["cid"] = cid
+        chamadas["uid"] = uid
+        return True
+
+    monkeypatch.setattr(
+        "App.database.excluir_contestacao", fake_excluir, raising=False
+    )
+
+    resposta = asyncio.run(
+        peticao_route.excluir_contestacao_rota(
+            request=_fake_request(),
+            contestacao_id=42,
+            usuario={"id": "U", "nome": "n", "email": "e@e"},
+        )
+    )
+
+    assert resposta == {"status": "deleted", "contestacao_id": 42}
+    assert chamadas == {"cid": 42, "uid": "U"}
+
+
+def test_delete_contestacao_404_quando_nao_pertence(monkeypatch):
+    """DELETE retorna 404 quando rowcount=0 (id inexistente ou de outro usuario)."""
+    monkeypatch.setattr(
+        "App.database.excluir_contestacao",
+        lambda cid, uid: False,
+        raising=False,
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(
+            peticao_route.excluir_contestacao_rota(
+                request=_fake_request(),
+                contestacao_id=999,
+                usuario={"id": "U", "nome": "n", "email": "e@e"},
+            )
+        )
+
+    assert exc.value.status_code == 404

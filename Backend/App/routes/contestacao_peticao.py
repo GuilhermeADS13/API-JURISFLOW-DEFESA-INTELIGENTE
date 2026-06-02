@@ -609,6 +609,28 @@ async def baixar_contestacao(
     return _resposta_docx(docx_bytes, dados_extraidos)
 
 
+@router.delete("/contestacoes/{contestacao_id}")
+@limiter.limit("20/minute")
+async def excluir_contestacao_rota(
+    request: Request,
+    contestacao_id: int = Path(..., gt=0),
+    usuario: dict[str, str] = Depends(get_authenticated_user),
+) -> dict:
+    """Deleta contestacao do usuario autenticado. IDOR-safe via filtro usuario_id."""
+    from App.database import excluir_contestacao
+
+    sucesso = excluir_contestacao(contestacao_id, usuario["id"])
+    if not sucesso:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Contestacao nao encontrada ou nao pertence ao usuario.",
+        )
+    logger.info(
+        "Contestacao excluida id=%s usuario_id=%s", contestacao_id, usuario["id"]
+    )
+    return {"status": "deleted", "contestacao_id": contestacao_id}
+
+
 def _montar_payload_revisao(
     payload: ConfirmacaoExtracao,
     dados_corrigidos: dict,
