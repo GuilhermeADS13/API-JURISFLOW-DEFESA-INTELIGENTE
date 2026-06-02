@@ -151,9 +151,10 @@ function getDashboardRefreshIntervalMs() {
 }
 
 // Tempo medio medido em producao (Sonnet 4.6, pipeline completo n8n).
+// Ultima medicao real: gerador sozinho leva ~7min em peticoes longas.
 // Cap a barra em 95% apos esse limite e troca a copy — feedback ao usuario
 // de que ainda esta rodando, sem barra batendo 100% e ficando travada.
-const TOTAL_ESTIMADO_S = 320;
+const TOTAL_ESTIMADO_S = 420;
 const TIMEOUT_HARD_S = 600;
 
 function ProgressoGeracao({ ativo, segundos }) {
@@ -172,42 +173,36 @@ function ProgressoGeracao({ ativo, segundos }) {
       dialogClassName="progresso-modal"
     >
       <Modal.Body className="text-center px-4 py-4">
-        <h5 className="mb-3" style={{ color: "#1a2332", fontWeight: 600 }}>
-          Preparando peca...
-        </h5>
-        <div
-          className="mb-3"
-          style={{
-            background: "#e9ecef",
-            borderRadius: 6,
-            height: 12,
-            overflow: "hidden",
-          }}
-        >
+        <h5 className="progresso-titulo mb-3">Preparando peça…</h5>
+        <div className="progresso-bar-wrapper mb-3">
           <div
-            style={{
-              background: "#c5a572",
-              height: "100%",
-              width: `${pct}%`,
-              transition: "width 0.5s ease",
-            }}
+            className="progresso-bar-fill"
+            style={{ width: `${pct}%` }}
           />
+          <span className="progresso-bar-pct">{pct}%</span>
         </div>
-        <div
-          style={{
-            fontFamily: "monospace",
-            fontSize: 18,
-            color: "#1a2332",
-            letterSpacing: 1,
-          }}
-        >
+        <div className="progresso-timer mb-2">
           {mm}:{ss}
         </div>
-        <small className="text-muted d-block mt-2">
-          {passouEstimado
-            ? `Finalizando... pode levar ate ${Math.floor(TIMEOUT_HARD_S / 60)}min em casos longos.`
-            : "Tempo medio: ~5min"}
-        </small>
+        <div className="progresso-aviso d-block">
+          {passouEstimado ? (
+            <>
+              Finalizando — pode levar até{" "}
+              <strong>{Math.floor(TIMEOUT_HARD_S / 60)} min</strong> em casos
+              longos.{" "}
+              <strong className="progresso-aviso-forte">
+                Não feche a janela.
+              </strong>
+            </>
+          ) : (
+            <>
+              Tempo médio: <strong>5 min</strong>.{" "}
+              <strong className="progresso-aviso-forte">
+                Não feche a janela.
+              </strong>
+            </>
+          )}
+        </div>
       </Modal.Body>
     </Modal>
   );
