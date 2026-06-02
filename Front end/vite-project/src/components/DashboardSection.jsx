@@ -37,7 +37,7 @@ export default function DashboardSection({
           <Badge className="section-badge mb-2">Dashboard</Badge>
           <h2 className="fw-bold mb-1">Dashboard informativo para os advogados</h2>
           <p className="text-secondary mb-0">
-            Veja o status da automacao e o historico das defesas em uma unica tela.
+            Veja o status da automação e o histórico das defesas em uma única tela.
           </p>
         </div>
 
@@ -58,12 +58,12 @@ export default function DashboardSection({
           <Col lg={4}>
             <Card className="dashboard-card dashboard-entry-main-card border-0 h-100">
               <Card.Body className="p-4">
-                <h3 className="h5 mb-3">Status da automacao</h3>
+                <h3 className="h5 mb-3">Status da automação</h3>
 
                 <div className="d-grid gap-3">
                   <div>
                     <div className="d-flex justify-content-between small mb-1">
-                      <span>Recepcao do envio</span>
+                      <span>Recepção do envio</span>
                       <span>{automationStatus.webhook}%</span>
                     </div>
                     <ProgressBar now={automationStatus.webhook} />
@@ -79,7 +79,7 @@ export default function DashboardSection({
 
                   <div>
                     <div className="d-flex justify-content-between small mb-1">
-                      <span>Validacao de saida</span>
+                      <span>Validação de saída</span>
                       <span>{automationStatus.validacao}%</span>
                     </div>
                     <ProgressBar now={automationStatus.validacao} />
@@ -92,7 +92,7 @@ export default function DashboardSection({
           <Col lg={8}>
             <Card className="history-card dashboard-entry-main-card dashboard-entry-history-card border-0">
               <Card.Body className="p-4">
-                <h3 className="h5 mb-3">Historico das defesas</h3>
+                <h3 className="h5 mb-3">Histórico das defesas</h3>
 
                 <div className="table-responsive">
                   <Table hover align="middle" className="mb-0 dashboard-history-table">
@@ -103,7 +103,7 @@ export default function DashboardSection({
                         <th>Tipo</th>
                         <th>Data</th>
                         <th>Status</th>
-                        {onBaixarPeca && <th>Acao</th>}
+                        {onBaixarPeca && <th>Ação</th>}
                       </tr>
                     </thead>
 
@@ -112,8 +112,8 @@ export default function DashboardSection({
                         <tr>
                           <td colSpan={onBaixarPeca ? 6 : 5} className="text-secondary">
                             {loading
-                              ? "Carregando historico do banco de dados..."
-                              : "Nenhum caso encontrado no banco para este usuario."}
+                              ? "Carregando histórico do banco de dados..."
+                              : "Nenhum caso encontrado no banco para este usuário."}
                           </td>
                         </tr>
                       ) : (
@@ -165,8 +165,8 @@ export default function DashboardSection({
                                       <Button
                                         size="sm"
                                         variant="outline-danger"
-                                        title="Excluir peca"
-                                        aria-label="Excluir peca"
+                                        title="Excluir peça"
+                                        aria-label="Excluir peça"
                                         disabled={
                                           baixandoId === item.contestacao_id
                                         }

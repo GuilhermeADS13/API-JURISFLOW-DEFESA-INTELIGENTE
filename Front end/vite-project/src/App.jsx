@@ -75,7 +75,7 @@ function getSupabaseAuthErrorMessage(error, fallbackMessage) {
   const message = (error?.message || "").toLowerCase();
 
   if (message.includes("invalid login credentials")) {
-    return "Nao encontramos uma conta com esse e-mail e senha.";
+    return "Não encontramos uma conta com esse e-mail e senha.";
   }
 
   if (message.includes("email not confirmed")) {
@@ -338,16 +338,16 @@ export default function App() {
 
   const generatedPreviewParagraphs = useMemo(() => {
     const autor = form.autor.trim() || "a parte autora";
-    const tipoAcao = form.tipoAcao.trim() || "ramo juridico ainda nao definido";
+    const tipoAcao = form.tipoAcao.trim() || "ramo jurídico ainda não definido";
     const pedidoAutor = form.pedidoAutor.trim() || "os pedidos formulados";
     const observacoes = form.fatos.trim();
 
     return [
-      `No ambito de ${tipoAcao.toLowerCase()}, defesa apresentada em face dos pedidos de ${autor} e destaca ausencia de pressupostos para procedencia do pedido inicial.`,
-      `O agente recomenda reforco argumentativo com base em ${pedidoAutor.toLowerCase()}, mantendo linguagem juridica formal e estrutura definida pelo escritorio.`,
+      `No âmbito de ${tipoAcao.toLowerCase()}, defesa apresentada em face dos pedidos de ${autor} e destaca ausência de pressupostos para procedência do pedido inicial.`,
+      `O agente recomenda reforço argumentativo com base em ${pedidoAutor.toLowerCase()}, mantendo linguagem jurídica formal e estrutura definida pelo escritório.`,
       observacoes
-        ? `Observacoes relevantes para a equipe: ${observacoes}`
-        : "O documento segue para revisao humana antes da exportacao final.",
+        ? `Observações relevantes para a equipe: ${observacoes}`
+        : "O documento segue para revisão humana antes da exportação final.",
     ];
   }, [form]);
 
@@ -542,7 +542,7 @@ export default function App() {
       if (error) {
         setAuthFeedback({
           variant: "danger",
-          text: "Nao foi possivel reenviar o e-mail. Tente novamente em instantes.",
+          text: "Não foi possível reenviar o e-mail. Tente novamente em instantes.",
         });
       } else {
         setResendCooldownUntil(Date.now() + 60_000);
@@ -660,7 +660,7 @@ export default function App() {
       if (!isSupabaseConfigured) {
         setAuthFeedback({
           variant: "danger",
-          text: "Supabase nao configurado no frontend. Verifique o .env.local.",
+          text: "Supabase não configurado no frontend. Verifique o .env.local.",
         });
         return;
       }
@@ -681,12 +681,12 @@ export default function App() {
 
         if (error) {
           if ((error.message || "").toLowerCase().includes("already registered")) {
-            setAuthErrors({ email: "Ja existe uma conta com este e-mail." });
+            setAuthErrors({ email: "Já existe uma conta com este e-mail." });
           }
 
           setAuthFeedback({
             variant: "danger",
-            text: getSupabaseAuthErrorMessage(error, "Nao foi possivel criar sua conta agora."),
+            text: getSupabaseAuthErrorMessage(error, "Não foi possível criar sua conta agora."),
           });
           return;
         }
@@ -707,7 +707,7 @@ export default function App() {
         if (!session) {
           setFeedback({
             variant: "warning",
-            text: "Conta criada, mas nao foi possivel carregar os dados da sessao.",
+            text: "Conta criada, mas não foi possível carregar os dados da sessão.",
           });
           return;
         }
@@ -738,7 +738,7 @@ export default function App() {
 
         setAuthFeedback({
           variant: "danger",
-          text: getSupabaseAuthErrorMessage(error, "Nao encontramos uma conta com esse e-mail e senha."),
+          text: getSupabaseAuthErrorMessage(error, "Não encontramos uma conta com esse e-mail e senha."),
         });
         return;
       }
@@ -747,7 +747,7 @@ export default function App() {
       if (!session) {
         setAuthFeedback({
           variant: "danger",
-          text: "Nao foi possivel carregar os dados da conta.",
+          text: "Não foi possível carregar os dados da conta.",
         });
         return;
       }
@@ -764,7 +764,7 @@ export default function App() {
     } catch {
       setAuthFeedback({
         variant: "danger",
-        text: "Nao foi possivel conectar com o servidor do Supabase.",
+        text: "Não foi possível conectar com o servidor do Supabase.",
       });
     } finally {
       setAuthLoading(false);
@@ -803,8 +803,8 @@ export default function App() {
     setFeedback({
       variant: remoteLogoutFailed ? "warning" : "info",
       text: remoteLogoutFailed
-        ? "Sessao local encerrada, mas nao foi possivel confirmar logout no Supabase."
-        : "Sessao encerrada com sucesso.",
+        ? "Sessão local encerrada, mas não foi possível confirmar logout no Supabase."
+        : "Sessão encerrada com sucesso.",
     });
   };
 
@@ -884,7 +884,7 @@ export default function App() {
       return;
     }
     if (anexosFiles.length >= 5) {
-      setAnexosError("Maximo de 5 anexos por peticao.");
+      setAnexosError("Máximo de 5 anexos por petição.");
       return;
     }
     setAnexosFiles((prev) => [...prev, file]);
@@ -902,20 +902,20 @@ export default function App() {
     // No modo "peticao" so exigimos a peticao inicial; campos do form sao
     // preenchidos automaticamente apos a extracao do agente.
     if (modo === "peticao") {
-      if (!peticaoFile) errors.peticao = "Anexe a peticao inicial em PDF ou DOCX.";
+      if (!peticaoFile) errors.peticao = "Anexe a petição inicial em PDF ou DOCX.";
       return errors;
     }
 
-    if (!form.processo.trim()) errors.processo = "Informe o numero do processo.";
+    if (!form.processo.trim()) errors.processo = "Informe o número do processo.";
     if (form.processo.trim() && !isValidNumeroProcesso(form.processo)) {
       errors.processo = "Use o formato 0001234-56.2026.8.00.0000.";
     }
-    if (!form.autor.trim()) errors.autor = "Informe o autor da acao.";
-    if (!form.reu.trim()) errors.reu = "Informe o reu (parte que voce representa).";
+    if (!form.autor.trim()) errors.autor = "Informe o autor da ação.";
+    if (!form.reu.trim()) errors.reu = "Informe o réu (parte que você representa).";
     if (!form.tipoAcao.trim()) errors.tipoAcao = "Selecione o ramo do direito.";
     if (!form.fatos.trim()) errors.fatos = "Resuma os fatos narrados pelo autor.";
     if (!form.pedidoAutor.trim()) errors.pedidoAutor = "Informe os pedidos do autor.";
-    if (!uploadedFile) errors.upload = "Anexe a peca base para continuar.";
+    if (!uploadedFile) errors.upload = "Anexe a peça base para continuar.";
 
     return errors;
   };
@@ -930,7 +930,7 @@ export default function App() {
 
     try {
       persistDraft(payload);
-      setDraftInfo(`Ultimo rascunho salvo em ${savedAt}`);
+      setDraftInfo(`Último rascunho salvo em ${savedAt}`);
       setFeedback({
         variant: "success",
         text: "Rascunho salvo com sucesso.",
@@ -938,7 +938,7 @@ export default function App() {
     } catch {
       setFeedback({
         variant: "danger",
-        text: "Nao foi possivel salvar o rascunho no navegador.",
+        text: "Não foi possível salvar o rascunho no navegador.",
       });
     }
   };
@@ -993,7 +993,7 @@ export default function App() {
           throw new Error(
             await getApiErrorMessage(
               response,
-              "Nao foi possivel carregar historico real do dashboard.",
+              "Não foi possível carregar histórico real do dashboard.",
             ),
           );
         }
@@ -1014,7 +1014,7 @@ export default function App() {
             text:
               error instanceof Error
                 ? error.message
-                : "Nao foi possivel sincronizar o dashboard com o banco de dados.",
+                : "Não foi possível sincronizar o dashboard com o banco de dados.",
           });
         }
       } finally {
@@ -1091,11 +1091,11 @@ export default function App() {
     if (!supportForm.email.trim()) {
       errors.email = "Informe seu e-mail para retorno.";
     } else if (!isValidEmail(supportForm.email)) {
-      errors.email = "Informe um e-mail valido.";
+      errors.email = "Informe um e-mail válido.";
     }
 
     if (!supportForm.categoria.trim()) {
-      errors.categoria = "Selecione a categoria da reclamacao.";
+      errors.categoria = "Selecione a categoria da reclamação.";
     }
 
     if (supportForm.processo.trim() && !isValidNumeroProcesso(supportForm.processo)) {
@@ -1103,15 +1103,15 @@ export default function App() {
     }
 
     if (!supportForm.assunto.trim()) {
-      errors.assunto = "Informe o assunto da reclamacao.";
+      errors.assunto = "Informe o assunto da reclamação.";
     } else if (supportForm.assunto.trim().length < 4) {
       errors.assunto = "Use ao menos 4 caracteres no assunto.";
     }
 
     if (!supportForm.mensagem.trim()) {
-      errors.mensagem = "Descreva a reclamacao para o suporte.";
+      errors.mensagem = "Descreva a reclamação para o suporte.";
     } else if (supportForm.mensagem.trim().length < 15) {
-      errors.mensagem = "Detalhe mais a reclamacao (minimo de 15 caracteres).";
+      errors.mensagem = "Detalhe mais a reclamação (mínimo de 15 caracteres).";
     }
 
     return errors;
@@ -1127,7 +1127,7 @@ export default function App() {
       setSupportErrors(errors);
       setSupportFeedback({
         variant: "danger",
-        text: "Revise os campos obrigatorios antes de enviar a reclamacao.",
+        text: "Revise os campos obrigatórios antes de enviar a reclamação.",
       });
       return;
     }
@@ -1164,13 +1164,13 @@ export default function App() {
         clearSession();
         setAuthUser(null);
         openAuthModal("login");
-        throw new Error("Sua sessao expirou. Faca login novamente para enviar ao suporte.");
+        throw new Error("Sua sessão expirou. Faça login novamente para enviar ao suporte.");
       }
 
       if (!response.ok) {
         const errorMessage = await getApiErrorMessage(
           response,
-          "Nao foi possivel enviar a reclamacao para o suporte.",
+          "Não foi possível enviar a reclamação para o suporte.",
         );
         throw new Error(errorMessage);
       }
@@ -1180,8 +1180,8 @@ export default function App() {
       setSupportFeedback({
         variant: "success",
         text: data?.protocolo
-          ? `Reclamacao recebida com sucesso. Protocolo: ${data.protocolo}.`
-          : "Reclamacao recebida com sucesso pelo time de suporte.",
+          ? `Reclamação recebida com sucesso. Protocolo: ${data.protocolo}.`
+          : "Reclamação recebida com sucesso pelo time de suporte.",
       });
       setSupportForm((prev) => ({
         ...prev,
@@ -1196,7 +1196,7 @@ export default function App() {
         text:
           error instanceof Error
             ? error.message
-            : "Nao foi possivel enviar a reclamacao para o suporte.",
+            : "Não foi possível enviar a reclamação para o suporte.",
       });
     } finally {
       setSupportLoading(false);
@@ -1369,7 +1369,7 @@ export default function App() {
       if (!w) {
         setFeedback({
           variant: "warning",
-          text: "Popup bloqueado. Salvamos como DOCX — voce pode abrir no Word e salvar como PDF (Arquivo -> Exportar).",
+          text: "Popup bloqueado. Salvamos como DOCX — você pode abrir no Word e salvar como PDF (Arquivo -> Exportar).",
         });
         autoDownloadDocx(docxB64, docxNome);
       }
@@ -1383,7 +1383,7 @@ export default function App() {
     if (!authUser) {
       setFeedback({
         variant: "warning",
-        text: "Faca login para enviar casos ao backend.",
+        text: "Faça login para enviar casos ao backend.",
       });
       openAuthModal("login");
       return;
@@ -1392,9 +1392,9 @@ export default function App() {
     if (!peticaoFile) {
       setFeedback({
         variant: "danger",
-        text: "Anexe a peticao inicial em PDF ou DOCX antes de enviar.",
+        text: "Anexe a petição inicial em PDF ou DOCX antes de enviar.",
       });
-      setFormErrors({ peticao: "Anexe a peticao inicial." });
+      setFormErrors({ peticao: "Anexe a petição inicial." });
       return;
     }
 
@@ -1413,7 +1413,7 @@ export default function App() {
         openAuthModal("login");
         setFeedback({
           variant: "warning",
-          text: "Sua sessao expirou. Faca login novamente para continuar.",
+          text: "Sua sessão expirou. Faça login novamente para continuar.",
         });
         setLoading(false);
         return;
@@ -1497,8 +1497,8 @@ export default function App() {
         setFeedback({
           variant: "danger",
           text: abortado
-            ? `Timeout (${Math.round(HARD_TIMEOUT_MS / 60000)}min) — o backend nao respondeu a tempo. Pode ser bloqueio do browser/extensao, ou o n8n demorou demais. Tente novamente ou veja os logs.`
-            : `Falha de rede ao enviar a peticao: ${fetchErr.message}. Verifique se o backend esta no ar e se nao ha extensao bloqueando POST grandes (payload de ${payloadMB}MB).`,
+            ? `Timeout (${Math.round(HARD_TIMEOUT_MS / 60000)}min) — o backend não respondeu a tempo. Pode ser bloqueio do browser/extensão, ou o n8n demorou demais. Tente novamente ou veja os logs.`
+            : `Falha de rede ao enviar a petição: ${fetchErr.message}. Verifique se o backend está no ar e se não há extensão bloqueando POST grandes (payload de ${payloadMB}MB).`,
         });
         return;
       }
@@ -1513,7 +1513,7 @@ export default function App() {
           clearSession();
           setAuthUser(null);
           openAuthModal("login");
-          throw new Error("Sessao expirada ou token invalido. Faca login novamente.");
+          throw new Error("Sessão expirada ou token inválido. Faça login novamente.");
         }
         throw new Error(errorMessage);
       }
@@ -1535,7 +1535,7 @@ export default function App() {
           variant: "warning",
           text:
             backendData.mensagem ||
-            "Confianca baixa na extracao. Revise os dados antes de gerar a minuta.",
+            "Confiança baixa na extração. Revise os dados antes de gerar a minuta.",
         });
         await loadDashboardData({ silent: true });
         return;
@@ -1615,7 +1615,7 @@ export default function App() {
         text:
           error instanceof Error
             ? error.message
-            : "Nao foi possivel gerar a contestacao a partir da peticao.",
+            : "Não foi possível gerar a contestação a partir da petição.",
       });
     }
   };
@@ -1703,13 +1703,13 @@ export default function App() {
       setAutomationStatus({ webhook: 100, ia: 86, validacao: 92 });
       setFeedback({
         variant: "success",
-        text: "Contestacao gerada com os dados revisados. Pronta para download.",
+        text: "Contestação gerada com os dados revisados. Pronta para download.",
       });
       await loadDashboardData({ silent: true });
       setCurrentPage("dashboard");
     } catch (error) {
       setRevisaoError(
-        error instanceof Error ? error.message : "Falha ao confirmar revisao.",
+        error instanceof Error ? error.message : "Falha ao confirmar revisão.",
       );
     } finally {
       setRevisaoLoading(false);
@@ -1731,7 +1731,7 @@ export default function App() {
     if (!authUser) {
       setFeedback({
         variant: "warning",
-        text: "Faca login para enviar casos ao backend.",
+        text: "Faça login para enviar casos ao backend.",
       });
       openAuthModal("login");
       return;
@@ -1764,7 +1764,7 @@ export default function App() {
         openAuthModal("login");
         setFeedback({
           variant: "warning",
-          text: "Sua sessao expirou. Faca login novamente para continuar.",
+          text: "Sua sessão expirou. Faça login novamente para continuar.",
         });
         setLoading(false);
         return;
@@ -1815,7 +1815,7 @@ export default function App() {
           clearSession();
           setAuthUser(null);
           openAuthModal("login");
-          throw new Error("Sessao expirada ou token invalido. Faca login novamente.");
+          throw new Error("Sessão expirada ou token inválido. Faça login novamente.");
         }
         throw new Error(errorMessage);
       }
@@ -1867,7 +1867,7 @@ export default function App() {
         text:
           error instanceof Error
             ? error.message
-            : "Nao foi possivel enviar para o agente de IA. Verifique backend e autenticacao.",
+            : "Não foi possível enviar para o agente de IA. Verifique backend e autenticação.",
       });
     }
   };
@@ -1888,7 +1888,7 @@ export default function App() {
     if (!submitted) {
       setFeedback({
         variant: "warning",
-        text: "Envie o caso para automacao antes de baixar o documento.",
+        text: "Envie o caso para automação antes de baixar o documento.",
       });
       return;
     }
@@ -1919,7 +1919,7 @@ export default function App() {
           <div class="meta">
             <p><strong>Processo:</strong> ${safeProcesso || "-"}</p>
             <p><strong>Autor:</strong> ${safeAutor || "-"}</p>
-            <p><strong>Reu:</strong> ${safeReu || "-"}</p>
+            <p><strong>Réu:</strong> ${safeReu || "-"}</p>
             <p><strong>Ramo do direito:</strong> ${safeTipoAcao || "-"}</p>
           </div>
           <div class="corpo">${safeDraft}</div>
@@ -1942,7 +1942,7 @@ export default function App() {
     if (!submitted) {
       setFeedback({
         variant: "warning",
-        text: "Envie o caso para automacao antes de gerar o PDF.",
+        text: "Envie o caso para automação antes de gerar o PDF.",
       });
       return;
     }
@@ -1978,7 +1978,7 @@ export default function App() {
           <div class="meta">
             <p><strong>Processo:</strong> ${safeProcesso || "-"}</p>
             <p><strong>Autor:</strong> ${safeAutor || "-"}</p>
-            <p><strong>Reu:</strong> ${safeReu || "-"}</p>
+            <p><strong>Réu:</strong> ${safeReu || "-"}</p>
             <p><strong>Ramo do direito:</strong> ${safeTipoAcao || "-"}</p>
           </div>
           <div class="corpo">${safeDraft}</div>
@@ -2095,7 +2095,7 @@ export default function App() {
             <div className="container">
               <div className="d-flex flex-wrap gap-2">
                 <Button variant="outline-secondary" onClick={() => handleNavigate("painel")}>
-                  Voltar para edicao
+                  Voltar para edição
                 </Button>
               </div>
             </div>
@@ -2163,7 +2163,7 @@ export default function App() {
         <Modal.Body>
           {iaResult?.riscos?.length > 0 && (
             <div className="mt-2">
-              <small className="text-warning fw-semibold">Pontos de atencao:</small>
+              <small className="text-warning fw-semibold">Pontos de atenção:</small>
               <ul className="mb-0 mt-1" style={{ fontSize: "0.85rem" }}>
                 {iaResult.riscos.map((r, i) => (
                   <li key={i}>{r}</li>
@@ -2174,7 +2174,7 @@ export default function App() {
           {iaResult?.citacoesIncertas?.length > 0 && (
             <div className="mt-3 p-2 border border-warning rounded bg-warning bg-opacity-10">
               <small className="text-warning fw-semibold d-block mb-1">
-                ⚠ Citacoes a revisar antes de protocolar (
+                ⚠ Citações a revisar antes de protocolar (
                 {iaResult.citacoesIncertas.length})
               </small>
               <ul className="mb-0" style={{ fontSize: "0.82rem" }}>
@@ -2196,12 +2196,12 @@ export default function App() {
           )}
           {iaResult?.citacoesVerificadas?.length > 0 && (
             <p className="mt-2 mb-0 text-success" style={{ fontSize: "0.82rem" }}>
-              ✓ {iaResult.citacoesVerificadas.length} citacao(oes) verificada(s) pelo
+              ✓ {iaResult.citacoesVerificadas.length} citação(ões) verificada(s) pelo
               revisor IA.
             </p>
           )}
           <p className="mt-3 mb-0 text-muted" style={{ fontSize: "0.9rem" }}>
-            O texto completo esta disponivel no dashboard para revisao e exportacao.
+            O texto completo está disponível no dashboard para revisão e exportação.
           </p>
         </Modal.Body>
 

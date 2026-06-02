@@ -20,15 +20,15 @@ export default function HeroSection({ onNavigate }) {
       <Container>
         <Row className="align-items-center g-4 g-lg-5">
           <Col lg={7} className="hero-copy">
-            <Badge className="hero-kicker mb-3">Automacao juridica de defesas</Badge>
+            <Badge className="hero-kicker mb-3">Automação jurídica de defesas</Badge>
 
             <h1 className="hero-title mb-3">
-              Organize o envio para o agente de IA e acompanhe a edicao da defesa em tempo real.
+              Organize o envio para o agente de IA e acompanhe a edição da defesa em tempo real.
             </h1>
 
             <p className="hero-lead mb-4">
               A plataforma foi simplificada para fluxo direto: preencher dados,
-              anexar a peca base, editar ao vivo e enviar para automacao com seguranca.
+              anexar a peça base, editar ao vivo e enviar para automação com segurança.
             </p>
 
             <div className="d-flex flex-wrap gap-2 mb-4">
@@ -38,7 +38,7 @@ export default function HeroSection({ onNavigate }) {
                 className="hero-primary-btn"
                 onClick={() => onNavigate("painel")}
               >
-                Abrir formulario IA
+                Abrir formulário IA
               </Button>
 
               <Button
@@ -52,23 +52,23 @@ export default function HeroSection({ onNavigate }) {
             </div>
 
             <div className="d-flex flex-wrap gap-2 mb-4">
-              <span className="trust-pill">Formulario unico e objetivo</span>
-              <span className="trust-pill">Edicao ao vivo da defesa</span>
-              <span className="trust-pill">Historico claro no dashboard</span>
+              <span className="trust-pill">Formulário único e objetivo</span>
+              <span className="trust-pill">Edição ao vivo da defesa</span>
+              <span className="trust-pill">Histórico claro no dashboard</span>
             </div>
 
             <div className="hero-proof-grid">
               <div className="proof-card">
                 <div className="proof-title">Fluxo direto para IA</div>
                 <p className="mb-0">
-                  Dados essenciais, upload da peca base e envio para automacao no mesmo ambiente.
+                  Dados essenciais, upload da peça base e envio para automação no mesmo ambiente.
                 </p>
               </div>
 
               <div className="proof-card">
                 <div className="proof-title">Dashboard simples</div>
                 <p className="mb-0">
-                  Indicadores claros e leitura facil para acompanhar cada defesa processada.
+                  Indicadores claros e leitura fácil para acompanhar cada defesa processada.
                 </p>
               </div>
             </div>
@@ -79,15 +79,15 @@ export default function HeroSection({ onNavigate }) {
               <Card.Body className="p-4 p-lg-4">
                 <div className="console-topbar mb-4">
                   <div>
-                    <small className="console-eyebrow d-block">Workspace juridico em tempo real</small>
-                    <h2 className="h5 mb-1">Painel de automacao de defesas</h2>
+                    <small className="console-eyebrow d-block">Workspace jurídico em tempo real</small>
+                    <h2 className="h5 mb-1">Painel de automação de defesas</h2>
                     <p className="text-secondary small mb-0">
-                      Etapas do processamento da defesa com visao objetiva.
+                      Etapas do processamento da defesa com visão objetiva.
                     </p>
                   </div>
                   <div className="console-score">
                     <strong>~5min</strong>
-                    <span>tempo medio</span>
+                    <span>tempo médio</span>
                   </div>
                 </div>
 
@@ -97,9 +97,9 @@ export default function HeroSection({ onNavigate }) {
                       <FileEarmarkArrowUp />
                     </div>
                     <div>
-                      <div className="fw-semibold">Upload da peticao</div>
+                      <div className="fw-semibold">Upload da petição</div>
                       <small className="text-secondary">
-                        PDF ou DOCX — os dados do processo sao extraidos automaticamente
+                        PDF ou DOCX — os dados do processo são extraídos automaticamente
                       </small>
                     </div>
                     <span className="feature-state">Step 01</span>
@@ -112,7 +112,7 @@ export default function HeroSection({ onNavigate }) {
                     <div>
                       <div className="fw-semibold">Busca por defesa similar</div>
                       <small className="text-secondary">
-                        Consulta semantica nos casos anteriores do escritorio
+                        Consulta semântica nos casos anteriores do escritório
                       </small>
                     </div>
                     <span className="feature-state">Step 02</span>
@@ -123,9 +123,9 @@ export default function HeroSection({ onNavigate }) {
                       <ShieldCheck />
                     </div>
                     <div>
-                      <div className="fw-semibold">Geracao com citacoes verificadas</div>
+                      <div className="fw-semibold">Geração com citações verificadas</div>
                       <small className="text-secondary">
-                        Cada jurisprudencia e artigo sao checados antes da entrega
+                        Cada jurisprudência e artigo são checados antes da entrega
                       </small>
                     </div>
                     <span className="feature-state">Step 03</span>
@@ -136,9 +136,9 @@ export default function HeroSection({ onNavigate }) {
                       <FileEarmarkCheck />
                     </div>
                     <div>
-                      <div className="fw-semibold">Download no estilo do escritorio</div>
+                      <div className="fw-semibold">Download no estilo do escritório</div>
                       <small className="text-secondary">
-                        Fonte, espacamento e cabecalho copiados do modelo enviado
+                        Fonte, espaçamento e cabeçalho copiados do modelo enviado
                       </small>
                     </div>
                     <span className="feature-state">Step 04</span>
@@ -149,7 +149,7 @@ export default function HeroSection({ onNavigate }) {
                   <div className="console-mini-card">
                     <Activity className="console-mini-icon" />
                     <div className="console-mini-value">~5min</div>
-                    <div className="console-mini-label">fluxos rapidos</div>
+                    <div className="console-mini-label">fluxos rápidos</div>
                   </div>
                   <div className="console-mini-card">
                     <FileEarmarkRuled className="console-mini-icon" />
@@ -159,7 +159,7 @@ export default function HeroSection({ onNavigate }) {
                 </div>
 
                 <div className="console-footer mt-3 pt-3">
-                  <span>Formulario, IA e dashboard conectados no mesmo fluxo</span>
+                  <span>Formulário, IA e dashboard conectados no mesmo fluxo</span>
                   <ArrowRight />
                 </div>
               </Card.Body>

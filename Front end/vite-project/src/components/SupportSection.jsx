@@ -17,9 +17,9 @@ export default function SupportSection({ form, errors, feedback, loading, onChan
               <Card.Body className="p-4 p-lg-5">
                 <div className="mb-4 support-head">
                   <Badge className="section-badge mb-2">Suporte</Badge>
-                  <h2 className="h3 mb-2">Canal de contato para reclamacoes</h2>
+                  <h2 className="h3 mb-2">Canal de contato para reclamações</h2>
                   <p className="text-secondary mb-0 support-intro-copy">
-                    Registre sua reclamacao e nosso time recebe por e-mail para iniciar o tratamento.
+                    Registre sua reclamação e nosso time recebe por e-mail para iniciar o tratamento.
                   </p>
                 </div>
 
@@ -58,7 +58,7 @@ export default function SupportSection({ form, errors, feedback, loading, onChan
 
                     <Col md={7}>
                       <Form.Group>
-                        <Form.Label>Categoria da reclamacao</Form.Label>
+                        <Form.Label>Categoria da reclamação</Form.Label>
                         <Form.Select
                           name="categoria"
                           value={form.categoria}
@@ -78,7 +78,7 @@ export default function SupportSection({ form, errors, feedback, loading, onChan
 
                     <Col md={5}>
                       <Form.Group>
-                        <Form.Label>Numero do processo (opcional)</Form.Label>
+                        <Form.Label>Número do processo (opcional)</Form.Label>
                         <Form.Control
                           name="processo"
                           value={form.processo}
@@ -97,7 +97,7 @@ export default function SupportSection({ form, errors, feedback, loading, onChan
                           name="assunto"
                           value={form.assunto}
                           onChange={onChange}
-                          placeholder="Resumo curto da reclamacao"
+                          placeholder="Resumo curto da reclamação"
                           isInvalid={Boolean(errors.assunto)}
                         />
                         <Form.Control.Feedback type="invalid">{errors.assunto}</Form.Control.Feedback>
@@ -106,7 +106,7 @@ export default function SupportSection({ form, errors, feedback, loading, onChan
 
                     <Col xs={12}>
                       <Form.Group>
-                        <Form.Label>Descricao detalhada</Form.Label>
+                        <Form.Label>Descrição detalhada</Form.Label>
                         <Form.Control
                           as="textarea"
                           rows={6}
@@ -124,7 +124,7 @@ export default function SupportSection({ form, errors, feedback, loading, onChan
 
                   <div className="d-flex flex-wrap gap-2 mt-4">
                     <Button type="submit" variant="dark" disabled={loading}>
-                      {loading ? "Enviando..." : "Enviar reclamacao"}
+                      {loading ? "Enviando..." : "Enviar reclamação"}
                     </Button>
                   </div>
                 </Form>

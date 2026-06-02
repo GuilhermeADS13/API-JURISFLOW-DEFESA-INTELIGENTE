@@ -148,18 +148,18 @@ export default function MainPanelSection({
                       onClick={() => onModoChange?.("peticao")}
                       disabled={loading}
                     >
-                      Enviar peticao inicial
+                      Enviar petição inicial
                     </Button>
                   </ButtonGroup>
                   <h2 className="h3 mb-2">
                     {modo === "peticao"
-                      ? "Geracao automatica a partir da peticao"
-                      : "Formulario para envio ao agente de IA"}
+                      ? "Geração automática a partir da petição"
+                      : "Formulário para envio ao agente de IA"}
                   </h2>
                   <p className="text-secondary mb-0">
                     {modo === "peticao"
-                      ? "Anexe a peticao inicial — o sistema extrai os dados e gera a contestacao."
-                      : "Preencha os dados do caso, anexe a peca base e envie para automacao."}
+                      ? "Anexe a petição inicial — o sistema extrai os dados e gera a contestação."
+                      : "Preencha os dados do caso, anexe a peça base e envie para automação."}
                   </p>
                 </div>
 
@@ -209,9 +209,9 @@ export default function MainPanelSection({
                       onDrop={handlePeticaoDrop}
                     >
                       <FileEarmarkText size={28} className="mb-2" />
-                      <div className="fw-semibold">Peticao inicial (obrigatorio)</div>
+                      <div className="fw-semibold">Petição inicial (obrigatório)</div>
                       <small className="text-secondary">
-                        Arraste ou clique para anexar PDF, DOC ou DOCX (ate 20 MB).
+                        Arraste ou clique para anexar PDF, DOC ou DOCX (até 20 MB).
                       </small>
                     </div>
                     <input
@@ -248,7 +248,7 @@ export default function MainPanelSection({
                     )}
 
                     <Form.Group className="mt-4">
-                      <Form.Label>Modelo base do escritorio (opcional)</Form.Label>
+                      <Form.Label>Modelo base do escritório (opcional)</Form.Label>
                       <div
                         role="button"
                         tabIndex={0}
@@ -311,7 +311,7 @@ export default function MainPanelSection({
                     <Row className="g-3 mt-1">
                       <Col md={6}>
                         <Form.Group>
-                          <Form.Label>Tipo de acao (dica para a IA)</Form.Label>
+                          <Form.Label>Tipo de ação (dica para a IA)</Form.Label>
                           <Form.Control
                             value={tipoAcaoHint || ""}
                             onChange={onTipoAcaoHintChange}
@@ -321,13 +321,13 @@ export default function MainPanelSection({
                       </Col>
                       <Col xs={12}>
                         <Form.Group>
-                          <Form.Label>Pontos especificos para atacar (opcional)</Form.Label>
+                          <Form.Label>Pontos específicos para atacar (opcional)</Form.Label>
                           <Form.Control
                             as="textarea"
                             rows={4}
                             value={pontosContestante || ""}
                             onChange={onPontosContestanteChange}
-                            placeholder="Ex.: prescricao bienal, ausencia de prova testemunhal, valor da causa irreal"
+                            placeholder="Ex.: prescrição bienal, ausência de prova testemunhal, valor da causa irreal"
                           />
                         </Form.Group>
                       </Col>
@@ -336,7 +336,7 @@ export default function MainPanelSection({
                     {/* PR5 multi-docs: anexos opcionais (max 5, total 50MB) */}
                     <Form.Group className="mt-4">
                       <Form.Label>
-                        Anexos da peticao (opcional — contratos, e-mails, laudos)
+                        Anexos da petição (opcional — contratos, e-mails, laudos)
                       </Form.Label>
                       <div className="d-flex align-items-center gap-2 flex-wrap">
                         <Button
@@ -397,7 +397,7 @@ export default function MainPanelSection({
 
                     <div className="d-flex flex-wrap gap-2 mt-4">
                       <Button type="submit" variant="dark" disabled={loading}>
-                        {loading ? "Processando..." : "Gerar contestacao automaticamente"}
+                        {loading ? "Processando..." : "Gerar contestação automaticamente"}
                       </Button>
                     </div>
                   </Form>
@@ -408,7 +408,7 @@ export default function MainPanelSection({
                   <Row className="g-3">
                     <Col md={6}>
                       <Form.Group>
-                        <Form.Label>Numero do processo</Form.Label>
+                        <Form.Label>Número do processo</Form.Label>
                         <IMaskInput
                           mask="0000000-00.0000.0.00.0000"
                           name="processo"
@@ -430,7 +430,7 @@ export default function MainPanelSection({
 
                     <Col md={6}>
                       <Form.Group>
-                        <Form.Label>Autor da acao</Form.Label>
+                        <Form.Label>Autor da ação</Form.Label>
                         <Form.Control
                           name="autor"
                           value={form.autor}
@@ -446,12 +446,12 @@ export default function MainPanelSection({
 
                     <Col md={6}>
                       <Form.Group>
-                        <Form.Label>Reu (parte que voce representa)</Form.Label>
+                        <Form.Label>Réu (parte que você representa)</Form.Label>
                         <Form.Control
                           name="reu"
                           value={form.reu}
                           onChange={onChange}
-                          placeholder="Nome da empresa / reu"
+                          placeholder="Nome da empresa / réu"
                           isInvalid={Boolean(formErrors.reu)}
                         />
                         <Form.Control.Feedback type="invalid">
@@ -489,7 +489,7 @@ export default function MainPanelSection({
                     {subtiposAcao[form.tipoAcao] && (
                       <Col md={6}>
                         <Form.Group>
-                          <Form.Label>Tipo especifico da acao</Form.Label>
+                          <Form.Label>Tipo específico da ação</Form.Label>
                           <Form.Select
                             name="subtipoAcao"
                             value={form.subtipoAcao || ""}
@@ -518,7 +518,7 @@ export default function MainPanelSection({
                           name="fatos"
                           value={form.fatos}
                           onChange={onChange}
-                          placeholder="Resumo dos fatos conforme a peticao inicial..."
+                          placeholder="Resumo dos fatos conforme a petição inicial..."
                           isInvalid={Boolean(formErrors.fatos)}
                         />
                         <Form.Control.Feedback type="invalid">
@@ -609,7 +609,7 @@ export default function MainPanelSection({
                     </Col>
 
                     <Col xs={12}>
-                      <Form.Label>Modelo base do escritorio (papel timbrado / estilo) — opcional</Form.Label>
+                      <Form.Label>Modelo base do escritório (papel timbrado / estilo) — opcional</Form.Label>
                       <div
                         role="button"
                         tabIndex={0}
@@ -632,7 +632,7 @@ export default function MainPanelSection({
                       >
                         <Upload size={28} className="mb-2" />
                         <small className="text-secondary">
-                          Anexe um .docx com o cabecalho/estilo do escritorio. A IA preserva o formato.
+                          Anexe um .docx com o cabeçalho/estilo do escritório. A IA preserva o formato.
                         </small>
                       </div>
                       <input
@@ -696,7 +696,7 @@ export default function MainPanelSection({
             <div className="d-grid gap-4 h-100">
               <Card className="dashboard-card panel-entry-secondary border-0">
                 <Card.Body className="p-4">
-                  <h3 className="h5 mb-2">Edicao ao vivo da defesa</h3>
+                  <h3 className="h5 mb-2">Edição ao vivo da defesa</h3>
                   <p className="text-secondary small mb-3">
                     Ajuste o texto livremente antes de exportar.
                   </p>
@@ -708,7 +708,7 @@ export default function MainPanelSection({
                       value={liveDraft}
                       onChange={onLiveDraftChange}
                       className="live-editor-area"
-                      placeholder="A defesa editada em tempo real sera exibida aqui."
+                      placeholder="A defesa editada em tempo real será exibida aqui."
                     />
                   </Form.Group>
 
@@ -740,7 +740,7 @@ export default function MainPanelSection({
                       Atualizar com texto gerado
                     </Button>
                     <small className="text-secondary">
-                      {liveDraftTouched ? "Edicao manual ativa" : "Texto sincronizado com o formulario"}
+                      {liveDraftTouched ? "Edição manual ativa" : "Texto sincronizado com o formulário"}
                     </small>
                   </div>
                 </Card.Body>
@@ -748,7 +748,7 @@ export default function MainPanelSection({
 
               <Card className="side-info-card panel-entry-tertiary border-0">
                 <Card.Body className="p-4">
-                  <h3 className="h5 mb-3">Regras do agente juridico</h3>
+                  <h3 className="h5 mb-3">Regras do agente jurídico</h3>
                   <div className="agent-rule-list">
                     {agentRules.map((rule) => (
                       <div key={rule} className="rule-item">

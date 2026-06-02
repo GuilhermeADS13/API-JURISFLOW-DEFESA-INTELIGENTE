@@ -15,33 +15,33 @@ export default function AppFooter() {
               <span className="brand-mark">JF</span>
               <div>
                 <div className="brand-name">JurisFlow AI</div>
-                <div className="brand-sub">Plataforma de automacao de Defesas Juridicas</div>
+                <div className="brand-sub">Plataforma de automação de Defesas Jurídicas</div>
               </div>
             </div>
             <p className="text-secondary mb-0">
               Plataforma pensada para organizar o fluxo de defesas com
-              rastreabilidade, produtividade e revisao juridica final.
+              rastreabilidade, produtividade e revisão jurídica final.
             </p>
           </div>
 
           <div className="footer-column">
             <div className="footer-title">Produto</div>
             <span>Painel de casos</span>
-            <span>Automacao de Defesas</span>
-            <span>Exportacao Juridica</span>
+            <span>Automação de Defesas</span>
+            <span>Exportação Jurídica</span>
           </div>
 
           <div className="footer-column">
-            <div className="footer-title">Operacao</div>
+            <div className="footer-title">Operação</div>
             <span>Fluxo do agente IA</span>
-            <span>Checklist de seguranca</span>
-            <span>Revisao humana final</span>
+            <span>Checklist de segurança</span>
+            <span>Revisão humana final</span>
           </div>
         </div>
 
         <div className="footer-bottom">
-          <span>Plataforma focada em automacao de defesas com clareza operacional</span>
-          <span>Fluxo direto: formulario IA, dashboard e suporte para reclamacoes</span>
+          <span>Plataforma focada em automação de defesas com clareza operacional</span>
+          <span>Fluxo direto: formulário IA, dashboard e suporte para reclamações</span>
         </div>
       </Container>
     </footer>

@@ -37,14 +37,14 @@ function ConfirmEmailScreen({
       <h5 className="confirm-email-title">Verifique seu e-mail</h5>
 
       <p className="confirm-email-body">
-        Enviamos um link de confirmacao para:
+        Enviamos um link de confirmação para:
       </p>
       <p className="confirm-email-address">{email}</p>
       <p className="confirm-email-hint">
         Abra o e-mail e clique em <strong>Confirmar cadastro</strong>. Depois
-        volte aqui e faca login normalmente.
+        volte aqui e faça login normalmente.
         <br />
-        Nao encontrou? Verifique a caixa de spam.
+        Não encontrou? Verifique a caixa de spam.
       </p>
 
       {feedback && (
@@ -63,7 +63,7 @@ function ConfirmEmailScreen({
           ? "Reenviando..."
           : secondsLeft > 0
           ? `Reenviar e-mail (${secondsLeft}s)`
-          : "Reenviar e-mail de confirmacao"}
+          : "Reenviar e-mail de confirmação"}
       </Button>
 
       <button type="button" className="auth-change-email-link" onClick={onChangeEmail}>
@@ -143,8 +143,8 @@ export default function AuthModal({
 
             <div className="auth-intro-copy">
               {isSignup
-                ? "Cadastre-se para centralizar os casos, salvar rascunhos e acompanhar a automacao das defesas."
-                : "Acesse sua operacao juridica para continuar os fluxos, revisar minutas e exportar as defesas."}
+                ? "Cadastre-se para centralizar os casos, salvar rascunhos e acompanhar a automação das defesas."
+                : "Acesse sua operação jurídica para continuar os fluxos, revisar minutas e exportar as defesas."}
             </div>
 
             {feedback && (
@@ -162,7 +162,7 @@ export default function AuthModal({
                     value={form.name}
                     onChange={onFieldChange}
                     onBlur={onFieldBlur}
-                    placeholder="Seu nome ou o nome do escritorio"
+                    placeholder="Seu nome ou o nome do escritório"
                     isInvalid={Boolean(errors.name)}
                   />
                   <Form.Control.Feedback type="invalid">{errors.name}</Form.Control.Feedback>
@@ -201,19 +201,19 @@ export default function AuthModal({
                 {isSignup && (
                   <div className="d-grid gap-1 mt-2">
                     <small className={passwordChecks?.minLength ? "text-success" : "text-secondary"}>
-                      Minimo de 8 caracteres
+                      Mínimo de 8 caracteres
                     </small>
                     <small className={passwordChecks?.hasUppercase ? "text-success" : "text-secondary"}>
-                      Pelo menos 1 letra maiuscula
+                      Pelo menos 1 letra maiúscula
                     </small>
                     <small className={passwordChecks?.hasLowercase ? "text-success" : "text-secondary"}>
-                      Pelo menos 1 letra minuscula
+                      Pelo menos 1 letra minúscula
                     </small>
                     <small className={passwordChecks?.hasNumber ? "text-success" : "text-secondary"}>
-                      Pelo menos 1 numero
+                      Pelo menos 1 número
                     </small>
                     <small className={passwordChecks?.hasSymbol ? "text-success" : "text-secondary"}>
-                      Pelo menos 1 simbolo
+                      Pelo menos 1 símbolo
                     </small>
                   </div>
                 )}
@@ -226,7 +226,7 @@ export default function AuthModal({
 
             <div className="auth-footer-note">
               {isSignup
-                ? "Ao criar sua conta, voce libera o acesso ao workspace de automacao de defesas."
+                ? "Ao criar sua conta, você libera o acesso ao workspace de automação de defesas."
                 : "Sem conta ainda? Troque para Criar conta e habilite seu acesso em segundos."}
             </div>
           </>

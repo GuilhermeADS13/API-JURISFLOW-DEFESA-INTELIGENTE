@@ -6,7 +6,11 @@ import { Badge } from "react-bootstrap";
  * Badge visual para status do caso no dashboard.
  */
 export default function StatusBadge({ status }) {
-  const normalized = status.toLowerCase();
+  // Remove acentos pra matching tolerar "análise" ↔ "analise", "concluída" ↔ "concluida" etc.
+  const normalized = status
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
 
   let tone = "neutral";
 

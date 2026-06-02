@@ -2,24 +2,24 @@
 // Dados mockados para cards, selects e historico da interface.
 export const stats = [
   {
-    label: "Tempo medio por defesa",
+    label: "Tempo médio por defesa",
     value: "~5 min",
-    detail: "Do upload da peticao ao DOCX pronto pra baixar",
+    detail: "Do upload da petição ao DOCX pronto pra baixar",
   },
   {
-    label: "Citacoes verificadas",
+    label: "Citações verificadas",
     value: "100%",
-    detail: "Toda jurisprudencia e artigo sao checados antes da entrega",
+    detail: "Toda jurisprudência e artigo são checados antes da entrega",
   },
   {
     label: "Estilo adaptativo",
     value: "DOCX",
-    detail: "Fonte, espacamento e cabecalho copiados do modelo enviado",
+    detail: "Fonte, espaçamento e cabeçalho copiados do modelo enviado",
   },
   {
-    label: "Aprendizado continuo",
+    label: "Aprendizado contínuo",
     value: "RAG",
-    detail: "Cada peca aprovada enriquece a base de defesas do escritorio",
+    detail: "Cada peça aprovada enriquece a base de defesas do escritório",
   },
 ];
 
@@ -29,21 +29,21 @@ export const legalBranches = [
   "Direito do Consumidor",
   "Direito Empresarial",
   "Direito Contratual",
-  "Direito Imobiliario",
-  "Direito de Familia e Sucessoes",
+  "Direito Imobiliário",
+  "Direito de Família e Sucessões",
   "Direito do Trabalho",
-  "Direito Previdenciario",
-  "Direito Tributario",
+  "Direito Previdenciário",
+  "Direito Tributário",
   "Direito Administrativo",
   "Direito Constitucional",
   "Direito Penal",
   "Direito Ambiental",
   "Direito Digital",
-  "Direito Bancario e Financeiro",
+  "Direito Bancário e Financeiro",
   "Direito Eleitoral",
-  "Direito Agrario",
-  "Direito Medico e da Saude",
-  "Direito Maritimo e Aeronautico",
+  "Direito Agrário",
+  "Direito Médico e da Saúde",
+  "Direito Marítimo e Aeronáutico",
 ];
 
 /**
@@ -53,19 +53,19 @@ export const legalBranches = [
  * Consumidor) mais acessiveis. PR6 P3.4.
  */
 export const legalBranchGroups = {
-  "Trabalhista e Previdenciario": [
+  "Trabalhista e Previdenciário": [
     "Direito do Trabalho",
-    "Direito Previdenciario",
+    "Direito Previdenciário",
   ],
   "Civil e Empresarial": [
     "Direito Civil",
     "Direito Empresarial",
     "Direito Contratual",
-    "Direito Imobiliario",
-    "Direito de Familia e Sucessoes",
+    "Direito Imobiliário",
+    "Direito de Família e Sucessões",
   ],
-  "Publico e Regulatorio": [
-    "Direito Tributario",
+  "Público e Regulatório": [
+    "Direito Tributário",
     "Direito Administrativo",
     "Direito Constitucional",
     "Direito Ambiental",
@@ -75,10 +75,10 @@ export const legalBranchGroups = {
     "Direito do Consumidor",
     "Direito Penal",
     "Direito Digital",
-    "Direito Bancario e Financeiro",
-    "Direito Agrario",
-    "Direito Medico e da Saude",
-    "Direito Maritimo e Aeronautico",
+    "Direito Bancário e Financeiro",
+    "Direito Agrário",
+    "Direito Médico e da Saúde",
+    "Direito Marítimo e Aeronáutico",
   ],
 };
 
@@ -94,50 +94,50 @@ export const legalBranchGroups = {
 export const subtiposAcao = {
   "Direito do Trabalho": [
     "Horas Extras",
-    "Rescisao Indireta",
+    "Rescisão Indireta",
     "Danos Morais Trabalhistas",
     "FGTS",
     "Adicional de Insalubridade",
     "Adicional de Periculosidade",
     "Acidente de Trabalho",
-    "Equiparacao Salarial",
+    "Equiparação Salarial",
     "Jornada de Trabalho",
-    "Vinculo Empregaticio",
+    "Vínculo Empregatício",
   ],
   "Direito do Consumidor": [
-    "Cobranca Indevida",
-    "Dano Moral por Negativacao",
+    "Cobrança Indevida",
+    "Dano Moral por Negativação",
     "Produto Defeituoso",
-    "Rescisao de Contrato",
+    "Rescisão de Contrato",
     "Propaganda Enganosa",
     "Recusa de Atendimento",
   ],
   "Direito Civil": [
     "Responsabilidade Civil",
     "Inadimplemento Contratual",
-    "Reparacao de Danos",
+    "Reparação de Danos",
     "Posse e Propriedade",
-    "Indenizacao por Danos Morais",
+    "Indenização por Danos Morais",
   ],
-  "Direito Previdenciario": [
+  "Direito Previdenciário": [
     "Aposentadoria por Idade",
     "Aposentadoria por Invalidez",
-    "Auxilio-Doenca",
-    "Pensao por Morte",
-    "Beneficio de Prestacao Continuada (BPC)",
+    "Auxílio-Doença",
+    "Pensão por Morte",
+    "Benefício de Prestação Continuada (BPC)",
   ],
-  "Direito Tributario": [
-    "Execucao Fiscal",
-    "Repeticao de Indebito",
+  "Direito Tributário": [
+    "Execução Fiscal",
+    "Repetição de Indébito",
     "ICMS",
     "ISS",
     "Imposto de Renda",
   ],
-  "Direito Bancario e Financeiro": [
-    "Revisao de Contrato Bancario",
+  "Direito Bancário e Financeiro": [
+    "Revisão de Contrato Bancário",
     "Juros Abusivos",
     "Tarifas Indevidas",
-    "Cartao de Credito",
+    "Cartão de Crédito",
     "Financiamento Veicular",
   ],
 };
@@ -147,21 +147,21 @@ export const historyItems = [
   {
     id: "CTR-2026-001",
     naturezaCaso: "Direito do Trabalho",
-    status: "Concluida",
+    status: "Concluída",
     data: "10/03/2026",
     tipo: "Defesa editada",
   },
   {
     id: "CTR-2026-002",
-    naturezaCaso: "Direito Tributario",
-    status: "Em analise",
+    naturezaCaso: "Direito Tributário",
+    status: "Em análise",
     data: "10/03/2026",
-    tipo: "Revisao de fundamentacao",
+    tipo: "Revisão de fundamentação",
   },
   {
     id: "CTR-2026-003",
     naturezaCaso: "Direito do Consumidor",
-    status: "Aguardando revisao",
+    status: "Aguardando revisão",
     data: "09/03/2026",
     tipo: "Defesa editada",
   },
@@ -169,40 +169,40 @@ export const historyItems = [
 
 // Regras de uso exibidas ao lado do editor da defesa.
 export const agentRules = [
-  "Nao alterar dados processuais sensiveis.",
-  "Nao inventar jurisprudencia nem citacoes.",
-  "Manter linguagem juridica formal e objetiva.",
-  "Atuar apenas na edicao da peca base.",
+  "Não alterar dados processuais sensíveis.",
+  "Não inventar jurisprudência nem citações.",
+  "Manter linguagem jurídica formal e objetiva.",
+  "Atuar apenas na edição da peça base.",
 ];
 
 // Cards de resumo no topo da tela de dashboard.
 export const dashboardCards = [
   { label: "Casos em processamento", value: "07" },
   { label: "Aguardando advogado", value: "14" },
-  { label: "Prontas para exportacao", value: "22" },
-  { label: "Precisao media do agente", value: "96%" },
+  { label: "Prontas para exportação", value: "22" },
+  { label: "Precisão média do agente", value: "96%" },
 ];
 
 // Opcoes de categoria exibidas no formulario de suporte.
 export const supportIssueTypes = [
-  "Atraso na geracao da defesa",
+  "Atraso na geração da defesa",
   "Erro na minuta sugerida",
   "Problema de upload de arquivo",
-  "Falha de login ou sessao",
+  "Falha de login ou sessão",
   "Outro",
 ];
 
 // Itens orientativos para o cliente preencher uma reclamacao completa.
 export const supportChecklist = [
   "Explique o que aconteceu e qual impacto no seu caso.",
-  "Informe o numero do processo quando houver relacao direta.",
-  "Descreva horario aproximado e etapa em que ocorreu a falha.",
-  "Inclua expectativas de retorno para priorizacao adequada.",
+  "Informe o número do processo quando houver relação direta.",
+  "Descreva horário aproximado e etapa em que ocorreu a falha.",
+  "Inclua expectativas de retorno para priorização adequada.",
 ];
 
 // Canais e SLA exibidos na lateral da aba de suporte.
 export const supportChannels = [
-  "Recebimento automatico por e-mail do time de suporte",
-  "Triagem inicial em ate 2 horas uteis",
-  "Atualizacoes por e-mail durante o tratamento",
+  "Recebimento automático por e-mail do time de suporte",
+  "Triagem inicial em até 2 horas úteis",
+  "Atualizações por e-mail durante o tratamento",
 ];

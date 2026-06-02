@@ -26,8 +26,8 @@ export default function AppNavbar({
   onLogout,
 }) {
   const menuItems = [
-    { id: "inicio", label: "Inicio" },
-    { id: "painel", label: "Formulario IA" },
+    { id: "inicio", label: "Início" },
+    { id: "painel", label: "Formulário IA" },
     { id: "dashboard", label: "Dashboard" },
     { id: "contato", label: "Suporte" },
   ];
@@ -43,7 +43,7 @@ export default function AppNavbar({
           <span className="brand-mark">JF</span>
           <span>
             <span className="brand-name d-block">JurisFlow AI</span>
-            <span className="brand-sub d-block">Automacao inteligente de defesas juridicas</span>
+            <span className="brand-sub d-block">Automação inteligente de defesas jurídicas</span>
           </span>
         </Navbar.Brand>
 

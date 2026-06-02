@@ -78,14 +78,14 @@ export default function RevisaoHumanaModal({
   return (
     <Modal show={show} onHide={onHide} centered size="lg" backdrop="static">
       <Modal.Header closeButton>
-        <Modal.Title>Revisao necessaria antes de gerar a contestacao</Modal.Title>
+        <Modal.Title>Revisão necessária antes de gerar a contestação</Modal.Title>
       </Modal.Header>
 
       <Form onSubmit={handleSubmit}>
         <Modal.Body>
           <Alert variant="warning" className="mb-3">
-            A IA teve <strong>baixa confianca ({confiancaLabel})</strong> ao extrair
-            os dados desta peticao. Revise e corrija os campos abaixo antes de
+            A IA teve <strong>baixa confiança ({confiancaLabel})</strong> ao extrair
+            os dados desta petição. Revise e corrija os campos abaixo antes de
             gerar a minuta final.
           </Alert>
 
@@ -102,7 +102,7 @@ export default function RevisaoHumanaModal({
           </Form.Group>
 
           <Form.Group className="mb-3">
-            <Form.Label>Reu (reclamado)</Form.Label>
+            <Form.Label>Réu (reclamado)</Form.Label>
             <Form.Control
               value={form.reu}
               onChange={handleChange("reu")}
@@ -113,7 +113,7 @@ export default function RevisaoHumanaModal({
           <div className="row g-2">
             <div className="col-md-6">
               <Form.Group className="mb-3">
-                <Form.Label>Numero do processo (CNJ)</Form.Label>
+                <Form.Label>Número do processo (CNJ)</Form.Label>
                 <Form.Control
                   value={form.numero_processo}
                   onChange={handleChange("numero_processo")}
@@ -135,7 +135,7 @@ export default function RevisaoHumanaModal({
           </div>
 
           <Form.Group className="mb-3">
-            <Form.Label>Tipo de acao</Form.Label>
+            <Form.Label>Tipo de ação</Form.Label>
             <Form.Control
               value={form.tipo_acao}
               onChange={handleChange("tipo_acao")}
@@ -189,7 +189,7 @@ export default function RevisaoHumanaModal({
                 Gerando...
               </>
             ) : (
-              "Confirmar e gerar contestacao"
+              "Confirmar e gerar contestação"
             )}
           </Button>
         </Modal.Footer>

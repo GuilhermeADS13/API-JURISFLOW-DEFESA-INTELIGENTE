@@ -74,7 +74,7 @@ export function validateAuthField(name, value, mode) {
 
   if (name === "email") {
     if (!fieldValue.trim()) return "Informe o e-mail.";
-    if (!isValidEmail(fieldValue)) return "Informe um e-mail valido.";
+    if (!isValidEmail(fieldValue)) return "Informe um e-mail válido.";
     return "";
   }
 
@@ -84,7 +84,7 @@ export function validateAuthField(name, value, mode) {
     if (mode === "signup") {
       const checks = getPasswordChecks(fieldValue);
       if (!checks.minLength || !checks.hasUppercase || !checks.hasLowercase || !checks.hasNumber || !checks.hasSymbol) {
-        return "A senha deve ter 8+ caracteres, com maiuscula, minuscula, numero e simbolo.";
+        return "A senha deve ter 8+ caracteres, com maiúscula, minúscula, número e símbolo.";
       }
     }
 
