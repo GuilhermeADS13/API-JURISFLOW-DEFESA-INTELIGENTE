@@ -462,7 +462,9 @@ def _build_docx_from_template_inner(
         "Nos termos do art. 830 da CLT, o patrono que subscreve a presente peça "
         "declara a autenticidade dos documentos acostados em cópia ao presente processo."
     )
-    _add_text_para(doc, str(autenticidade_texto), contador, numerar=True)
+    # Strip cabecalho que a IA as vezes prefixa por engano ('## V — DA AUTENTICIDADE...')
+    autenticidade_texto = _strip_secao_prefix(str(autenticidade_texto))
+    _add_text_para(doc, autenticidade_texto, contador, numerar=True)
     doc.add_paragraph("")
     secao_idx += 1
 
@@ -499,9 +501,22 @@ def _build_docx_from_template_inner(
     assinatura = minuta.get("assinatura") or {}
     if not isinstance(assinatura, dict):
         assinatura = {}
-    local_data = assinatura.get("local_data") or f"{_local_padrao(dados)}, {_data_extenso()}."
-    nome_adv = assinatura.get("advogado") or _adv_padrao(dados, "nome")
-    oab_adv = assinatura.get("oab") or _adv_padrao(dados, "oab")
+    def _limpar(s: Any) -> str:
+        # Remove tabs/quebras espurias que vazam do JSON da IA (ex: 'OAB/PE a pree\tncher')
+        return re.sub(r"\s+", " ", str(s or "")).strip()
+
+    local_data = _limpar(assinatura.get("local_data"))
+    # Se IA deixou 'data a preencher' ou similar, sobrescreve com fallback completo.
+    if not local_data or "preencher" in local_data.lower() or "definir" in local_data.lower():
+        local_data = f"{_local_padrao(dados)}, {_data_extenso()}."
+
+    nome_adv = _limpar(assinatura.get("advogado"))
+    if not nome_adv or "preencher" in nome_adv.lower() or "definir" in nome_adv.lower():
+        nome_adv = _adv_padrao(dados, "nome")
+
+    oab_adv = _limpar(assinatura.get("oab"))
+    if not oab_adv or "preencher" in oab_adv.lower() or "definir" in oab_adv.lower():
+        oab_adv = _adv_padrao(dados, "oab")
 
     _add_para_simples(doc, local_data, alinhamento="center")
     doc.add_paragraph("")
@@ -828,25 +843,43 @@ def _data_extenso() -> str:
 
 
 def _local_padrao(dados: dict[str, Any]) -> str:
-    """Local padrao para encerramento. Se dados.vara mencionar cidade, usa; senao Recife/PE."""
-    vara = str(dados.get("vara") or "")
-    # Tenta extrair cidade da vara ('Vara do Trabalho de Petrolina/PE')
-    m = re.search(r"de\s+([A-ZÁ-Úa-zá-ú\s]+?)[/\-]([A-Z]{2})", vara)
-    if m:
-        return f"{m.group(1).strip()}/{m.group(2)}"
+    """Local padrao para encerramento: sede do escritorio G. Trindade (Recife/PE).
+
+    A cidade da Vara nao deve aparecer na assinatura (so no cabecalho processual);
+    no encerramento usa-se a sede do escritorio.
+    """
     return "Recife/PE"
 
 
 def _adv_padrao(dados: dict[str, Any], campo: str) -> str:
-    """Pega dados do advogado do form (se fornecidos via dados.dados_advogado)."""
+    """Pega dados do advogado do form OU fallback para o escritorio G. Trindade."""
     adv = dados.get("dados_advogado") or {}
     if not isinstance(adv, dict):
         adv = {}
     if campo == "nome":
-        return adv.get("nome") or "A definir"
+        return adv.get("nome") or "Genner Trindade"
     if campo == "oab":
-        return adv.get("oab") or "OAB a preencher"
+        return adv.get("oab") or "OAB/PE 27.790"
     return ""
+
+
+def _strip_secao_prefix(texto: str) -> str:
+    """Remove prefixos de cabecalho de secao gerados pela IA dentro do conteudo.
+
+    A IA as vezes prefixa '## V — DA AUTENTICIDADE...' + 'NN.- ' no inicio do
+    campo (que ja eh renderizado com cabecalho proprio pelo builder). Sem strip,
+    o cabecalho duplica e a numeracao vaza como texto.
+    """
+    if not texto:
+        return texto
+    s = str(texto).lstrip()
+    # Remove '## I-VI — CABECALHO...' no inicio (com ou sem ponto final)
+    s = re.sub(r"^#{1,4}\s*[IVXLCDM]+\s*[—\-–]\s*[^\n]+?\n+", "", s, count=1)
+    # Remove '## CABECALHO SEM ROMANO' no inicio tambem
+    s = re.sub(r"^#{1,4}\s*[^\n]+?\n+", "", s, count=1)
+    # Remove numeracao 'NN.-' duplicada que a IA as vezes adiciona
+    s = re.sub(r"^\d{1,3}[\.\-]+\s+", "", s.lstrip())
+    return s.strip()
 
 
 def _add_text_para_com_indent(doc: Any, texto: str) -> None:
