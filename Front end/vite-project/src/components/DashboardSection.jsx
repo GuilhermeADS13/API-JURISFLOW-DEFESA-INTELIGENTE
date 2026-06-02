@@ -1,6 +1,6 @@
 // Secao de dashboard com indicadores de automacao e historico de contestacoes.
 import React, { useState } from "react";
-import { Badge, Button, Card, Col, Container, ProgressBar, Row, Spinner, Table } from "react-bootstrap";
+import { Badge, Button, Card, Col, Container, Modal, ProgressBar, Row, Spinner, Table } from "react-bootstrap";
 import StatusBadge from "./ui/StatusBadge";
 
 /**
@@ -20,6 +20,7 @@ export default function DashboardSection({
   onExcluirPeca,
 }) {
   const [baixandoId, setBaixandoId] = useState(null);
+  const [formatoModal, setFormatoModal] = useState(null);
 
   const handleBaixar = async (contestacaoId, formato = "docx") => {
     if (!onBaixarPeca || !contestacaoId) return;
@@ -29,6 +30,13 @@ export default function DashboardSection({
     } finally {
       setBaixandoId(null);
     }
+  };
+
+  const handleEscolherFormato = async (formato) => {
+    if (!formatoModal) return;
+    const cid = formatoModal;
+    setFormatoModal(null);
+    await handleBaixar(cid, formato);
   };
   return (
     <section id="dashboard" className="py-5">
@@ -135,26 +143,15 @@ export default function DashboardSection({
                                       variant="primary"
                                       disabled={baixandoId === item.contestacao_id}
                                       onClick={() =>
-                                        handleBaixar(item.contestacao_id, "docx")
+                                        setFormatoModal(item.contestacao_id)
                                       }
-                                      title="Baixar como DOCX (Word)"
+                                      title="Baixar a peça"
                                     >
                                       {baixandoId === item.contestacao_id ? (
                                         <Spinner animation="border" size="sm" />
                                       ) : (
-                                        "DOCX"
+                                        "Baixar"
                                       )}
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline-primary"
-                                      disabled={baixandoId === item.contestacao_id}
-                                      onClick={() =>
-                                        handleBaixar(item.contestacao_id, "pdf")
-                                      }
-                                      title="Baixar como PDF (via impressão)"
-                                    >
-                                      PDF
                                     </Button>
                                     {onExcluirPeca && (
                                       <Button
@@ -201,6 +198,45 @@ export default function DashboardSection({
           </Col>
         </Row>
       </Container>
+
+      <Modal
+        show={formatoModal !== null}
+        onHide={() => setFormatoModal(null)}
+        centered
+        dialogClassName="baixar-formato-modal"
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>Escolha o formato para baixar</Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="p-4">
+          <Row className="g-3">
+            <Col xs={12} md={6}>
+              <button
+                type="button"
+                className="baixar-formato-card"
+                onClick={() => handleEscolherFormato("docx")}
+              >
+                <div className="baixar-formato-titulo">DOCX</div>
+                <div className="baixar-formato-desc">
+                  Arquivo Word, editável. Recomendado para revisar antes de protocolar.
+                </div>
+              </button>
+            </Col>
+            <Col xs={12} md={6}>
+              <button
+                type="button"
+                className="baixar-formato-card"
+                onClick={() => handleEscolherFormato("pdf")}
+              >
+                <div className="baixar-formato-titulo">PDF</div>
+                <div className="baixar-formato-desc">
+                  Pronto para impressão e protocolar. Não permite edição.
+                </div>
+              </button>
+            </Col>
+          </Row>
+        </Modal.Body>
+      </Modal>
     </section>
   );
 }
