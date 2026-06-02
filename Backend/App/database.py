@@ -1038,7 +1038,9 @@ def excluir_contestacao(contestacao_id: int, usuario_id: str) -> bool:
                 "DELETE FROM contestacoes WHERE id = %s AND usuario_id = %s",
                 (contestacao_id, usuario_id),
             )
-            return cursor.rowcount > 0
+            apagou = cursor.rowcount > 0
+        connection.commit()
+        return apagou
 
 
 def atualizar_contestacao_pos_revisao(
