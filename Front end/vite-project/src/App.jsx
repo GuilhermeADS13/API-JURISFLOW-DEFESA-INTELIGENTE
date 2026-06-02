@@ -2162,9 +2162,11 @@ export default function App() {
 
         <Modal.Body>
           {iaResult?.riscos?.length > 0 && (
-            <div className="mt-2">
-              <small className="text-warning fw-semibold">Pontos de atenção:</small>
-              <ul className="mb-0 mt-1" style={{ fontSize: "0.85rem" }}>
+            <div className="mt-2 p-2 border border-danger rounded bg-danger bg-opacity-10">
+              <small className="text-danger fw-semibold d-block mb-1">
+                ⚠ Pontos de atenção — revisar antes de protocolar:
+              </small>
+              <ul className="mb-0 mt-1 text-danger" style={{ fontSize: "0.85rem" }}>
                 {iaResult.riscos.map((r, i) => (
                   <li key={i}>{r}</li>
                 ))}
