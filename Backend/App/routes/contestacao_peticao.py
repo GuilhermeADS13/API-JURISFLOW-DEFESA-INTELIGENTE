@@ -192,6 +192,28 @@ async def _chamar_n8n_peticao(
             detail="Resposta invalida do servico de geracao.",
         )
 
+    # Workflow sinaliza falha da IA (fallback acionado) com status='erro_ia'.
+    # Sem este guard o backend monta DOCX com o conteudo do fallback e entrega
+    # ao usuario uma peca quebrada (sem preliminares, com texto generico).
+    if resposta.get("status") == "erro_ia":
+        engine = resposta.get("engine_ia") or {}
+        api_error = engine.get("api_error") or "erro desconhecido"
+        logger.error(
+            "n8n %s caiu em fallback %s api_error=%s provider=%s",
+            fluxo,
+            contexto_log,
+            api_error,
+            engine.get("provider"),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Falha no gerador de IA (a chamada externa foi abortada). "
+                "Tente novamente em alguns segundos — em peticoes longas, "
+                "o gerador as vezes precisa de uma segunda tentativa."
+            ),
+        )
+
     minuta = resposta.get("minuta") or {}
     if not minuta:
         logger.warning(
