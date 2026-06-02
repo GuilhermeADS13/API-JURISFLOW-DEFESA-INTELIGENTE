@@ -248,7 +248,7 @@ export default function MainPanelSection({
                     )}
 
                     <Form.Group className="mt-4">
-                      <Form.Label>Modelo base do escritório (opcional)</Form.Label>
+                      <Form.Label>Modelo base do escritório</Form.Label>
                       <div
                         role="button"
                         tabIndex={0}
@@ -271,7 +271,7 @@ export default function MainPanelSection({
                       >
                         <Upload size={28} className="mb-2" />
                         <small className="text-secondary">
-                          Arraste ou clique para anexar um .docx com placeholders Jinja2.
+                          Arraste ou clique para anexar o arquivo .docx.
                         </small>
                       </div>
                       <input
@@ -321,7 +321,7 @@ export default function MainPanelSection({
                       </Col>
                       <Col xs={12}>
                         <Form.Group>
-                          <Form.Label>Pontos específicos para atacar (opcional)</Form.Label>
+                          <Form.Label>Pontos específicos para atacar</Form.Label>
                           <Form.Control
                             as="textarea"
                             rows={4}
@@ -609,7 +609,7 @@ export default function MainPanelSection({
                     </Col>
 
                     <Col xs={12}>
-                      <Form.Label>Modelo base do escritório (papel timbrado / estilo) — opcional</Form.Label>
+                      <Form.Label>Modelo base do escritório (papel timbrado / estilo)</Form.Label>
                       <div
                         role="button"
                         tabIndex={0}
