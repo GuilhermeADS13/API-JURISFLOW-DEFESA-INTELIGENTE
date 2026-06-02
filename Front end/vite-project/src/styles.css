@@ -2277,7 +2277,8 @@ h5 {
 .rule-item,
 .auth-user-chip,
 .auth-modal .modal-content,
-.platform-modal .modal-content {
+.platform-modal .modal-content,
+.baixar-formato-modal .modal-content {
   background: linear-gradient(180deg, rgba(23, 28, 36, 0.96), rgba(18, 22, 29, 0.94)) !important;
   border: 1px solid var(--uniform-border) !important;
   color: var(--uniform-text) !important;
@@ -2443,21 +2444,33 @@ h6,
   border-color: rgba(162, 174, 196, 0.32) !important;
 }
 
-/* Modal Baixar — cards de formato (DOCX/PDF) */
+/* Modal Baixar — cards de formato (DOCX/PDF) — tema dark unificado */
+.baixar-formato-modal .modal-header {
+  border-bottom: 1px solid var(--uniform-border) !important;
+  color: var(--uniform-text) !important;
+}
+.baixar-formato-modal .modal-header .btn-close {
+  filter: invert(1) grayscale(100%) brightness(1.6);
+}
+.baixar-formato-modal .modal-title {
+  font-weight: 600;
+  color: var(--uniform-text);
+}
+
 .baixar-formato-card {
   width: 100%;
   text-align: left;
-  border: 1px solid rgba(162, 174, 196, 0.32);
-  background: rgba(92, 105, 129, 0.08);
-  border-radius: 12px;
-  padding: 20px 18px;
-  color: inherit;
+  border: 1px solid var(--uniform-border);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 16px;
+  padding: 22px 20px;
+  color: var(--uniform-text);
   transition: border-color 0.2s ease, background 0.2s ease, transform 0.1s ease;
   cursor: pointer;
 }
 .baixar-formato-card:hover {
-  border-color: #c5a572;
-  background: rgba(197, 165, 114, 0.08);
+  border-color: var(--uniform-accent);
+  background: rgba(208, 178, 122, 0.08);
 }
 .baixar-formato-card:active {
   transform: scale(0.99);
@@ -2467,10 +2480,10 @@ h6,
   font-weight: 700;
   letter-spacing: 1px;
   margin-bottom: 6px;
-  color: #c5a572;
+  color: var(--uniform-accent);
 }
 .baixar-formato-desc {
   font-size: 0.85rem;
-  color: #adb5bd;
-  line-height: 1.4;
+  color: var(--uniform-muted);
+  line-height: 1.45;
 }
