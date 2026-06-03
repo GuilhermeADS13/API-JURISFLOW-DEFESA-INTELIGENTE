@@ -34,3 +34,7 @@ docs/_dev/playwright-report/
 # Agent skills baixadas via `npx skills add` (tooling externo, regeravel)
 .agents/
 skills-lock.json
+
+# MCP config — pode conter Personal Access Tokens (Supabase PAT, etc).
+# Manter um .mcp.example.json no repo se precisar versionar o shape.
+.mcp.json
