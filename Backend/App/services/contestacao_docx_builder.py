@@ -39,6 +39,7 @@ from App.services.docx_style_defaults import (
     SPACE_BEFORE_SECAO1_PT_DEFAULT,
     SPACE_BEFORE_SECAO2_PT_DEFAULT,
     aplicar_espacamento_padrao as _aplicar_espacamento_padrao_central,
+    cap_font_size_pt,
     cap_line_spacing,
     cap_space_after_pt,
 )
@@ -100,7 +101,7 @@ def _extrair_estilo_modelo(doc: Any) -> dict[str, Any]:
         if getattr(normal.font, "name", None):
             estilo["font_name"] = normal.font.name
         if getattr(normal.font, "size", None):
-            estilo["font_size_pt"] = float(normal.font.size.pt)
+            estilo["font_size_pt"] = cap_font_size_pt(normal.font.size.pt)
     except Exception as err:  # noqa: BLE001 — template estranho, segue com default
         logger.debug("Sem acesso ao style Normal do template: %s", err)
 
@@ -116,7 +117,9 @@ def _extrair_estilo_modelo(doc: Any) -> dict[str, Any]:
                     break
             for run in paragrafo.runs:
                 if getattr(run.font, "size", None):
-                    estilo["font_size_pt"] = float(run.font.size.pt)
+                    # Cap em [11, 12]pt — protege contra templates com
+                    # tamanho exotico (ver docx_style_defaults).
+                    estilo["font_size_pt"] = cap_font_size_pt(run.font.size.pt)
                     break
             pf = paragrafo.paragraph_format
             ls = pf.line_spacing
