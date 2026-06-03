@@ -34,7 +34,7 @@ import binascii
 import logging
 import threading
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Path, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Request, status
 
 from App.database import (
     atualizar_contestacao_pos_revisao,
@@ -581,6 +581,7 @@ def _carregar_contestacao_em_revisao(contestacao_id: int, usuario_id: str) -> di
 async def baixar_contestacao(
     request: Request,
     contestacao_id: int = Path(..., gt=0),
+    formato: str = Query("docx", pattern="^(docx|pdf)$"),
     usuario: dict[str, str] = Depends(get_authenticated_user),
 ) -> dict:
     """Regenera o DOCX de uma contestacao a partir do banco e retorna em base64.
@@ -628,6 +629,33 @@ async def baixar_contestacao(
         usuario_id=usuario_id,
         contexto=f"download contestacao_id={contestacao_id}",
     )
+
+    if formato == "pdf":
+        from App.services.pdf_converter import PdfConversionError, docx_to_pdf
+
+        try:
+            pdf_bytes = docx_to_pdf(docx_bytes)
+        except PdfConversionError as exc:
+            logger.error(
+                "Falha conversao DOCX->PDF contestacao_id=%s erro=%s",
+                contestacao_id,
+                exc,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    "Conversao para PDF indisponivel. Baixe em DOCX e converta no Word."
+                ),
+            ) from exc
+
+        nome_docx = _montar_nome_saida(dados_extraidos)
+        nome_pdf = nome_docx[:-5] + ".pdf" if nome_docx.endswith(".docx") else nome_docx + ".pdf"
+        return {
+            "arquivo_editado_base64": base64.b64encode(pdf_bytes).decode("ascii"),
+            "arquivo_editado_nome": nome_pdf,
+            "arquivo_editado_mime_type": "application/pdf",
+        }
+
     return _resposta_docx(docx_bytes, dados_extraidos)
 
 

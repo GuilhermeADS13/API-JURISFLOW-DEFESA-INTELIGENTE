@@ -22,11 +22,11 @@ export default function DashboardSection({
   const [baixandoId, setBaixandoId] = useState(null);
   const [formatoModal, setFormatoModal] = useState(null);
 
-  const handleBaixar = async (contestacaoId, formato = "docx", popup = null) => {
+  const handleBaixar = async (contestacaoId, formato = "docx") => {
     if (!onBaixarPeca || !contestacaoId) return;
     setBaixandoId(contestacaoId);
     try {
-      await onBaixarPeca(contestacaoId, formato, popup);
+      await onBaixarPeca(contestacaoId, formato);
     } finally {
       setBaixandoId(null);
     }
@@ -35,22 +35,8 @@ export default function DashboardSection({
   const handleEscolherFormato = async (formato) => {
     if (!formatoModal) return;
     const cid = formatoModal;
-    // Pre-abre o popup SINCRONO no contexto do clique do usuario,
-    // antes de qualquer await. Sem isso o browser bloqueia window.open
-    // chamado depois do fetch async (gesto perdido).
-    let popup = null;
-    if (formato === "pdf") {
-      popup = window.open("about:blank", "_blank");
-      if (popup) {
-        popup.document.write(
-          "<!doctype html><html><head><title>Preparando PDF…</title>" +
-          "<style>body{font-family:system-ui,sans-serif;padding:48px;text-align:center;color:#1a2332;background:#f5f0eb}h3{margin-bottom:8px;color:#c5a572}p{color:#6c6055}</style>" +
-          "</head><body><h3>Preparando PDF…</h3><p>Aguarde, a peça está sendo carregada.</p></body></html>",
-        );
-      }
-    }
     setFormatoModal(null);
-    await handleBaixar(cid, formato, popup);
+    await handleBaixar(cid, formato);
   };
   return (
     <section id="dashboard" className="py-5">

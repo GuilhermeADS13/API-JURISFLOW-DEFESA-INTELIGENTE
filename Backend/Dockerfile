@@ -27,11 +27,15 @@ WORKDIR /app
 # - libpq5: psycopg2-binary
 # - tesseract-ocr + tesseract-ocr-por: OCR para PDFs digitalizados (PR6 #3, Guia v3 §2.7)
 # - poppler-utils: pdf2image precisa do `pdftoppm`/`pdftocairo` para converter PDF -> imagem
+# - libreoffice-writer + libreoffice-core: conversao DOCX -> PDF no endpoint /baixar?formato=pdf
+#   (usado por App/services/pdf_converter.py via subprocess headless)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     tesseract-ocr \
     tesseract-ocr-por \
     poppler-utils \
+    libreoffice-writer \
+    libreoffice-core \
     && rm -rf /var/lib/apt/lists/*
 
 # Copia pacotes instalados do builder

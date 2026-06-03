@@ -1210,18 +1210,23 @@ export default function App() {
       const mime = arquivoNome.toLowerCase().endsWith(".docx")
         ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         : "application/octet-stream";
-      const blob = base64ToBlob(arquivoB64, mime);
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = arquivoNome;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(link.href);
+      autoDownloadArquivo(arquivoB64, arquivoNome, mime);
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error("[autoDownloadDocx] falhou:", err);
     }
+  };
+
+  const autoDownloadArquivo = (arquivoB64, arquivoNome, mime) => {
+    if (!arquivoB64 || !arquivoNome) return;
+    const blob = base64ToBlob(arquivoB64, mime || "application/octet-stream");
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = arquivoNome;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
   };
 
   /**
@@ -1230,14 +1235,15 @@ export default function App() {
    * - formato='pdf':  abre nova aba com versao imprimivel + window.print()
    *                   o usuario salva como PDF pelo dialogo do navegador
    */
-  const handleBaixarContestacao = async (contestacaoId, formato = "docx", popup = null) => {
+  const handleBaixarContestacao = async (contestacaoId, formato = "docx") => {
     try {
       const accessToken = await getSupabaseAccessToken();
       const url = new URL(
         `/api/contestacoes/${contestacaoId}/baixar`,
         PETICAO_API_URL,
-      ).toString();
-      const resp = await fetch(url, {
+      );
+      if (formato === "pdf") url.searchParams.set("formato", "pdf");
+      const resp = await fetch(url.toString(), {
         method: "GET",
         credentials: "include",
         headers: {
@@ -1254,25 +1260,21 @@ export default function App() {
       }
       const data = await resp.json();
       const b64 = data?.arquivo_editado_base64 || "";
-      const nome = data?.arquivo_editado_nome || `contestacao_${contestacaoId}.docx`;
+      const nome =
+        data?.arquivo_editado_nome ||
+        `contestacao_${contestacaoId}.${formato === "pdf" ? "pdf" : "docx"}`;
+      const mime =
+        data?.arquivo_editado_mime_type ||
+        (formato === "pdf"
+          ? "application/pdf"
+          : "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
       if (!b64) {
         setFeedback({ variant: "warning", text: "Resposta sem arquivo." });
         return;
       }
-
-      if (formato === "pdf") {
-        // Abre o DOCX numa nova aba usando docx-preview no client e
-        // dispara window.print() pro usuario salvar como PDF.
-        abrirParaImpressaoPdf(b64, nome, popup);
-        return;
-      }
-      // Caso PDF tenha pre-aberto popup mas usuario tenha pedido DOCX
-      // (fluxo nao ocorre, mas defensivo) — fecha popup pra nao deixar aba vazia.
-      if (popup && !popup.closed) popup.close();
-      autoDownloadDocx(b64, nome);
+      autoDownloadArquivo(b64, nome, mime);
     } catch (err) {
       console.error("[handleBaixarContestacao] falhou:", err);
-      if (popup && !popup.closed) popup.close();
       setFeedback({
         variant: "danger",
         text: `Erro ao baixar a peca: ${err.message || err}`,
@@ -1320,70 +1322,6 @@ export default function App() {
         variant: "danger",
         text: `Erro ao excluir a peça: ${err.message || err}`,
       });
-    }
-  };
-
-  /**
-   * Abre uma nova aba com o DOCX renderizado em HTML (via docx-preview)
-   * e dispara window.print() — o usuario salva como PDF pelo dialogo do browser.
-   * Fallback: se popup foi bloqueado, baixa direto como .docx.
-   */
-  const abrirParaImpressaoPdf = (docxB64, docxNome, popupWindow = null) => {
-    try {
-      const blob = base64ToBlob(
-        docxB64,
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      );
-      const blobUrl = URL.createObjectURL(blob);
-      const printableHtml = `<!doctype html>
-<html lang="pt-BR">
-  <head>
-    <meta charset="utf-8" />
-    <title>${docxNome.replace(/\.docx$/i, "")} — PDF</title>
-    <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"><\/script>
-    <script src="https://unpkg.com/docx-preview@0.3.5/dist/docx-preview.js"><\/script>
-    <style>
-      body { font-family: 'Times New Roman', Times, serif; margin: 0; padding: 24px; }
-      .actions { position: fixed; top: 12px; right: 12px; z-index: 100; }
-      .actions button { padding: 10px 16px; font-size: 14px; cursor: pointer; }
-      @media print { .actions { display: none; } body { padding: 0; } }
-    </style>
-  </head>
-  <body>
-    <div class="actions">
-      <button onclick="window.print()">Imprimir / Salvar como PDF</button>
-    </div>
-    <div id="docx-container"></div>
-    <script>
-      fetch("${blobUrl}").then(r => r.blob()).then(b => {
-        return docx.renderAsync(b, document.getElementById("docx-container"));
-      }).then(() => { setTimeout(() => window.print(), 800); })
-      .catch(err => { document.body.innerText = "Erro ao renderizar: " + err; });
-    <\/script>
-  </body>
-</html>`;
-      const htmlBlob = new Blob([printableHtml], { type: "text/html;charset=utf-8" });
-      const htmlUrl = URL.createObjectURL(htmlBlob);
-      // Se o caller pre-abriu um popup sincronamente (DashboardSection ja faz isso
-      // pro fluxo PDF — evita popup blocker depois do fetch async), reusa-o.
-      // Caso contrario tenta abrir agora; pode falhar com popup blocker.
-      let w = popupWindow && !popupWindow.closed ? popupWindow : null;
-      if (w) {
-        w.location.replace(htmlUrl);
-      } else {
-        w = window.open(htmlUrl, "_blank");
-      }
-      if (!w) {
-        setFeedback({
-          variant: "warning",
-          text: "Popup bloqueado. Salvamos como DOCX — você pode abrir no Word e salvar como PDF (Arquivo -> Exportar).",
-        });
-        autoDownloadDocx(docxB64, docxNome);
-      }
-    } catch (err) {
-      console.error("[abrirParaImpressaoPdf] falhou:", err);
-      if (popupWindow && !popupWindow.closed) popupWindow.close();
-      autoDownloadDocx(docxB64, docxNome);
     }
   };
 
