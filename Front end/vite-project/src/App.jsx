@@ -2161,7 +2161,7 @@ export default function App() {
               <small className="text-danger fw-semibold d-block mb-1">
                 ⚠ Pontos de atenção — revisar antes de protocolar:
               </small>
-              <ul className="mb-0 mt-1 text-danger" style={{ fontSize: "0.85rem" }}>
+              <ul className="mb-0 mt-1" style={{ fontSize: "0.85rem" }}>
                 {iaResult.riscos.map((r, i) => (
                   <li key={i}>{r}</li>
                 ))}
