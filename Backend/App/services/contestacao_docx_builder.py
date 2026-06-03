@@ -28,7 +28,7 @@ from types import MappingProxyType
 from typing import Any, Callable
 
 from docx import Document
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
 from docx.shared import Cm, Pt
 
 logger = logging.getLogger(__name__)
@@ -42,10 +42,13 @@ logger = logging.getLogger(__name__)
 _ESTILO_PADRAO: dict[str, Any] = {
     "font_name": "Arial",
     "font_size_pt": 11.0,
-    "line_spacing": 1.25,
-    "space_after_pt": 6.0,
-    "space_before_secao1_pt": 18.0,
-    "space_before_secao2_pt": 12.0,
+    # 1.15 = "Word Normal" body line spacing. LibreOffice e Word renderizam
+    # praticamente identico nesse valor (em 1.5 ou 1.25 o LO da mais ar
+    # que o Word, gerando 1-2 paginas a mais nas peças longas).
+    "line_spacing": 1.15,
+    "space_after_pt": 4.0,
+    "space_before_secao1_pt": 12.0,
+    "space_before_secao2_pt": 8.0,
     # Tab stop default do Word eh ~1.27cm. Modelo G. Trindade nao define
     # tab_stops customizados — usa 'NN.- TAB ESPACO TAB' (gera ~2-3cm).
     "tab_stop_cm": 1.27,
@@ -106,11 +109,15 @@ def _extrair_estilo_modelo(doc: Any) -> dict[str, Any]:
             ls = pf.line_spacing
             # ls pode ser float (multiplicador) ou WD_LINE_SPACING enum (int).
             # So aceita valores numericos positivos plausiveis (0.5–3.0).
+            # Cap em 1.20 — templates antigos do escritorio costumam ter 1.5
+            # (padrao Word legado) que renderiza com muito ar em LibreOffice
+            # (gera 1-2 paginas extras vs Word). 1.15-1.20 da resultado
+            # equivalente nos dois renderers.
             if isinstance(ls, (int, float)) and 0.5 <= float(ls) <= 3.0:
-                estilo["line_spacing"] = float(ls)
+                estilo["line_spacing"] = min(float(ls), 1.20)
             if pf.space_after:
                 try:
-                    estilo["space_after_pt"] = float(pf.space_after.pt)
+                    estilo["space_after_pt"] = min(float(pf.space_after.pt), 6.0)
                 except (AttributeError, TypeError):
                     pass
         except Exception as err:  # noqa: BLE001 — paragrafo corrompido, ignora
@@ -549,11 +556,17 @@ def _font_default(run: Any) -> None:
 
 
 def _aplicar_espacamento_padrao(p: Any) -> None:
-    """Espacamento alinhado ao template (line_spacing + space_after lidos do modelo)."""
+    """Espacamento alinhado ao template (line_spacing + space_after lidos do modelo).
+
+    Forca WD_LINE_SPACING.MULTIPLE pra garantir interpretacao identica em Word
+    e LibreOffice — sem isso o LO assume regra default diferente e renderiza
+    com mais ar entre linhas, gerando paginas extras na conversao DOCX->PDF.
+    """
     estilo = _estilo()
     pf = p.paragraph_format
     pf.space_after = Pt(estilo["space_after_pt"])
     pf.space_before = Pt(0)
+    pf.line_spacing_rule = WD_LINE_SPACING.MULTIPLE
     pf.line_spacing = estilo["line_spacing"]
 
 
