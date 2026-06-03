@@ -28,8 +28,20 @@ from types import MappingProxyType
 from typing import Any, Callable
 
 from docx import Document
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Cm, Pt
+
+from App.services.docx_style_defaults import (
+    FONT_NAME_DEFAULT,
+    FONT_SIZE_PT_DEFAULT,
+    LINE_SPACING_DEFAULT,
+    SPACE_AFTER_PT_DEFAULT,
+    SPACE_BEFORE_SECAO1_PT_DEFAULT,
+    SPACE_BEFORE_SECAO2_PT_DEFAULT,
+    aplicar_espacamento_padrao as _aplicar_espacamento_padrao_central,
+    cap_line_spacing,
+    cap_space_after_pt,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,15 +52,16 @@ logger = logging.getLogger(__name__)
 # configs via ContextVar (thread-safe para requests concorrentes).
 
 _ESTILO_PADRAO: dict[str, Any] = {
-    "font_name": "Arial",
-    "font_size_pt": 11.0,
-    # 1.15 = "Word Normal" body line spacing. LibreOffice e Word renderizam
-    # praticamente identico nesse valor (em 1.5 ou 1.25 o LO da mais ar
-    # que o Word, gerando 1-2 paginas a mais nas peças longas).
-    "line_spacing": 1.15,
-    "space_after_pt": 4.0,
-    "space_before_secao1_pt": 12.0,
-    "space_before_secao2_pt": 8.0,
+    # IMPORTANTE: valores padroes de tipografia/espacamento sao a unica fonte
+    # da verdade em `App/services/docx_style_defaults.py`. Qualquer ajuste
+    # vai LA, nao aqui — assim outros builders (peticao, parecer, etc) ficam
+    # consistentes sem repetir o bug do PDF LibreOffice fora de paginacao.
+    "font_name": FONT_NAME_DEFAULT,
+    "font_size_pt": FONT_SIZE_PT_DEFAULT,
+    "line_spacing": LINE_SPACING_DEFAULT,
+    "space_after_pt": SPACE_AFTER_PT_DEFAULT,
+    "space_before_secao1_pt": SPACE_BEFORE_SECAO1_PT_DEFAULT,
+    "space_before_secao2_pt": SPACE_BEFORE_SECAO2_PT_DEFAULT,
     # Tab stop default do Word eh ~1.27cm. Modelo G. Trindade nao define
     # tab_stops customizados — usa 'NN.- TAB ESPACO TAB' (gera ~2-3cm).
     "tab_stop_cm": 1.27,
@@ -109,15 +122,16 @@ def _extrair_estilo_modelo(doc: Any) -> dict[str, Any]:
             ls = pf.line_spacing
             # ls pode ser float (multiplicador) ou WD_LINE_SPACING enum (int).
             # So aceita valores numericos positivos plausiveis (0.5–3.0).
-            # Cap em 1.20 — templates antigos do escritorio costumam ter 1.5
-            # (padrao Word legado) que renderiza com muito ar em LibreOffice
-            # (gera 1-2 paginas extras vs Word). 1.15-1.20 da resultado
-            # equivalente nos dois renderers.
+            # Caps em `docx_style_defaults` evitam que templates antigos
+            # do escritorio (1.5 = padrao Word legado) gerem PDF com
+            # paginacao diferente entre Word e LibreOffice.
             if isinstance(ls, (int, float)) and 0.5 <= float(ls) <= 3.0:
-                estilo["line_spacing"] = min(float(ls), 1.20)
+                estilo["line_spacing"] = cap_line_spacing(ls)
             if pf.space_after:
                 try:
-                    estilo["space_after_pt"] = min(float(pf.space_after.pt), 6.0)
+                    estilo["space_after_pt"] = cap_space_after_pt(
+                        pf.space_after.pt
+                    )
                 except (AttributeError, TypeError):
                     pass
         except Exception as err:  # noqa: BLE001 — paragrafo corrompido, ignora
@@ -556,18 +570,21 @@ def _font_default(run: Any) -> None:
 
 
 def _aplicar_espacamento_padrao(p: Any) -> None:
-    """Espacamento alinhado ao template (line_spacing + space_after lidos do modelo).
+    """Espacamento padrao via docx_style_defaults (line_spacing + space_after
+    lidos do modelo com cap de seguranca aplicado em `_detectar_estilo_base`).
 
-    Forca WD_LINE_SPACING.MULTIPLE pra garantir interpretacao identica em Word
-    e LibreOffice — sem isso o LO assume regra default diferente e renderiza
-    com mais ar entre linhas, gerando paginas extras na conversao DOCX->PDF.
+    A funcao centralizada em `docx_style_defaults.py` forca
+    `WD_LINE_SPACING.MULTIPLE` explicitamente — sem isso o LibreOffice
+    usa uma regra default que adiciona ar extra entre linhas, fazendo o
+    mesmo DOCX renderizar com paginacao diferente entre Word e LO.
     """
     estilo = _estilo()
-    pf = p.paragraph_format
-    pf.space_after = Pt(estilo["space_after_pt"])
-    pf.space_before = Pt(0)
-    pf.line_spacing_rule = WD_LINE_SPACING.MULTIPLE
-    pf.line_spacing = estilo["line_spacing"]
+    _aplicar_espacamento_padrao_central(
+        p,
+        line_spacing=estilo["line_spacing"],
+        space_after_pt=estilo["space_after_pt"],
+        space_before_pt=0.0,
+    )
 
 
 def _aplicar_tab_stop_grande(p: Any) -> None:
@@ -613,19 +630,26 @@ def _add_heading(doc: Any, texto: str, *, nivel: int) -> None:
     """Adiciona cabecalho com negrito + sublinhado.
 
     Espacamento antes e line_spacing lidos do template:
-    - nivel 1 (I, II, III...): respiracao maior (default 18pt)
-    - nivel 2/3 (A, B, C...):  respiracao menor (default 12pt)
+    - nivel 1 (I, II, III...): respiracao maior (default 12pt)
+    - nivel 2/3 (A, B, C...):  respiracao menor (default 8pt)
+
+    Usa o helper centralizado de `docx_style_defaults` (mesma regra
+    WD_LINE_SPACING.MULTIPLE explicita pra garantir paginacao identica
+    em Word e LibreOffice).
     """
     estilo = _estilo()
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    pf = p.paragraph_format
-    pf.space_before = Pt(
-        estilo["space_before_secao1_pt"] if nivel == 1
-        else estilo["space_before_secao2_pt"]
+    _aplicar_espacamento_padrao_central(
+        p,
+        line_spacing=estilo["line_spacing"],
+        space_after_pt=estilo["space_after_pt"],
+        space_before_pt=(
+            estilo["space_before_secao1_pt"]
+            if nivel == 1
+            else estilo["space_before_secao2_pt"]
+        ),
     )
-    pf.space_after = Pt(estilo["space_after_pt"])
-    pf.line_spacing = estilo["line_spacing"]
     texto_limpo = _RE_INLINE_BOLD.sub(r"\1", texto)
     if nivel == 1:
         texto_limpo = texto_limpo.upper()
