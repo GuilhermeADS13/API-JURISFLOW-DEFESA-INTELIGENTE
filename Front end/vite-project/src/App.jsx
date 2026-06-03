@@ -1230,7 +1230,7 @@ export default function App() {
    * - formato='pdf':  abre nova aba com versao imprimivel + window.print()
    *                   o usuario salva como PDF pelo dialogo do navegador
    */
-  const handleBaixarContestacao = async (contestacaoId, formato = "docx") => {
+  const handleBaixarContestacao = async (contestacaoId, formato = "docx", popup = null) => {
     try {
       const accessToken = await getSupabaseAccessToken();
       const url = new URL(
@@ -1263,12 +1263,16 @@ export default function App() {
       if (formato === "pdf") {
         // Abre o DOCX numa nova aba usando docx-preview no client e
         // dispara window.print() pro usuario salvar como PDF.
-        abrirParaImpressaoPdf(b64, nome);
+        abrirParaImpressaoPdf(b64, nome, popup);
         return;
       }
+      // Caso PDF tenha pre-aberto popup mas usuario tenha pedido DOCX
+      // (fluxo nao ocorre, mas defensivo) — fecha popup pra nao deixar aba vazia.
+      if (popup && !popup.closed) popup.close();
       autoDownloadDocx(b64, nome);
     } catch (err) {
       console.error("[handleBaixarContestacao] falhou:", err);
+      if (popup && !popup.closed) popup.close();
       setFeedback({
         variant: "danger",
         text: `Erro ao baixar a peca: ${err.message || err}`,
@@ -1324,7 +1328,7 @@ export default function App() {
    * e dispara window.print() — o usuario salva como PDF pelo dialogo do browser.
    * Fallback: se popup foi bloqueado, baixa direto como .docx.
    */
-  const abrirParaImpressaoPdf = (docxB64, docxNome) => {
+  const abrirParaImpressaoPdf = (docxB64, docxNome, popupWindow = null) => {
     try {
       const blob = base64ToBlob(
         docxB64,
@@ -1360,7 +1364,15 @@ export default function App() {
 </html>`;
       const htmlBlob = new Blob([printableHtml], { type: "text/html;charset=utf-8" });
       const htmlUrl = URL.createObjectURL(htmlBlob);
-      const w = window.open(htmlUrl, "_blank");
+      // Se o caller pre-abriu um popup sincronamente (DashboardSection ja faz isso
+      // pro fluxo PDF — evita popup blocker depois do fetch async), reusa-o.
+      // Caso contrario tenta abrir agora; pode falhar com popup blocker.
+      let w = popupWindow && !popupWindow.closed ? popupWindow : null;
+      if (w) {
+        w.location.replace(htmlUrl);
+      } else {
+        w = window.open(htmlUrl, "_blank");
+      }
       if (!w) {
         setFeedback({
           variant: "warning",
@@ -1370,6 +1382,7 @@ export default function App() {
       }
     } catch (err) {
       console.error("[abrirParaImpressaoPdf] falhou:", err);
+      if (popupWindow && !popupWindow.closed) popupWindow.close();
       autoDownloadDocx(docxB64, docxNome);
     }
   };
