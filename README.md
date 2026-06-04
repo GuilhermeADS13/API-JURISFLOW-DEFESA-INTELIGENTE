@@ -2,7 +2,7 @@
 
 Sistema web fullstack para geração automatizada de contestações trabalhistas/cíveis. O advogado faz upload da petição inicial em PDF/DOCX, o sistema extrai os dados via IA, consulta defesas anteriores do escritório no RAG semântico, gera uma minuta estruturada (preliminares A-G, mérito ponto-a-ponto, fundamentos, pedidos) e entrega o `.docx` ou `.pdf` final pronto pra protocolar — com o mesmo timbre, fonte e estilo do escritório.
 
-> **Entrega Final do Projeto Integrador:** [`docs/ENTREGA_FINAL.md`](docs/ENTREGA_FINAL.md) (visão geral, testes, cobertura, CI/CD, métricas, refatorações) — versão PDF em [`docs/ENTREGA_FINAL.pdf`](docs/ENTREGA_FINAL.pdf).
+
 
 ---
 
