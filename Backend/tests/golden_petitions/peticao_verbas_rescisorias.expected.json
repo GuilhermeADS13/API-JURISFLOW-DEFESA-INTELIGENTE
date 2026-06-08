@@ -1,0 +1,12 @@
+{
+  "descricao": "Reclamação de verbas rescisórias com seções I-DA LEGITIMIDADE, II-DOS FATOS, III-DO DIREITO, IV-DOS PEDIDOS, V-DO VALOR DA CAUSA.",
+  "sections_present": ["LEGITIMIDADE", "FATOS", "DIREITO", "PEDIDOS", "VALOR_CAUSA"],
+  "sections_absent": ["PRELIMINARES", "MERITO"],
+  "sample_text_in_section": {
+    "LEGITIMIDADE": "Reclamante e parte legitima por ter mantido vinculo empregaticio",
+    "FATOS": "admitida em 10 de maio de 2018",
+    "DIREITO": "art. 477",
+    "PEDIDOS": "pagamento do saldo de salario de novembro/2025",
+    "VALOR_CAUSA": "R$ 18.500,00"
+  }
+}

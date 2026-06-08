@@ -1,0 +1,12 @@
+{
+  "descricao": "Reclamação com dano moral, com I-DAS PRELIMINARES, II-DOS FATOS, III-DO MERITO, IV-DOS PEDIDOS, V-DO VALOR DA CAUSA.",
+  "sections_present": ["PRELIMINARES", "FATOS", "MERITO", "PEDIDOS", "VALOR_CAUSA"],
+  "sections_absent": ["LEGITIMIDADE", "TECNICO_JURIDICO"],
+  "sample_text_in_section": {
+    "PRELIMINARES": "inversao do onus probatorio",
+    "FATOS": "tratamento humilhante",
+    "MERITO": "assedio moral",
+    "PEDIDOS": "indenizacao por danos morais no\nvalor de R$ 30.000,00",
+    "VALOR_CAUSA": "R$ 45.000,00"
+  }
+}

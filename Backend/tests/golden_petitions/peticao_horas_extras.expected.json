@@ -1,0 +1,11 @@
+{
+  "descricao": "Reclamação trabalhista por horas extras com seções I-DOS FATOS, II-DO DIREITO, III-DOS PEDIDOS, IV-DO VALOR DA CAUSA.",
+  "sections_present": ["FATOS", "DIREITO", "PEDIDOS", "VALOR_CAUSA"],
+  "sections_absent": ["LEGITIMIDADE", "PRELIMINARES"],
+  "sample_text_in_section": {
+    "FATOS": "Reclamante foi admitido pela Reclamada em 02 de marco de 2020",
+    "DIREITO": "Sumula 338 do TST",
+    "PEDIDOS": "condenacao da Reclamada ao pagamento de horas extras",
+    "VALOR_CAUSA": "R$ 45.000,00"
+  }
+}
