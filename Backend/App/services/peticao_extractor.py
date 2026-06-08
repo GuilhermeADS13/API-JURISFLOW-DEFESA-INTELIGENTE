@@ -587,6 +587,9 @@ def _extrair_pdf(conteudo: bytes) -> str:
 def _extrair_pdf_via_ocr(conteudo: bytes) -> str:
     """Converte paginas do PDF em imagens e roda Tesseract em cada uma.
 
+    PR13 #B2: cacheia o resultado por SHA-256 do PDF — OCR de um PDF nao muda,
+    entao reupload do mesmo arquivo vira lookup <1s em vez de 30-120s.
+
     Limita a `OCR_MAX_PAGES` paginas (OCR eh lento ~5-10s/pagina e o webhook
     n8n tem timeout de 180s — passar disso quebra o pipeline). Processa uma
     pagina de cada vez para nao explodir a memoria com PDFs grandes.
@@ -594,6 +597,39 @@ def _extrair_pdf_via_ocr(conteudo: bytes) -> str:
     if not _OCR_LIBS_DISPONIVEIS:
         return ""
 
+    # Lookup no cache antes de gastar Tesseract. Falha silenciosa (sem DB,
+    # extracao continua normalmente — cache eh otimizacao, nao requisito).
+    import hashlib
+
+    file_hash = hashlib.sha256(conteudo).hexdigest()
+    try:
+        from App.database import get_ocr_cache
+
+        cached = get_ocr_cache(file_hash)
+        if cached:
+            logger.info(
+                "OCR cache hit hash=%s... (%d chars)", file_hash[:12], len(cached)
+            )
+            return cached
+    except Exception as error:
+        logger.warning("Falha ao consultar OCR cache: %s", error)
+
+    texto = _executar_ocr_real(conteudo)
+
+    # Persiste cache em background-safe (falha silenciosa).
+    if texto:
+        try:
+            from App.database import set_ocr_cache
+
+            set_ocr_cache(file_hash, texto)
+        except Exception as error:
+            logger.warning("Falha ao gravar OCR cache: %s", error)
+
+    return texto
+
+
+def _executar_ocr_real(conteudo: bytes) -> str:
+    """Roda Tesseract de fato — sem cache. Extraido pra facilitar mock em testes."""
     # convert_from_bytes carrega TUDO em memoria; melhor passar last_page e
     # processar em batches se PDF for gigante. Aqui limitamos no parametro.
     try:

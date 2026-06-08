@@ -189,3 +189,114 @@ def test_ocr_combina_pypdf_quando_pypdf_tem_algo(monkeypatch):
     # Ambos presentes no resultado
     assert "TEXTO_PYPDF_CABECALHO" in texto
     assert "TEXTO_OCR_CORPO" in texto
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PR13 #B2: Cache de OCR (SHA-256 do PDF)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_cache_hit_pula_tesseract(monkeypatch):
+    """Quando get_ocr_cache retorna texto, _executar_ocr_real NAO eh chamado."""
+    from App.services import peticao_extractor
+
+    monkeypatch.setattr(peticao_extractor, "_OCR_LIBS_DISPONIVEIS", True)
+
+    chamadas_real = []
+    monkeypatch.setattr(
+        peticao_extractor,
+        "_executar_ocr_real",
+        lambda c: (chamadas_real.append(c), "NAO_DEVERIA_RODAR")[1],
+    )
+    monkeypatch.setattr(
+        "App.database.get_ocr_cache",
+        lambda h: "TEXTO_DO_CACHE",
+    )
+    set_chamadas = []
+    monkeypatch.setattr(
+        "App.database.set_ocr_cache",
+        lambda h, t, paginas=None: set_chamadas.append((h, len(t))),
+    )
+
+    resultado = peticao_extractor._extrair_pdf_via_ocr(b"fake_pdf_bytes")
+
+    assert resultado == "TEXTO_DO_CACHE"
+    assert chamadas_real == []  # Tesseract nao rodou
+    assert set_chamadas == []  # nao reescreve cache em hit
+
+
+def test_cache_miss_executa_ocr_e_grava(monkeypatch):
+    """Cache vazio -> Tesseract roda + set_ocr_cache eh chamado com hash certo."""
+    import hashlib
+
+    from App.services import peticao_extractor
+
+    monkeypatch.setattr(peticao_extractor, "_OCR_LIBS_DISPONIVEIS", True)
+    monkeypatch.setattr(peticao_extractor, "_executar_ocr_real", lambda c: "TEXTO_NOVO")
+    monkeypatch.setattr("App.database.get_ocr_cache", lambda h: None)
+
+    sets = []
+    monkeypatch.setattr(
+        "App.database.set_ocr_cache",
+        lambda h, t, paginas=None: sets.append((h, t)),
+    )
+
+    conteudo = b"pdf_bytes_unicos"
+    esperado_hash = hashlib.sha256(conteudo).hexdigest()
+
+    resultado = peticao_extractor._extrair_pdf_via_ocr(conteudo)
+
+    assert resultado == "TEXTO_NOVO"
+    assert len(sets) == 1
+    assert sets[0] == (esperado_hash, "TEXTO_NOVO")
+
+
+def test_cache_falha_silenciosa_nao_quebra_extracao(monkeypatch):
+    """Se o DB nao responder, OCR continua funcionando — cache eh otimizacao."""
+    from App.services import peticao_extractor
+
+    monkeypatch.setattr(peticao_extractor, "_OCR_LIBS_DISPONIVEIS", True)
+    monkeypatch.setattr(peticao_extractor, "_executar_ocr_real", lambda c: "TEXTO_OK")
+
+    def boom(_h):
+        raise RuntimeError("DB down")
+
+    monkeypatch.setattr("App.database.get_ocr_cache", boom)
+    monkeypatch.setattr("App.database.set_ocr_cache", boom)
+
+    # Nao deve levantar; deve retornar o texto do OCR real
+    resultado = peticao_extractor._extrair_pdf_via_ocr(b"fake_pdf")
+    assert resultado == "TEXTO_OK"
+
+
+def test_cache_nao_grava_texto_vazio(monkeypatch):
+    """Se Tesseract retorna vazio (libs off ou poppler ausente), nao polui o cache."""
+    from App.services import peticao_extractor
+
+    monkeypatch.setattr(peticao_extractor, "_OCR_LIBS_DISPONIVEIS", True)
+    monkeypatch.setattr(peticao_extractor, "_executar_ocr_real", lambda c: "")
+    monkeypatch.setattr("App.database.get_ocr_cache", lambda h: None)
+    sets = []
+    monkeypatch.setattr(
+        "App.database.set_ocr_cache",
+        lambda h, t, paginas=None: sets.append((h, t)),
+    )
+
+    resultado = peticao_extractor._extrair_pdf_via_ocr(b"fake_pdf")
+
+    assert resultado == ""
+    assert sets == []  # nao gravou cache de string vazia
+
+
+def test_helpers_db_rejeitam_hash_invalido():
+    """get_ocr_cache / set_ocr_cache cortam input invalido ANTES de tocar DB."""
+    from App import database as db
+
+    # Strings curtas ou vazias devem ser no-op sem inicializar pool
+    assert db.get_ocr_cache("") is None
+    assert db.get_ocr_cache("curto") is None
+    # set_ocr_cache nao explode com hash invalido ou texto vazio
+    db.set_ocr_cache("", "texto")
+    db.set_ocr_cache("curto", "texto")
+    # Hash valido mas texto vazio: tambem deve ser no-op (nao polui cache)
+    db.set_ocr_cache("a" * 64, "")

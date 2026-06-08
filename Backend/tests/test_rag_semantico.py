@@ -666,6 +666,113 @@ class TestRagHibrido:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# PR13 #B1: classificador de area_juridica + filtros do RAG
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestClassificadorAreaJuridica:
+    @pytest.mark.parametrize(
+        "tipo_acao,esperado",
+        [
+            ("Trabalhista - Horas Extras", "trabalhista"),
+            ("Reclamacao Trabalhista - Verbas Rescisorias", "trabalhista"),
+            ("Acao de Cobranca de FGTS", "trabalhista"),
+            ("Direito do Consumidor - Vicio do Produto", "consumidor"),
+            ("Acao Bancaria - Revisao de Contrato", "bancario"),
+            ("Acao Previdenciaria - Aposentadoria por Invalidez", "previdenciario"),
+            ("Beneficio Assistencial - Lei 8213", "previdenciario"),
+            ("Indenizacao por Danos Materiais - CPC ", "civel"),
+            ("Acao Civel - Responsabilidade Civil", "civel"),
+            # Edge cases: nao bate em nenhuma keyword -> None
+            ("", None),
+            (None, None),
+            ("Foo bar baz", None),
+            ("Acao Tributaria", None),  # nao mapeado
+        ],
+    )
+    def test_classifica_corretamente(self, tipo_acao, esperado):
+        from App.database import _classificar_area_juridica
+
+        assert _classificar_area_juridica(tipo_acao) == esperado
+
+    def test_areas_canonicas_fechadas(self):
+        from App.database import AREAS_JURIDICAS_CANONICAS
+
+        assert AREAS_JURIDICAS_CANONICAS == frozenset({
+            "trabalhista", "consumidor", "bancario", "previdenciario", "civel",
+        })
+
+
+class TestFiltroAreaJuridicaNaBusca:
+    """Verifica que area_juridica eh aceita opcionalmente nos call-sites do RAG."""
+
+    def _make_emb(self):
+        return [0.1] * 384
+
+    def test_route_normaliza_area_juridica_do_payload(self):
+        """A rota lê area_juridica do payload e passa adiante. None default."""
+        from App.routes.rag import _normalizar_input
+
+        # Com area
+        _, _, _, area = _normalizar_input({
+            "tipo_acao": "Trabalhista",
+            "fatos": "x",
+            "pedidos": [],
+            "area_juridica": "TRABALHISTA",  # case-insensitive
+        })
+        assert area == "trabalhista"
+
+        # Sem area
+        _, _, _, area = _normalizar_input({"tipo_acao": "x", "fatos": "y", "pedidos": []})
+        assert area is None
+
+    def test_route_propaga_area_para_buscas(self):
+        """area_juridica do payload chega como kwarg pras duas buscas."""
+        from App.routes import rag as rag_route
+        from unittest.mock import patch, MagicMock
+
+        captured_kwargs = {}
+
+        def fake_semantica(**kw):
+            captured_kwargs["semantica"] = kw
+            return []
+
+        def fake_lexical(**kw):
+            captured_kwargs["lexical"] = kw
+            return []
+
+        with (
+            patch("App.routes.rag.gerar_embedding_query", return_value=self._make_emb()),
+            patch("App.routes.rag.buscar_defesas_semanticas", side_effect=fake_semantica),
+            patch("App.routes.rag.buscar_defesas_lexicais", side_effect=fake_lexical),
+        ):
+            # Reusa __run helper do TestRagRoute
+            import asyncio
+            from fastapi import Request
+
+            req = Request(scope={
+                "type": "http", "method": "POST", "path": "/api/rag/defesas-similares",
+                "headers": [], "query_string": b"", "client": ("127.0.0.1", 0),
+            })
+            asyncio.new_event_loop().run_until_complete(
+                rag_route.buscar_defesas_similares(
+                    request=req,
+                    payload={
+                        "tipo_acao": "Trabalhista - Horas Extras",
+                        "numero_processo": "0001",
+                        "fatos": "fatos",
+                        "pedidos": ["p1"],
+                        "area_juridica": "trabalhista",
+                    },
+                    usuario={"id": "u1", "nome": "x", "email": "x@x.com"},
+                )
+            )
+
+        assert captured_kwargs["semantica"]["area_juridica"] == "trabalhista"
+        assert captured_kwargs["lexical"]["area_juridica"] == "trabalhista"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # contestacao_peticao: _disparar_embedding (fire-and-forget)
 # ─────────────────────────────────────────────────────────────────────────────
 

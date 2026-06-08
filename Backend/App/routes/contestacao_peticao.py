@@ -260,6 +260,9 @@ def _montar_save_payload(
         # Persiste o modelo do escritorio pra regenerar o DOCX depois
         "modelo_base_b64": payload.modelo_base_base64 or "",
         "modelo_base_nome": payload.modelo_base_nome or "",
+        # PR13 #B1: area_juridica vem do Extrator (preferencial). Se ausente,
+        # save_contestacao chama o classificador via _classificar_area_juridica.
+        "area_juridica": dados_extraidos.get("area_juridica"),
     }
 
 

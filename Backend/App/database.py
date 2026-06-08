@@ -711,12 +711,23 @@ def save_contestacao(
     modelo_b64 = str(payload.get("modelo_base_b64") or "")
     modelo_nome = str(payload.get("modelo_base_nome") or "")
 
+    # PR13 #B1: metadados juridicos. area_juridica vem (a) do payload se o
+    # Extrator do n8n preencheu, ou (b) derivada de tipo_acao pelo classificador.
+    # resultado entra default None — preenchido manualmente depois pelo advogado.
+    tipo_acao_str = str(payload.get("tipo_acao", ""))
+    area_juridica = payload.get("area_juridica")
+    if area_juridica not in AREAS_JURIDICAS_CANONICAS:
+        area_juridica = _classificar_area_juridica(tipo_acao_str)
+    resultado_payload = payload.get("resultado")
+    if resultado_payload not in ("procedente", "improcedente", "parcial", "em_andamento"):
+        resultado_payload = None
+
     params = (
         str(payload.get("usuario_id") or ""),
         str(payload.get("numero_processo", "")),
         str(payload.get("autor", "")),
         str(payload.get("reu", "")),
-        str(payload.get("tipo_acao", "")),
+        tipo_acao_str,
         str(payload.get("fatos", "")),
         str(payload.get("pedido_autor", "")),
         conteudo,
@@ -732,6 +743,8 @@ def save_contestacao(
         _adaptar_json_pg(minuta_json_original),
         modelo_b64,
         modelo_nome,
+        area_juridica,
+        resultado_payload,
     )
 
     with _get_connection() as connection:
@@ -758,9 +771,11 @@ def save_contestacao(
                     dados_confianca,
                     minuta_json_original,
                     modelo_base_b64,
-                    modelo_base_nome
+                    modelo_base_nome,
+                    area_juridica,
+                    resultado
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
                 params,
@@ -1151,6 +1166,45 @@ def _iso_or_str(value: Any) -> str:
     return str(value or "")
 
 
+# PR13 #B1: areas juridicas canonicas. Lista fechada — qualquer string fora
+# disso fica como None em area_juridica (conservador). Filtros do RAG
+# downstream so usam essas chaves.
+AREAS_JURIDICAS_CANONICAS = frozenset({
+    "trabalhista",
+    "consumidor",
+    "bancario",
+    "previdenciario",
+    "civel",
+})
+
+# Mapeamento keyword -> area canonica. Primeira chave que casa decide.
+# Mantemos ordenado por especificidade (mais especifico primeiro) pra evitar
+# que "previdenciario" case com "civel" generico via "responsab".
+_AREA_KEYWORDS = (
+    ("trabalhista", ("trabalh", "clt ", "celetist", "rescis", "horas extras", "fgts", "ctps", "verbas rescis")),
+    ("previdenciario", ("previd", "inss", "aposent", "beneficio", "lei 8213")),
+    ("consumidor", ("consumidor", "cdc", "compra ", "produto defeituoso", "vicio do produto", "lei 8078")),
+    ("bancario", ("banc", "financ", "emprestim", "credito consig", "cartao de credito")),
+    ("civel", ("civel", "contrat", "responsabil", "danos materiais", "cpc ")),
+)
+
+
+def _classificar_area_juridica(tipo_acao: str | None) -> str | None:
+    """Mapeia tipo_acao livre para area canonica. Conservador: se nao casar, None.
+
+    Hoje 100% das contestacoes do projeto sao trabalhistas, mas o classificador
+    ja eh estruturado pra cinco areas porque o RAG fica multi-tenant + multi-area
+    naturalmente. Comeca declarar area, dps adiciona filtros downstream.
+    """
+    if not tipo_acao:
+        return None
+    t = tipo_acao.lower()
+    for area, kws in _AREA_KEYWORDS:
+        if any(k in t for k in kws):
+            return area
+    return None
+
+
 def _row_to_defesa_semantica(row: tuple) -> dict[str, Any]:
     """Mapeia tupla do SELECT de `buscar_defesas_semanticas` para dict de resposta."""
     minuta = _extrair_minuta(row[4])
@@ -1186,6 +1240,54 @@ def salvar_embedding(contestacao_id: int, embedding: list[float]) -> None:
         connection.commit()
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# PR13 #B2: Cache de OCR (Tesseract por SHA-256 do PDF)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def get_ocr_cache(file_hash: str) -> str | None:
+    """Retorna texto OCR cacheado pra file_hash ou None. Bumpa ultimo_uso_em."""
+    if not file_hash or len(file_hash) != 64:  # SHA-256 hex = 64 chars
+        return None
+    _ensure_db_initialized()
+    with _get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE ocr_cache SET ultimo_uso_em = now()
+                WHERE file_hash = %s
+                RETURNING texto_extraido
+                """,
+                (file_hash,),
+            )
+            row = cursor.fetchone()
+        connection.commit()
+    return row[0] if row else None
+
+
+def set_ocr_cache(file_hash: str, texto: str, paginas: int | None = None) -> None:
+    """Persiste texto OCR. UPSERT por file_hash — re-OCR sobrescreve (raro mas seguro)."""
+    if not file_hash or len(file_hash) != 64:
+        return
+    if not texto:
+        return
+    _ensure_db_initialized()
+    with _get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO ocr_cache (file_hash, texto_extraido, paginas_processadas)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (file_hash) DO UPDATE
+                  SET texto_extraido = EXCLUDED.texto_extraido,
+                      paginas_processadas = EXCLUDED.paginas_processadas,
+                      ultimo_uso_em = now()
+                """,
+                (file_hash, texto, paginas),
+            )
+        connection.commit()
+
+
 def buscar_defesas_semanticas(
     embedding: list[float],
     tipo_acao: str,
@@ -1193,6 +1295,7 @@ def buscar_defesas_semanticas(
     *,
     usuario_id: str | None,
     limit: int = 10,
+    area_juridica: str | None = None,
 ) -> list[dict[str, Any]]:
     """Busca contestacoes anteriores similares via distancia coseno (pgvector <=>).
 
@@ -1226,6 +1329,10 @@ def buscar_defesas_semanticas(
         return []
     pattern_tipo = f"{raiz_segura}%"
 
+    # PR13 #B1: filtro opcional por area_juridica canonica. Quando preenchida,
+    # restringe ainda mais o universo de candidatos antes do ANN. None = sem filtro.
+    area_canonica = area_juridica if area_juridica in AREAS_JURIDICAS_CANONICAS else None
+
     with _get_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
@@ -1243,6 +1350,7 @@ def buscar_defesas_semanticas(
                 WHERE status = 'ok'
                   AND tipo_acao ILIKE %s ESCAPE '\\'
                   AND fatos_embedding IS NOT NULL
+                  AND (%s::text IS NULL OR area_juridica = %s)
                   AND (
                     usuario_id = %s
                     OR (n8n_resposta::jsonb->'engine_ia'->>'provider' = 'humano')
@@ -1257,6 +1365,8 @@ def buscar_defesas_semanticas(
                 (
                     vec_str,
                     pattern_tipo,
+                    area_canonica,
+                    area_canonica,
                     usuario_id or "__sem_usuario__",
                     excluir_numero,
                     vec_str,
@@ -1316,6 +1426,7 @@ def buscar_defesas_lexicais(
     *,
     usuario_id: str | None,
     limit: int = 10,
+    area_juridica: str | None = None,
 ) -> list[dict[str, Any]]:
     """Busca contestacoes anteriores por similaridade lexical (BM25-like via ts_rank_cd).
 
@@ -1351,6 +1462,9 @@ def buscar_defesas_lexicais(
 
     safe_limit = max(1, min(int(limit), 20))
 
+    # PR13 #B1: filtro opcional por area_juridica canonica (mesmo padrao da semantica).
+    area_canonica = area_juridica if area_juridica in AREAS_JURIDICAS_CANONICAS else None
+
     _ensure_db_initialized()
 
     with _get_connection() as connection:
@@ -1370,6 +1484,7 @@ def buscar_defesas_lexicais(
                 WHERE status = 'ok'
                   AND tipo_acao ILIKE %s ESCAPE '\\'
                   AND fatos_tsv @@ plainto_tsquery('portuguese', %s)
+                  AND (%s::text IS NULL OR area_juridica = %s)
                   AND (
                     usuario_id = %s
                     OR (n8n_resposta::jsonb->'engine_ia'->>'provider' = 'humano')
@@ -1385,6 +1500,8 @@ def buscar_defesas_lexicais(
                     query_normalizada,
                     pattern_tipo,
                     query_normalizada,
+                    area_canonica,
+                    area_canonica,
                     usuario_id or "__sem_usuario__",
                     excluir_numero,
                     safe_limit,
@@ -1393,6 +1510,127 @@ def buscar_defesas_lexicais(
             rows = cursor.fetchall()
 
     return [_row_to_defesa_lexical(row) for row in rows]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PR13 #B3: Base de legislacao curada (busca hibrida tsvector + pgvector)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def upsert_legislacao(
+    origem: str,
+    numero: str,
+    texto: str,
+    *,
+    area_juridica: str | None = None,
+    embedding: list[float] | None = None,
+) -> None:
+    """UPSERT em public.legislacao por (origem, numero). Usado pelo script de ingestao."""
+    if not origem or not numero or not texto:
+        return
+    _ensure_db_initialized()
+    vec_str = _format_pgvector(embedding) if embedding else None
+    area = area_juridica if area_juridica in AREAS_JURIDICAS_CANONICAS else None
+    with _get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO legislacao (origem, numero, texto, area_juridica, embedding)
+                VALUES (%s, %s, %s, %s, %s::vector)
+                ON CONFLICT (origem, numero) DO UPDATE
+                  SET texto = EXCLUDED.texto,
+                      area_juridica = EXCLUDED.area_juridica,
+                      embedding = EXCLUDED.embedding
+                """,
+                (origem, numero, texto, area, vec_str),
+            )
+        connection.commit()
+
+
+def _row_to_legislacao(row: tuple) -> dict[str, Any]:
+    """Mapeia tupla do SELECT de buscar_legislacao para dict."""
+    return {
+        "origem": str(row[0] or ""),
+        "numero": str(row[1] or ""),
+        "texto": str(row[2] or ""),
+        "area_juridica": str(row[3] or "") if row[3] else None,
+        "score": float(row[4] or 0.0),
+    }
+
+
+def buscar_legislacao_semantica(
+    embedding: list[float],
+    *,
+    area_juridica: str | None = None,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    """Busca legislacao por similaridade vetorial (cosine).
+
+    Sem multi-tenant: legislacao eh recurso compartilhado (lei eh lei).
+    Filtro opcional por area_juridica reduz ruido (ex: pega CLT e CF mas
+    nao CDC quando area=trabalhista).
+    """
+    _ensure_db_initialized()
+    vec_str = _format_pgvector(embedding)
+    safe_limit = max(1, min(int(limit), 10))
+    area_canonica = area_juridica if area_juridica in AREAS_JURIDICAS_CANONICAS else None
+
+    with _get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    origem, numero, texto, area_juridica,
+                    1 - (embedding <=> %s::vector) AS score
+                FROM legislacao
+                WHERE embedding IS NOT NULL
+                  AND (%s::text IS NULL OR area_juridica IS NULL OR area_juridica = %s)
+                ORDER BY embedding <=> %s::vector ASC
+                LIMIT %s
+                """,
+                (vec_str, area_canonica, area_canonica, vec_str, safe_limit),
+            )
+            rows = cursor.fetchall()
+    return [_row_to_legislacao(row) for row in rows]
+
+
+def buscar_legislacao_lexical(
+    texto_query: str,
+    *,
+    area_juridica: str | None = None,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    """Busca legislacao por ranking lexical (ts_rank_cd + plainto_tsquery)."""
+    query_normalizada = _normalizar_query_lexical(texto_query)
+    if not query_normalizada:
+        return []
+    safe_limit = max(1, min(int(limit), 10))
+    area_canonica = area_juridica if area_juridica in AREAS_JURIDICAS_CANONICAS else None
+
+    _ensure_db_initialized()
+    with _get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    origem, numero, texto, area_juridica,
+                    ts_rank_cd(texto_tsv, plainto_tsquery('portuguese', %s)) AS score
+                FROM legislacao
+                WHERE texto_tsv @@ plainto_tsquery('portuguese', %s)
+                  AND (%s::text IS NULL OR area_juridica IS NULL OR area_juridica = %s)
+                ORDER BY score DESC
+                LIMIT %s
+                """,
+                (
+                    query_normalizada,
+                    query_normalizada,
+                    area_canonica,
+                    area_canonica,
+                    safe_limit,
+                ),
+            )
+            rows = cursor.fetchall()
+    return [_row_to_legislacao(row) for row in rows]
 
 
 def salvar_exemplar(

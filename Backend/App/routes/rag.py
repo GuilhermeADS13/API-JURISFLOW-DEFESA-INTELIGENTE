@@ -54,8 +54,12 @@ def _resposta_vazia(status_code: str, detalhe: str) -> dict:
     return {"status": status_code, "detalhe": detalhe, "casos": [], "total": 0}
 
 
-def _normalizar_input(payload: dict) -> tuple[str, str, str]:
-    """Extrai (tipo_acao, numero_processo, texto_query) do payload n8n."""
+def _normalizar_input(payload: dict) -> tuple[str, str, str, str | None]:
+    """Extrai (tipo_acao, numero_processo, texto_query, area_juridica) do payload n8n.
+
+    `area_juridica` (PR13 #B1) eh opcional — quando vier, a busca filtra por
+    ela alem do tipo_acao (mais especifico). None = sem filtro adicional.
+    """
     tipo_acao = str(payload.get("tipo_acao") or "").strip()
     numero_processo = str(payload.get("numero_processo") or "sem-numero").strip()
     fatos = str(payload.get("fatos") or "").strip()
@@ -66,7 +70,9 @@ def _normalizar_input(payload: dict) -> tuple[str, str, str]:
         else str(pedidos_raw)
     )
     texto_query = f"{fatos} {pedidos_str}".strip()
-    return tipo_acao, numero_processo, texto_query
+    area_raw = payload.get("area_juridica")
+    area_juridica = str(area_raw).strip().lower() if area_raw else None
+    return tipo_acao, numero_processo, texto_query, area_juridica
 
 
 def _executar_busca_semantica(
@@ -74,6 +80,7 @@ def _executar_busca_semantica(
     tipo_acao: str,
     numero_processo: str,
     usuario_id: str | None,
+    area_juridica: str | None,
 ) -> list[dict]:
     """Executa a busca pgvector. Retorna [] em erro (logado) ou se embedding=None."""
     if embedding is None:
@@ -85,6 +92,7 @@ def _executar_busca_semantica(
             excluir_numero=numero_processo,
             usuario_id=usuario_id,
             limit=_CANDIDATOS_POR_BUSCA,
+            area_juridica=area_juridica,
         )
     except Exception as err:
         logger.error(
@@ -101,6 +109,7 @@ def _executar_busca_lexical(
     tipo_acao: str,
     numero_processo: str,
     usuario_id: str | None,
+    area_juridica: str | None,
 ) -> list[dict]:
     """Executa a busca lexical tsvector. Retorna [] em erro (logado)."""
     try:
@@ -110,6 +119,7 @@ def _executar_busca_lexical(
             excluir_numero=numero_processo,
             usuario_id=usuario_id,
             limit=_CANDIDATOS_POR_BUSCA,
+            area_juridica=area_juridica,
         )
     except Exception as err:
         logger.error(
@@ -212,7 +222,7 @@ async def buscar_defesas_similares(
         fatos: str            — resumo dos fatos extraidos
         pedidos: str|list     — pedidos do autor (string ou lista)
     """
-    tipo_acao, numero_processo, texto_query = _normalizar_input(payload)
+    tipo_acao, numero_processo, texto_query, area_juridica = _normalizar_input(payload)
 
     if not tipo_acao:
         raise HTTPException(
@@ -233,10 +243,10 @@ async def buscar_defesas_similares(
 
     usuario_id = usuario.get("id")
     semanticos = _executar_busca_semantica(
-        embedding, tipo_acao, numero_processo, usuario_id
+        embedding, tipo_acao, numero_processo, usuario_id, area_juridica
     )
     lexicais = _executar_busca_lexical(
-        texto_query, tipo_acao, numero_processo, usuario_id
+        texto_query, tipo_acao, numero_processo, usuario_id, area_juridica
     )
 
     if not semanticos and not lexicais:
