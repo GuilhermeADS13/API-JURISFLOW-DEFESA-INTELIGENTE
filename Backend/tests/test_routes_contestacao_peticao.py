@@ -161,6 +161,74 @@ def test_happy_path_sem_modelo_base(monkeypatch):
     assert "Improcedencia total" in texto
 
 
+def test_happy_path_encaminha_citacoes_e_contradicoes(monkeypatch):
+    """PR12 #10: campos do Self-Correction e Detector de Contradicoes
+    do n8n devem aparecer no response p/ o frontend exibir avisos."""
+    payload = _payload_valido()
+
+    async def fake_n8n(dados):
+        resp = _resposta_n8n_ok()
+        resp["citacoes_incertas"] = [
+            {"texto": "STJ, REsp 9.999.999/SP", "tipo": "acordao", "motivo": "numero suspeito"}
+        ]
+        resp["citacoes_verificadas"] = [
+            {"texto": "art. 818 da CLT", "tipo": "lei"}
+        ]
+        resp["contradicoes"] = [
+            {
+                "tipo": "data",
+                "trecho_peticao": "admissao em 01/03/2020",
+                "trecho_minuta": "admissao em 01/03/2019",
+                "descricao": "Data de admissao diverge entre peticao e minuta",
+                "severidade": "alta",
+            }
+        ]
+        return resp
+
+    monkeypatch.setattr(peticao_route, "enviar_para_n8n_peticao", fake_n8n)
+    monkeypatch.setattr(peticao_route, "save_contestacao", lambda **kw: 77)
+
+    resposta = asyncio.run(
+        peticao_route.contestar_por_peticao(
+            request=_fake_request(),
+            payload=payload,
+            usuario={"id": "USR-TESTE", "nome": "Ana", "email": "a@a.com"},
+        )
+    )
+
+    assert resposta["status"] == "ok"
+    assert len(resposta["citacoes_incertas"]) == 1
+    assert resposta["citacoes_incertas"][0]["texto"] == "STJ, REsp 9.999.999/SP"
+    assert len(resposta["citacoes_verificadas"]) == 1
+    assert len(resposta["contradicoes"]) == 1
+    assert resposta["contradicoes"][0]["severidade"] == "alta"
+
+
+def test_happy_path_campos_avisos_ausentes_no_n8n_viram_listas_vazias(monkeypatch):
+    """PR12 #10: se n8n nao devolveu citacoes_*/contradicoes (ex: node desativado),
+    o backend devolve [] em vez de undefined — frontend nao quebra."""
+    payload = _payload_valido()
+
+    async def fake_n8n(dados):
+        # _resposta_n8n_ok() ja nao traz esses campos
+        return _resposta_n8n_ok()
+
+    monkeypatch.setattr(peticao_route, "enviar_para_n8n_peticao", fake_n8n)
+    monkeypatch.setattr(peticao_route, "save_contestacao", lambda **kw: 55)
+
+    resposta = asyncio.run(
+        peticao_route.contestar_por_peticao(
+            request=_fake_request(),
+            payload=payload,
+            usuario={"id": "USR-TESTE", "nome": "Ana", "email": "a@a.com"},
+        )
+    )
+
+    assert resposta["citacoes_incertas"] == []
+    assert resposta["citacoes_verificadas"] == []
+    assert resposta["contradicoes"] == []
+
+
 def test_happy_path_com_modelo_base_chama_docxtpl(monkeypatch):
     payload = _payload_valido(
         modelo_base_base64=base64.b64encode(_modelo_base_docx_bytes()).decode("ascii"),

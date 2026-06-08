@@ -488,6 +488,12 @@ def _fluxo_ok(
         "dados_extraidos": dados_extraidos,
         "minuta": minuta,
         "engine_ia": engine_ia,
+        # Self-Correction (PR6 #2) e Detector de Contradicoes (PR12 #10) rodam
+        # no n8n e voltam no envelope. Frontend usa esses campos pra avisar
+        # o advogado antes do protocolo.
+        "citacoes_incertas": resposta_n8n.get("citacoes_incertas") or [],
+        "citacoes_verificadas": resposta_n8n.get("citacoes_verificadas") or [],
+        "contradicoes": resposta_n8n.get("contradicoes") or [],
         **_resposta_docx(docx_bytes, dados_extraidos),
     }
 

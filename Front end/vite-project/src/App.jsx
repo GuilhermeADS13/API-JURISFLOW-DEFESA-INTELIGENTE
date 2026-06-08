@@ -1531,9 +1531,12 @@ export default function App() {
         ? backendData.citacoes_incertas : [];
       const citacoesVerificadas = Array.isArray(backendData?.citacoes_verificadas)
         ? backendData.citacoes_verificadas : [];
+      // PR12 #10 — Detector de Contradicoes: minuta vs fatos extraidos da peticao.
+      const contradicoes = Array.isArray(backendData?.contradicoes)
+        ? backendData.contradicoes : [];
       setIaResult({
         engine, riscos, arquivoB64, arquivoNome, defesasConsultadas,
-        citacoesIncertas, citacoesVerificadas,
+        citacoesIncertas, citacoesVerificadas, contradicoes,
       });
       autoDownloadDocx(arquivoB64, arquivoNome);
 
@@ -1638,6 +1641,7 @@ export default function App() {
         defesasConsultadas: 0,
         citacoesIncertas: Array.isArray(data?.citacoes_incertas) ? data.citacoes_incertas : [],
         citacoesVerificadas: Array.isArray(data?.citacoes_verificadas) ? data.citacoes_verificadas : [],
+        contradicoes: Array.isArray(data?.contradicoes) ? data.contradicoes : [],
       });
       autoDownloadDocx(arquivoB64, arquivoNome);
       setLastCaseId(String(data?.contestacao_id || revisaoData.contestacao_id));
@@ -2139,6 +2143,52 @@ export default function App() {
                     )}
                   </li>
                 ))}
+              </ul>
+            </div>
+          )}
+          {iaResult?.contradicoes?.length > 0 && (
+            <div className="mt-3 p-2 border border-danger rounded bg-danger bg-opacity-10">
+              <small className="text-danger fw-semibold d-block mb-1">
+                ⚠ Contradições detectadas entre petição inicial e contestação (
+                {iaResult.contradicoes.length})
+              </small>
+              <ul className="mb-0" style={{ fontSize: "0.82rem" }}>
+                {iaResult.contradicoes.map((c, i) => {
+                  const badgeClass =
+                    c.severidade === "alta"
+                      ? "bg-danger"
+                      : c.severidade === "media"
+                      ? "bg-warning text-dark"
+                      : "bg-secondary";
+                  return (
+                    <li key={i} className="mb-2">
+                      <span className={`badge ${badgeClass} me-1`}>
+                        {c.severidade || "baixa"}
+                      </span>
+                      <span className="badge bg-light text-dark border me-1">
+                        {c.tipo || "outros"}
+                      </span>
+                      <strong>{c.descricao}</strong>
+                      {(c.trecho_peticao || c.trecho_minuta) && (
+                        <div
+                          className="text-muted mt-1"
+                          style={{ fontSize: "0.78rem" }}
+                        >
+                          {c.trecho_peticao && (
+                            <div>
+                              📄 Petição: <em>{c.trecho_peticao}</em>
+                            </div>
+                          )}
+                          {c.trecho_minuta && (
+                            <div>
+                              📝 Minuta: <em>{c.trecho_minuta}</em>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}

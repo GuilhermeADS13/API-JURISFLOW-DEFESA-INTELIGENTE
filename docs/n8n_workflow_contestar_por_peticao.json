@@ -1,10 +1,10 @@
 {
   "id": "WF_AUTOJURI_CONTESTAR_POR_PETICAO",
   "name": "AutoJuri - Webhook Contestar por Peticao",
-  "description": "Webhook POST /contestar-por-peticao -> recebe texto extraido da peticao inicial (extracao no backend) -> Claude extrai dados estruturados -> RAG no Supabase para defesas anteriores -> Claude gera minuta JSON ponto a ponto -> backend monta o .docx final | PR6 #4: RAG Semantico (pgvector <=>), fallback TF-IDF.",
+  "description": "Webhook POST /contestar-por-peticao -> recebe texto extraido da peticao inicial (extracao no backend) -> Claude extrai dados estruturados -> RAG no Supabase para defesas anteriores -> Claude gera minuta JSON ponto a ponto -> backend monta o .docx final | PR6 #4: RAG Semantico (pgvector <=>), fallback TF-IDF. | PR12 #10: Detector de Contradicoes (Haiku 4.5) entre Self-Correction e Responder.",
   "active": true,
   "createdAt": "2026-05-06T00:00:00.000Z",
-  "updatedAt": "2026-05-14T00:00:00.000Z",
+  "updatedAt": "2026-06-05T00:00:00.000Z",
   "nodes": [
     {
       "id": "node-wh-peticao",
@@ -94,12 +94,26 @@
       }
     },
     {
+      "id": "node-detector-contradicoes",
+      "name": "Detector de Contradicoes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// n8n 2.17.5 JS sandbox shims (process, AbortController, fetch). Tudo em const.\nconst __AC_INIT = (() => { if (typeof globalThis.AbortController === 'undefined') { globalThis.AbortController = class { constructor() { this.signal = undefined; } abort() {} }; } return true; })();\nconst __PROC = (() => { try { return process.env || {}; } catch (_) { return {}; } })();\nconst __HTTP = (() => { try { if ($helpers && $helpers.httpRequest) return $helpers; } catch (_) {} try { if (typeof helpers !== 'undefined' && helpers && helpers.httpRequest) return helpers; } catch (_) {} try { if (this && this.helpers && this.helpers.httpRequest) return this.helpers; } catch (_) {} return null; })();\nconst __FETCH = async (url, opts) => {\n  opts = opts || {};\n  const method = opts.method || 'GET';\n  const headers = opts.headers || {};\n  let body = opts.body;\n  if (typeof body === 'string') { try { body = JSON.parse(body); } catch (_) { } }\n  if (!__HTTP) {\n    try { const r = await fetch(url, opts); return r; } catch (_) {}\n    throw new Error('http_unavailable');\n  }\n  try {\n    const r = await __HTTP.httpRequest({ url, method, headers, body, json: true, returnFullResponse: true, ignoreHttpStatusErrors: true, timeout: 480000 });\n    const status = r.statusCode || r.status || 200;\n    const data = (r.body !== undefined) ? r.body : r;\n    return { ok: status >= 200 && status < 300, status, json: async () => data, text: async () => (typeof data === 'string' ? data : JSON.stringify(data || {})) };\n  } catch (e) {\n    const status = e.statusCode || e.status || 500;\n    const msg = (e.message || '').slice(0, 500);\n    return { ok: false, status, json: async () => ({ error: msg }), text: async () => msg };\n  }\n};\n\n// PR12 #10 — Detector de Contradicoes (Guia v4 §10)\n// Apos o Self-Correction validar citacoes, esta etapa pede ao Claude Haiku\n// para auditar se a minuta CONTRADIZ fatos extraidos da peticao inicial.\n// Detecta: partes invertidas, datas erradas, valores divergentes, teses\n// incompativeis. Pega o pior caso possivel — peça contradizendo dados do\n// autor — antes de chegar ao advogado.\n//\n// Custo: ~1 chamada Claude Haiku 4.5 (~1500 tokens out, T=0.0). Vale a pena.\n\nasync function callClaudeWithRetry(url, opts, maxRetries) {\n  const RETRIES = maxRetries || 3;\n  const BACKOFF = [1000, 2000, 4000];\n  let lastErr = null;\n  for (let i = 0; i < RETRIES; i++) {\n    try {\n      const r = await __FETCH(url, opts);\n      if (r.status === 429 || r.status === 529 || r.status === 500) {\n        if (i < RETRIES - 1) {\n          await new Promise(res => setTimeout(res, BACKOFF[i] || 4000));\n          lastErr = { status: r.status, msg: `retryable_${r.status}` };\n          continue;\n        }\n      }\n      return r;\n    } catch (e) {\n      lastErr = { status: 500, msg: e.message || String(e) };\n      if (i < RETRIES - 1) {\n        await new Promise(res => setTimeout(res, BACKOFF[i] || 4000));\n        continue;\n      }\n    }\n  }\n  return { ok: false, status: (lastErr && lastErr.status) || 500, json: async () => ({ error: (lastErr && lastErr.msg) || 'all_retries_failed' }), text: async () => (lastErr && lastErr.msg) || 'all_retries_failed' };\n}\n\nconst envelope = $input.first().json;\nif (envelope.status !== 'ok' || !envelope.minuta) {\n  return [{ json: envelope }];\n}\n\nconst readEnv = (key, fb = '') => {\n  try {\n    if (typeof $vars !== 'undefined' && $vars && $vars[key]) return String($vars[key]).trim();\n    if (typeof $env !== 'undefined' && $env && $env[key]) return String($env[key]).trim();\n  } catch (_) {}\n  return __PROC[key] || fb;\n};\n\nconst stripFences = s => {\n  const cleaned = String(s || '').trim().replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/i, '').trim();\n  const first = cleaned.indexOf('{');\n  const last = cleaned.lastIndexOf('}');\n  if (first === -1 || last === -1 || last < first) return cleaned;\n  return cleaned.slice(first, last + 1);\n};\n\nconst ANTHROPIC_KEY = readEnv('ANTHROPIC_API_KEY') || readEnv('CLAUDE_API_KEY');\nconst CLAUDE_MODEL = readEnv('CLAUDE_VERIFICACAO_MODEL') || 'claude-haiku-4-5';\nconst BASE_URL = (readEnv('ANTHROPIC_BASE_URL') || 'https://api.anthropic.com').replace(/\\/$/, '');\nconst API_VERSION = readEnv('ANTHROPIC_VERSION') || '2023-06-01';\n\nconst dados = envelope.dados_extraidos || {};\nconst m = envelope.minuta;\n\nconst dadosPeticao = JSON.stringify({\n  autor: dados.autor || null,\n  reu: dados.reu || null,\n  numero_processo: dados.numero_processo || null,\n  tipo_acao: dados.tipo_acao || null,\n  vara: dados.vara || null,\n  fatos_resumo: (dados.fatos_resumo || '').slice(0, 2000),\n  pedidos: dados.pedidos || [],\n  valores: dados.valores || {},\n  argumentos_autor: (dados.argumentos_autor || []).slice(0, 5),\n}, null, 2);\n\nconst textoMinuta = [\n  m.tese_central, m.cabecalho_processual, m.preliminares, m.merito, m.fundamentos, m.pedidos,\n].filter(Boolean).join('\\n\\n').slice(0, 6000);\n\nconst SYSTEM_DETECTOR = `Voce eh um auditor juridico criterioso. Sua unica funcao eh comparar os DADOS EXTRAIDOS da peticao inicial com o TEXTO DA MINUTA de contestacao gerada, e identificar CONTRADICOES factuais — afirmacoes na minuta que entrem em conflito com os fatos narrados pelo autor.\n\nRetorne SOMENTE JSON valido (sem markdown, sem codeblock):\n{\n  \"contradicoes\": [\n    {\"tipo\": \"partes|data|valor|tese|outros\", \"trecho_peticao\": \"snippet curto do dado extraido\", \"trecho_minuta\": \"snippet curto da minuta contradizente\", \"descricao\": \"explicacao em 1 frase\", \"severidade\": \"alta|media|baixa\"}\n  ]\n}\n\nREGRAS:\n- \"alta\": contradicao factual evidente (parte invertida, data > N anos divergente, valor > 50% divergente, nome do autor/reu errado, numero do processo errado).\n- \"media\": divergencia parcial (data fora do range mas dentro do mesmo ano, valor 10-50% divergente, citacao de fato similar mas com detalhe trocado).\n- \"baixa\": divergencia interpretativa (a tese da minuta argumenta contra o autor — isso eh ESPERADO em contestacao e NAO eh contradicao; so marque baixa se houver erro factual menor).\n- NAO marque como contradicao argumentacao adversarial — a contestacao DEVE atacar a tese do autor. So conte como contradicao se a minuta AFIRMAR fato que entra em conflito com fato EXTRAIDO da peticao.\n- Se nao houver contradicoes, retorne {\"contradicoes\": []}.\n- \"trecho_*\" max 200 chars.`;\n\nconst USER_DETECTOR = `DADOS EXTRAIDOS DA PETICAO:\n${dadosPeticao}\n\nTEXTO DA MINUTA GERADA:\n${textoMinuta}`;\n\nlet resultado = { contradicoes: [] };\nlet provider = 'fallback';\nlet apiError = null;\nlet tokens_input = 0, tokens_output = 0;\n\nif (ANTHROPIC_KEY) {\n  try {\n    const resp = await callClaudeWithRetry(`${BASE_URL}/v1/messages`, {\n      method: 'POST',\n      headers: {\n        'x-api-key': ANTHROPIC_KEY,\n        'anthropic-version': API_VERSION,\n        'content-type': 'application/json',\n        'anthropic-beta': 'prompt-caching-2024-07-31',\n      },\n      body: {\n        model: CLAUDE_MODEL,\n        max_tokens: 1500,\n        temperature: 0,\n        system: [{ type: 'text', text: SYSTEM_DETECTOR, cache_control: { type: 'ephemeral' } }],\n        messages: [{ role: 'user', content: USER_DETECTOR }],\n      },\n    });\n\n    if (resp.ok) {\n      const payload = await resp.json();\n      if (payload && payload.usage) {\n        tokens_input = parseInt(payload.usage.input_tokens, 10) || 0;\n        tokens_output = parseInt(payload.usage.output_tokens, 10) || 0;\n      }\n      const raw = (payload.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();\n      if (raw) {\n        try {\n          resultado = JSON.parse(stripFences(raw));\n          provider = 'claude';\n        } catch (e) {\n          apiError = `parse_error: ${e.message}`;\n        }\n      } else {\n        apiError = 'resposta_vazia';\n      }\n    } else {\n      apiError = `http_${resp.status}`;\n    }\n  } catch (e) {\n    apiError = e.message || 'erro_desconhecido';\n  }\n} else {\n  apiError = 'sem_chave_anthropic';\n}\n\nconst contradicoes = Array.isArray(resultado.contradicoes) ? resultado.contradicoes : [];\nconst sanitizadas = [];\nfor (const c of contradicoes) {\n  if (!c || typeof c !== 'object') continue;\n  sanitizadas.push({\n    tipo: ['partes', 'data', 'valor', 'tese', 'outros'].includes(String(c.tipo)) ? String(c.tipo) : 'outros',\n    trecho_peticao: String(c.trecho_peticao || '').slice(0, 200),\n    trecho_minuta: String(c.trecho_minuta || '').slice(0, 200),\n    descricao: String(c.descricao || '').slice(0, 300),\n    severidade: ['alta', 'media', 'baixa'].includes(String(c.severidade)) ? String(c.severidade) : 'baixa',\n  });\n}\n\nreturn [{\n  json: {\n    ...envelope,\n    contradicoes: sanitizadas,\n    detector_contradicoes: {\n      provider, model: CLAUDE_MODEL, api_error: apiError,\n      tokens_input, tokens_output, tokens_total: tokens_input + tokens_output,\n      custo_estimado_usd: tokens_input || tokens_output ? parseFloat(((tokens_input/1000000*1) + (tokens_output/1000000*5)).toFixed(6)) : 0,\n    },\n  },\n}];\n"
+      }
+    },
+    {
       "id": "node-responder-peticao",
       "name": "Responder",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        1500,
+        1660,
         300
       ],
       "parameters": {
@@ -229,7 +243,7 @@
       "main": [
         [
           {
-            "node": "Responder",
+            "node": "Detector de Contradicoes",
             "type": "main",
             "index": 0
           }
@@ -248,6 +262,17 @@
         [
           {
             "node": "Responder Erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detector de Contradicoes": {
+      "main": [
+        [
+          {
+            "node": "Responder",
             "type": "main",
             "index": 0
           }
