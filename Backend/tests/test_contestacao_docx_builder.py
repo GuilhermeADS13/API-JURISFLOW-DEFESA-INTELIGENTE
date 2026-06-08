@@ -185,3 +185,188 @@ def test_rol_nao_renderiza_quando_anexos_nao_eh_lista():
         )
         texto = _texto_do_docx(docx_bytes)
         assert "ROL DE DOCUMENTOS" not in texto
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PR15 — Embedding de imagens no ROL
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _png_colorido(cor: str = "white") -> bytes:
+    """PNG 2x2 com cor especifica. Cores diferentes evitam dedup do python-docx."""
+    from PIL import Image
+
+    buf = BytesIO()
+    Image.new("RGB", (2, 2), color=cor).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+# Contador global pra gerar PNGs unicos em cada chamada (cor sequencial).
+_CORES_TESTE = ("red", "green", "blue", "yellow", "purple", "orange", "cyan", "magenta", "pink", "brown")
+
+
+def _imagem_embedavel(tipo: str, nome: str = "fake.png", cor_idx: int | None = None):
+    """Helper pra criar ImagemEmbedavel com PNG UNICO (evita dedup do docx)."""
+    from App.services.embed_processor import ImagemEmbedavel
+
+    # Cor diferente por chamada — se cor_idx for None, hash do nome decide.
+    if cor_idx is None:
+        cor_idx = hash(nome) % len(_CORES_TESTE)
+    cor = _CORES_TESTE[cor_idx % len(_CORES_TESTE)]
+    return ImagemEmbedavel(
+        tipo=tipo,
+        nome=nome,
+        bytes_png=_png_colorido(cor),
+        pagina=1,
+        eh_imagem_direta=True,
+    )
+
+
+def _contar_imagens_no_docx(bytes_docx: bytes) -> int:
+    """Conta arquivos em word/media/ — onde python-docx grava imagens embedded."""
+    import zipfile
+
+    with zipfile.ZipFile(BytesIO(bytes_docx)) as z:
+        return sum(1 for name in z.namelist() if name.startswith("word/media/"))
+
+
+def test_imagem_embeddada_quando_tipo_casa_com_anexo():
+    from App.services.contestacao_docx_builder import montar_docx_programatico
+
+    anexos = [
+        {"numero": "Doc. 01", "tipo": "Folha de Ponto", "descricao": "jornada"},
+        {"numero": "Doc. 02", "tipo": "Extrato FGTS", "descricao": "depositos"},
+    ]
+    imagens = [
+        _imagem_embedavel("folha_ponto", "ponto.png"),
+        _imagem_embedavel("fgts", "fgts.png"),
+    ]
+
+    docx_bytes = montar_docx_programatico(
+        _dados_minimos(),
+        _minuta_minima(documentos_anexos=anexos),
+        imagens_embedar=imagens,
+    )
+
+    # Ambas imagens embedded — nenhum placeholder fallback
+    assert _contar_imagens_no_docx(docx_bytes) == 2
+    texto = _texto_do_docx(docx_bytes)
+    assert "[ANEXAR ARQUIVO]" not in texto
+    # Legendas com nome do arquivo aparecem
+    assert "ponto.png" in texto
+    assert "fgts.png" in texto
+
+
+def test_placeholder_quando_tipo_nao_casa():
+    """Anexo declarado pelo Claude mas sem imagem correspondente: placeholder."""
+    from App.services.contestacao_docx_builder import montar_docx_programatico
+
+    anexos = [
+        {"numero": "Doc. 01", "tipo": "Folha de Ponto", "descricao": "jornada"},
+        {"numero": "Doc. 02", "tipo": "Extrato FGTS", "descricao": "depositos"},
+    ]
+    # So uma imagem (folha_ponto) — FGTS vai cair em placeholder
+    imagens = [_imagem_embedavel("folha_ponto", "ponto.png")]
+
+    docx_bytes = montar_docx_programatico(
+        _dados_minimos(),
+        _minuta_minima(documentos_anexos=anexos),
+        imagens_embedar=imagens,
+    )
+
+    assert _contar_imagens_no_docx(docx_bytes) == 1
+    texto = _texto_do_docx(docx_bytes)
+    # 1 placeholder ainda (pro FGTS sem imagem)
+    assert texto.count("[ANEXAR ARQUIVO]") == 1
+
+
+def test_imagens_nao_casadas_viram_outras_provas():
+    """Imagens enviadas sem item correspondente no ROL caem em bloco extra."""
+    from App.services.contestacao_docx_builder import montar_docx_programatico
+
+    anexos = [
+        {"numero": "Doc. 01", "tipo": "Contrato de Trabalho", "descricao": "x"},
+    ]
+    # Imagem de tipo que nao casa com nenhum item declarado
+    imagens = [
+        _imagem_embedavel("laudo_pericial", "laudo.png"),
+        _imagem_embedavel("print", "email.png"),
+    ]
+
+    docx_bytes = montar_docx_programatico(
+        _dados_minimos(),
+        _minuta_minima(documentos_anexos=anexos),
+        imagens_embedar=imagens,
+    )
+
+    # Total: 0 casadas no ROL + 2 em OUTRAS PROVAS = 2 imagens embedded
+    assert _contar_imagens_no_docx(docx_bytes) == 2
+    texto = _texto_do_docx(docx_bytes)
+    assert "OUTRAS PROVAS ANEXAS" in texto
+
+
+def test_normalizar_tipo_anexo_casa_variantes_humanas():
+    from App.services.contestacao_docx_builder import _normalizar_tipo_anexo
+
+    assert _normalizar_tipo_anexo("Folha de Ponto") == "folha_ponto"
+    assert _normalizar_tipo_anexo("Cartoes de Ponto") == "folha_ponto"
+    assert _normalizar_tipo_anexo("Extrato FGTS") == "fgts"
+    assert _normalizar_tipo_anexo("Extrato Analitico FGTS") == "fgts"
+    assert _normalizar_tipo_anexo("TRCT") == "trct"
+    assert _normalizar_tipo_anexo("Termo de Rescisao") == "trct"
+    assert _normalizar_tipo_anexo("Laudo Pericial") == "laudo_pericial"
+    assert _normalizar_tipo_anexo("PPP") == "laudo_pericial"
+    assert _normalizar_tipo_anexo("Contrato de Trabalho") == "contrato"
+    assert _normalizar_tipo_anexo("CTPS Digital") == "ctps"
+    assert _normalizar_tipo_anexo("Prints de e-mail") == "print"
+    # Fallback
+    assert _normalizar_tipo_anexo("Coisa Aleatoria") == "outro"
+    assert _normalizar_tipo_anexo("") == "outro"
+    assert _normalizar_tipo_anexo(None) == "outro"
+
+
+def test_falha_em_embedding_de_imagem_corrompida_nao_quebra():
+    """Imagem com bytes invalidos vira placeholder de erro, nao crasha o docx."""
+    from App.services.contestacao_docx_builder import montar_docx_programatico
+    from App.services.embed_processor import ImagemEmbedavel
+
+    imagem_quebrada = ImagemEmbedavel(
+        tipo="fgts",
+        nome="quebrada.png",
+        bytes_png=b"nao_eh_png_valido",
+        pagina=1,
+        eh_imagem_direta=True,
+    )
+
+    docx_bytes = montar_docx_programatico(
+        _dados_minimos(),
+        _minuta_minima(documentos_anexos=[{"numero": "Doc. 01", "tipo": "FGTS", "descricao": "x"}]),
+        imagens_embedar=[imagem_quebrada],
+    )
+    texto = _texto_do_docx(docx_bytes)
+    # Nenhuma imagem embedded mas docx gerou OK + placeholder de erro
+    assert _contar_imagens_no_docx(docx_bytes) == 0
+    assert "FALHA AO EMBEDAR" in texto
+
+
+def test_rol_so_renderiza_se_houver_anexos_ou_imagens():
+    """Sem anexos no JSON E sem imagens, secao NAO aparece."""
+    from App.services.contestacao_docx_builder import montar_docx_programatico
+
+    docx_bytes = montar_docx_programatico(_dados_minimos(), _minuta_minima())
+    texto = _texto_do_docx(docx_bytes)
+    assert "ROL DE DOCUMENTOS" not in texto
+    assert "OUTRAS PROVAS" not in texto
+
+
+def test_sem_anexos_mas_com_imagens_renderiza_outras_provas():
+    """Imagens sem ROL: bloco OUTRAS PROVAS aparece direto."""
+    from App.services.contestacao_docx_builder import montar_docx_programatico
+
+    imagens = [_imagem_embedavel("outro", "anexo.png")]
+    docx_bytes = montar_docx_programatico(
+        _dados_minimos(), _minuta_minima(), imagens_embedar=imagens
+    )
+    texto = _texto_do_docx(docx_bytes)
+    assert "OUTRAS PROVAS ANEXAS" in texto
+    assert _contar_imagens_no_docx(docx_bytes) == 1

@@ -274,6 +274,10 @@ export default function App() {
   // PR5 Multi-documentos: lista de anexos opcionais (alem da peticao principal).
   const [anexosFiles, setAnexosFiles] = useState([]);
   const [anexosError, setAnexosError] = useState("");
+  // PR15: provas a embedar visualmente no docx (FGTS, TRCT, laudos, prints).
+  // Cada item: { file: File, tipo: 'folha_ponto'|'fgts'|'trct'|'laudo_pericial'|'contrato'|'ctps'|'print'|'outro' }
+  const [embedFiles, setEmbedFiles] = useState([]);
+  const [embedError, setEmbedError] = useState("");
   // PR5 HiL: modal de revisao humana quando confianca da IA < 0.7.
   const [showRevisaoModal, setShowRevisaoModal] = useState(false);
   const [revisaoData, setRevisaoData] = useState(null); // { contestacao_id, dados_extraidos, dados_confianca, modelo_base_base64 }
@@ -891,6 +895,39 @@ export default function App() {
     setAnexosError("");
   };
 
+  // PR15: provas embedaveis no docx final
+  const handleAdicionarEmbed = (file, tipo = "outro") => {
+    if (!file) return;
+    // Validacao basica de tamanho e extensao (model do backend faz o check real)
+    const ext = (file.name || "").toLowerCase().slice(-5);
+    const validExt = [".jpg", ".jpeg", ".png", ".pdf"].some((e) => ext.endsWith(e));
+    if (!validExt) {
+      setEmbedError("Arquivo embedável deve ser JPG, JPEG, PNG ou PDF.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setEmbedError("Arquivo embedável excede 10MB.");
+      return;
+    }
+    if (embedFiles.length >= 10) {
+      setEmbedError("Máximo de 10 provas embedáveis por petição.");
+      return;
+    }
+    setEmbedFiles((prev) => [...prev, { file, tipo }]);
+    setEmbedError("");
+  };
+
+  const handleRemoverEmbed = (index) => {
+    setEmbedFiles((prev) => prev.filter((_, i) => i !== index));
+    setEmbedError("");
+  };
+
+  const handleChangeTipoEmbed = (index, tipo) => {
+    setEmbedFiles((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, tipo } : item)),
+    );
+  };
+
   const validateForm = () => {
     const errors = {};
 
@@ -1398,6 +1435,16 @@ export default function App() {
         })),
       );
 
+      // PR15: provas embedaveis (imagens/PDFs) serializadas com tipo canonico.
+      const embedSerializados = await Promise.all(
+        embedFiles.map(async ({ file, tipo }) => ({
+          base64: await readFileAsBase64(file),
+          nome: file.name,
+          mime_type: file.type || "application/octet-stream",
+          tipo,
+        })),
+      );
+
       const payload = {
         arquivo_peticao_base64: peticaoBase64,
         arquivo_peticao_nome: peticaoFile.name,
@@ -1407,6 +1454,7 @@ export default function App() {
         tipo_acao_hint: tipoAcaoHint.trim() || null,
         pontos_contestante: pontosContestante.trim() || null,
         arquivos_anexos: anexosSerializados,
+        arquivos_embedar: embedSerializados,
       };
 
       // Avisa o usuario se o payload eh grande (modelo .docx vira ~2-3MB
@@ -2026,6 +2074,11 @@ export default function App() {
           anexosError={anexosError}
           onAdicionarAnexo={handleAdicionarAnexo}
           onRemoverAnexo={handleRemoverAnexo}
+          embedFiles={embedFiles}
+          embedError={embedError}
+          onAdicionarEmbed={handleAdicionarEmbed}
+          onRemoverEmbed={handleRemoverEmbed}
+          onChangeTipoEmbed={handleChangeTipoEmbed}
         />
       )}
 

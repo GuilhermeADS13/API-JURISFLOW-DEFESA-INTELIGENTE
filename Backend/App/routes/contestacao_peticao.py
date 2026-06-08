@@ -293,20 +293,28 @@ def _montar_docx(
     minuta: dict,
     usuario_id: str,
     contexto: str = "",
+    imagens_embedar: list | None = None,
 ) -> bytes:
     """Monta DOCX com modelo base (se houver) ou cai no programatico.
 
     Unifica o que antes eram `_montar_docx` e `_montar_docx_minimal`, eliminando
     duplicacao: ambos chamavam `montar_docx_com_modelo` + fallback identico.
+
+    PR15 — `imagens_embedar` (list[ImagemEmbedavel]) sao inseridas no ROL DE
+    DOCUMENTOS quando o tipo casa com algum item de minuta.documentos_anexos[].
     """
     docx_bytes = None
     if modelo_b64:
-        docx_bytes = montar_docx_com_modelo(modelo_b64, dados_extraidos, minuta)
+        docx_bytes = montar_docx_com_modelo(
+            modelo_b64, dados_extraidos, minuta, imagens_embedar=imagens_embedar
+        )
     if docx_bytes is not None:
         return docx_bytes
 
     try:
-        return montar_docx_programatico(dados_extraidos, minuta)
+        return montar_docx_programatico(
+            dados_extraidos, minuta, imagens_embedar=imagens_embedar
+        )
     except (RuntimeError, ValueError, OSError) as error:
         logger.error(
             "Falha ao montar .docx programatico %s usuario_id=%s erro=%s",
@@ -456,12 +464,21 @@ def _fluxo_ok(
     engine_ia: dict,
     confianca: float | None,
 ) -> dict:
-    """Monta DOCX, persiste e devolve resposta de minuta pronta."""
+    """Monta DOCX, persiste e devolve resposta de minuta pronta.
+
+    PR15 — converte payload.arquivos_embedar em list[ImagemEmbedavel] (PDFs
+    viram PNGs via pdf2image) e passa pro builder.
+    """
+    from App.services.embed_processor import processar_arquivos_embedar
+
+    imagens_embedar = processar_arquivos_embedar(payload.arquivos_embedar)
+
     docx_bytes = _montar_docx(
         payload.modelo_base_base64,
         dados_extraidos=dados_extraidos,
         minuta=minuta,
         usuario_id=usuario_id,
+        imagens_embedar=imagens_embedar,
     )
 
     contestacao_id = _persistir_contestacao(

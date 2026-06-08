@@ -23,9 +23,28 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 ALLOWED_PETICAO_EXTENSIONS = (".pdf", ".docx", ".doc")
 ALLOWED_MODELO_BASE_EXTENSIONS = (".docx",)
 ALLOWED_ANEXO_EXTENSIONS = (".pdf", ".docx", ".doc")
+# PR15: extensoes aceitas pra embedding visual (imagens + PDFs convertidos).
+ALLOWED_EMBED_EXTENSIONS = (".jpg", ".jpeg", ".png", ".pdf")
 MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024  # 20MB — peticoes podem ser grandes
 MAX_ANEXOS = 5
 MAX_TOTAL_ANEXOS_BYTES = 50 * 1024 * 1024  # 50MB somando todos os anexos
+# PR15: provas embedaveis no docx final (imagens FGTS/TRCT/laudos/prints).
+MAX_ARQUIVOS_EMBEDAR = 10
+MAX_TOTAL_EMBED_BYTES = 30 * 1024 * 1024  # 30MB somando todos
+MAX_EMBED_FILE_BYTES = 10 * 1024 * 1024  # 10MB por arquivo embedavel
+
+# Tipos canonicos pra casar com documentos_anexos[].tipo gerado pelo Claude.
+# Sao os mesmos slugs usados no enum do frontend e no mapeamento do builder.
+TIPOS_EMBED_CANONICOS = frozenset({
+    "folha_ponto",
+    "fgts",
+    "trct",
+    "laudo_pericial",
+    "contrato",
+    "ctps",
+    "print",
+    "outro",
+})
 
 # Magic bytes dos formatos permitidos. PDF: %PDF, DOC: OLE2 compound, DOCX: ZIP.
 _MAGIC_BYTES_PETICAO: list[bytes] = [
@@ -34,6 +53,10 @@ _MAGIC_BYTES_PETICAO: list[bytes] = [
     b"PK\x03\x04",
 ]
 _MAGIC_BYTES_DOCX = b"PK\x03\x04"
+# PR15: magic bytes pra imagens.
+_MAGIC_BYTES_JPG = (b"\xff\xd8\xff",)  # JPEG (SOI marker)
+_MAGIC_BYTES_PNG = (b"\x89PNG\r\n\x1a\n",)
+_MAGIC_BYTES_PDF = (b"%PDF",)
 
 
 class ArquivoAnexo(BaseModel):
@@ -77,6 +100,69 @@ class ArquivoAnexo(BaseModel):
         return conteudo
 
 
+class ArquivoEmbedar(BaseModel):
+    """PR15: prova a embedar VISUALMENTE no docx final (imagem/PDF).
+
+    Diferente de ArquivoAnexo (que vai pra extracao de texto/OCR), este
+    aqui eh inserido como imagem no proprio docx via doc.add_picture() —
+    apos o item correspondente em documentos_anexos[] gerado pelo Claude.
+
+    `tipo` casa com a taxonomia em TIPOS_EMBED_CANONICOS — usado pra mapear
+    com o item certo da lista que o Claude gerou (folha_ponto -> Doc. 03, etc).
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    base64: Annotated[str, Field(min_length=1)]
+    nome: Annotated[str, Field(min_length=1, max_length=255)]
+    mime_type: str = "application/octet-stream"
+    tipo: Annotated[str, Field(min_length=1, max_length=40)]
+
+    @field_validator("nome")
+    @classmethod
+    def validar_nome_embed(cls, value: str) -> str:
+        nome = os.path.basename(value.strip())
+        if not nome:
+            raise ValueError("Nome de arquivo embedavel invalido.")
+        if not nome.lower().endswith(ALLOWED_EMBED_EXTENSIONS):
+            raise ValueError(
+                "Arquivo embedavel deve ser JPG, JPEG, PNG ou PDF."
+            )
+        return nome
+
+    @field_validator("tipo")
+    @classmethod
+    def validar_tipo_embed(cls, value: str) -> str:
+        tipo_norm = (value or "").strip().lower()
+        if tipo_norm not in TIPOS_EMBED_CANONICOS:
+            raise ValueError(
+                f"tipo invalido: {tipo_norm!r}. Use um de: "
+                + ", ".join(sorted(TIPOS_EMBED_CANONICOS))
+            )
+        return tipo_norm
+
+    @field_validator("base64")
+    @classmethod
+    def validar_conteudo_embed(cls, value: str) -> str:
+        conteudo = value.strip()
+        if not conteudo:
+            raise ValueError("Conteudo do arquivo embedavel obrigatorio.")
+        try:
+            raw = base64.b64decode(conteudo, validate=True)
+        except (binascii.Error, ValueError) as error:
+            raise ValueError("Conteudo embedavel invalido em base64.") from error
+        if len(raw) > MAX_EMBED_FILE_BYTES:
+            raise ValueError(
+                f"Arquivo embedavel excede {MAX_EMBED_FILE_BYTES // 1024 // 1024}MB."
+            )
+        magic_validos = _MAGIC_BYTES_JPG + _MAGIC_BYTES_PNG + _MAGIC_BYTES_PDF
+        if not any(raw.startswith(m) for m in magic_validos):
+            raise ValueError(
+                "Conteudo embedavel nao corresponde a JPG, PNG ou PDF valido."
+            )
+        return conteudo
+
+
 class ContestacaoPorPeticao(BaseModel):
     """Payload para POST /api/contestar-por-peticao.
 
@@ -100,6 +186,9 @@ class ContestacaoPorPeticao(BaseModel):
     # PR5 - Multi-documentos
     arquivos_anexos: list[ArquivoAnexo] = Field(default_factory=list)
 
+    # PR15: provas embedaveis visualmente no docx final (max 10).
+    arquivos_embedar: list[ArquivoEmbedar] = Field(default_factory=list)
+
     @model_validator(mode="after")
     def validar_anexos_agregados(self):
         if len(self.arquivos_anexos) > MAX_ANEXOS:
@@ -115,6 +204,22 @@ class ContestacaoPorPeticao(BaseModel):
         if total > MAX_TOTAL_ANEXOS_BYTES:
             raise ValueError(
                 f"Soma dos anexos excede {MAX_TOTAL_ANEXOS_BYTES // 1024 // 1024}MB."
+            )
+
+        # PR15: valida limite e tamanho dos arquivos embedaveis.
+        if len(self.arquivos_embedar) > MAX_ARQUIVOS_EMBEDAR:
+            raise ValueError(
+                f"Maximo de {MAX_ARQUIVOS_EMBEDAR} arquivos embedaveis por peticao."
+            )
+        total_embed = 0
+        for e in self.arquivos_embedar:
+            try:
+                total_embed += len(base64.b64decode(e.base64.strip(), validate=True))
+            except (binascii.Error, ValueError):
+                continue
+        if total_embed > MAX_TOTAL_EMBED_BYTES:
+            raise ValueError(
+                f"Soma dos arquivos embedaveis excede {MAX_TOTAL_EMBED_BYTES // 1024 // 1024}MB."
             )
         return self
 

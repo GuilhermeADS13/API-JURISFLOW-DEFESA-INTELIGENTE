@@ -180,17 +180,26 @@ def _extrair_estilo_modelo(doc: Any) -> dict[str, Any]:
 # ─────────────────────── Geracao programatica do .docx ───────────────────────
 
 
-def montar_docx_programatico(dados: dict[str, Any], minuta: dict[str, Any]) -> bytes:
+def montar_docx_programatico(
+    dados: dict[str, Any],
+    minuta: dict[str, Any],
+    *,
+    imagens_embedar: list | None = None,
+) -> bytes:
     """Gera .docx do zero quando nao ha modelo base do escritorio.
 
     Estrutura espelha a do Node 6 do guia tecnico v2: cabecalho com partes,
     tese central, preliminares, merito, impugnacao por pedido, fundamentos,
     pedidos. Tudo em portugues.
+
+    PR15 — `imagens_embedar` (list[ImagemEmbedavel] do embed_processor) sao
+    inseridas como imagens reais no ROL DE DOCUMENTOS final quando o tipo
+    casa com algum item de minuta['documentos_anexos'].
     """
     doc = Document()
     _aplicar_estilo_base(doc)
     _escrever_cabecalho(doc, dados)
-    _escrever_secoes_minuta(doc, minuta)
+    _escrever_secoes_minuta(doc, minuta, imagens_embedar=imagens_embedar)
     _escrever_rodape(doc, minuta)
 
     out = BytesIO()
@@ -232,7 +241,12 @@ _SECOES_FINAIS = (
 )
 
 
-def _escrever_secoes_minuta(doc: Any, minuta: dict[str, Any]) -> None:
+def _escrever_secoes_minuta(
+    doc: Any,
+    minuta: dict[str, Any],
+    *,
+    imagens_embedar: list | None = None,
+) -> None:
     """Itera secoes da minuta na ordem definida em _SECOES_TEXTO.
 
     impugnacao_pedidos NAO eh renderizada como secao romana separada:
@@ -240,7 +254,8 @@ def _escrever_secoes_minuta(doc: Any, minuta: dict[str, Any]) -> None:
     aparece como subsecao do merito (III.Z).
 
     Apos PEDIDOS (V), renderiza o ROL DE DOCUMENTOS (VI) quando o Claude
-    populou `documentos_anexos[]` com a lista de probatorias a juntar.
+    populou `documentos_anexos[]`. Se houver `imagens_embedar` (PR15), as
+    imagens reais entram no lugar do placeholder [ANEXAR ARQUIVO].
     """
     for chave, titulo in _SECOES_TEXTO:
         _escrever_secao_texto(doc, titulo, minuta.get(chave))
@@ -250,23 +265,83 @@ def _escrever_secoes_minuta(doc: Any, minuta: dict[str, Any]) -> None:
     for chave, titulo in _SECOES_FINAIS:
         _escrever_secao_texto(doc, titulo, minuta.get(chave))
 
-    # PR14 — Rol de documentos probatorios que o advogado deve anexar.
-    _escrever_rol_documentos(doc, minuta.get("documentos_anexos"))
+    # PR14/PR15 — Rol de documentos probatorios (com imagens embedded se houver).
+    _escrever_rol_documentos(
+        doc, minuta.get("documentos_anexos"), imagens_embedar=imagens_embedar
+    )
+
+
+def _normalizar_tipo_anexo(tipo_bruto: Any) -> str:
+    """Normaliza tipo declarado pelo Claude em chave canonica PR15.
+
+    Aceita varios formatos: 'Folha de Ponto' -> 'folha_ponto'; 'FGTS' -> 'fgts';
+    'Laudo Pericial Tecnico' -> 'laudo_pericial' (matching por substring).
+    Retorna 'outro' se nao casar nenhum padrao.
+    """
+    t = str(tipo_bruto or "").lower().strip()
+    if not t:
+        return "outro"
+    # Match por substring — robusto ao Claude usar variacoes ("Folha de Ponto" vs "Cartoes de Ponto")
+    if any(kw in t for kw in ("folha de ponto", "cartao", "cartoes", "controle de jornada")):
+        return "folha_ponto"
+    if "fgts" in t or "extrato analitico" in t:
+        return "fgts"
+    if "trct" in t or "rescisao" in t or "termo de rescisao" in t:
+        return "trct"
+    if "laudo" in t or "pericial" in t or "ppp" in t:
+        return "laudo_pericial"
+    if "contrato" in t and "trabalho" in t:
+        return "contrato"
+    if "ctps" in t or "carteira de trabalho" in t:
+        return "ctps"
+    if "print" in t or "e-mail" in t or "email" in t or "audio" in t:
+        return "print"
+    return "outro"
+
+
+def _achar_imagens_pra_tipo(
+    tipo_canonico: str, imagens_pendentes: list
+) -> list:
+    """Remove e retorna todas as ImagemEmbedavel cujo tipo bate com o canonico.
+
+    Mutates a lista pra remover as escolhidas (cada imagem casa com um item da
+    lista de anexos, nao se repete). Match exato no campo .tipo (que veio
+    sanitizado pelo Pydantic).
+    """
+    casadas = [img for img in imagens_pendentes if img.tipo == tipo_canonico]
+    for img in casadas:
+        imagens_pendentes.remove(img)
+    return casadas
 
 
 def _escrever_rol_documentos(
-    doc: Any, anexos: Any, *, titulo: str = "VI — ROL DE DOCUMENTOS QUE INSTRUEM A PRESENTE"
+    doc: Any,
+    anexos: Any,
+    *,
+    titulo: str = "VI — ROL DE DOCUMENTOS QUE INSTRUEM A PRESENTE",
+    imagens_embedar: list | None = None,
 ) -> None:
-    """Renderiza a secao ROL DE DOCUMENTOS com placeholders [ANEXAR ARQUIVO].
+    """Renderiza a secao ROL DE DOCUMENTOS com imagens embedded ou placeholders.
 
-    Espera lista de dicts {numero, tipo, descricao}. Cada item vira 2 paragrafos:
+    Espera lista de dicts {numero, tipo, descricao}. Cada item vira:
     1. 'Doc. NN — TIPO: descricao' (justificado, com tipo em negrito)
-    2. '[ANEXAR ARQUIVO]' (centralizado, marcador visual pro advogado)
+    2. Imagem embedded (se houver match em imagens_embedar pelo tipo)
+       OU '[ANEXAR ARQUIVO]' (centralizado, marcador visual fallback)
 
-    Itens malformados sao silenciosamente descartados pra nao quebrar o docx.
-    `titulo` permite ao template builder passar numeracao romana dinamica.
+    PR15: `imagens_embedar` eh list[ImagemEmbedavel] do embed_processor.
+    Quando presente, casa por tipo canonico (normalizado via _normalizar_tipo_anexo)
+    e insere a imagem via doc.add_picture(). PDFs multi-pagina viram N imagens
+    consecutivas. Imagens nao casadas com nenhum item ficam num bloco extra
+    'OUTRAS PROVAS ANEXAS' no final.
+
+    Itens malformados sao silenciosamente descartados.
+    `titulo` permite numeracao romana dinamica no template builder.
     """
     if not isinstance(anexos, list) or not anexos:
+        # Mesmo sem ROL textual, se houver imagens embedaveis ainda renderiza
+        # o bloco de OUTRAS PROVAS ANEXAS no fim.
+        if imagens_embedar:
+            _escrever_outras_provas(doc, list(imagens_embedar))
         return
 
     itens_validos = [
@@ -274,6 +349,8 @@ def _escrever_rol_documentos(
         if isinstance(a, dict) and (a.get("tipo") or a.get("descricao"))
     ]
     if not itens_validos:
+        if imagens_embedar:
+            _escrever_outras_provas(doc, list(imagens_embedar))
         return
 
     doc.add_heading(titulo, level=2)
@@ -284,6 +361,9 @@ def _escrever_rol_documentos(
         "extintivos do direito do autor (art. 818, II, CLT):",
         justify=True,
     )
+
+    # Copia mutavel — _achar_imagens_pra_tipo remove conforme casa.
+    pendentes = list(imagens_embedar or [])
 
     for idx, item in enumerate(itens_validos[:10], start=1):
         numero = str(item.get("numero") or f"Doc. {idx:02d}").strip()
@@ -301,11 +381,65 @@ def _escrever_rol_documentos(
             sep = ": " if tipo else ""
             para.add_run(f"{sep}{descricao}")
 
-        # Marcador visual centralizado pro advogado saber onde inserir o arquivo
-        placeholder = doc.add_paragraph()
-        placeholder.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run_ph = placeholder.add_run("[ANEXAR ARQUIVO]")
-        run_ph.italic = True
+        # PR15: tenta embedar imagens reais quando o tipo casa.
+        tipo_canonico = _normalizar_tipo_anexo(tipo)
+        imagens_casadas = _achar_imagens_pra_tipo(tipo_canonico, pendentes)
+
+        if imagens_casadas:
+            for img in imagens_casadas:
+                _inserir_imagem(doc, img)
+        else:
+            # Sem imagem: mantem placeholder pro advogado anexar manualmente.
+            placeholder = doc.add_paragraph()
+            placeholder.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run_ph = placeholder.add_run("[ANEXAR ARQUIVO]")
+            run_ph.italic = True
+
+    # Imagens que nao casaram com nenhum item — viram bloco extra "OUTRAS PROVAS".
+    if pendentes:
+        _escrever_outras_provas(doc, pendentes)
+
+
+def _inserir_imagem(doc: Any, imagem: Any) -> None:
+    """Insere uma ImagemEmbedavel centralizada com legenda opcional.
+
+    Largura fixa em 15cm (cabe em folha A4 com margens padrao). Falha silenciosa:
+    se python-docx nao conseguir abrir o blob, loga e segue.
+    """
+    try:
+        para = doc.add_paragraph()
+        para.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = para.add_run()
+        run.add_picture(BytesIO(imagem.bytes_png), width=Cm(15))
+
+        # Legenda discreta com nome do arquivo + numero da pagina (se multi).
+        nome_legenda = imagem.nome
+        if not imagem.eh_imagem_direta and imagem.pagina > 1:
+            nome_legenda = f"{imagem.nome} (pag. {imagem.pagina})"
+        elif not imagem.eh_imagem_direta:
+            nome_legenda = f"{imagem.nome}"
+        leg = doc.add_paragraph()
+        leg.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        leg_run = leg.add_run(nome_legenda)
+        leg_run.italic = True
+        leg_run.font.size = Pt(9)
+    except Exception as e:
+        logger.warning("Falha ao inserir imagem %s no docx: %s", imagem.nome, e)
+        # Fallback: placeholder text pra advogado anexar manualmente
+        fb = doc.add_paragraph()
+        fb.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        fb_run = fb.add_run(f"[FALHA AO EMBEDAR {imagem.nome} — ANEXAR MANUALMENTE]")
+        fb_run.italic = True
+
+
+def _escrever_outras_provas(doc: Any, imagens: list) -> None:
+    """Renderiza bloco final com imagens que nao casaram com itens do ROL."""
+    if not imagens:
+        return
+    doc.add_paragraph("")
+    doc.add_heading("OUTRAS PROVAS ANEXAS", level=3)
+    for img in imagens:
+        _inserir_imagem(doc, img)
 
 
 def _strip_markdown(texto: Any) -> str:
@@ -375,6 +509,8 @@ def montar_docx_com_modelo(
     modelo_b64: str,
     dados: dict[str, Any],
     minuta: dict[str, Any],
+    *,
+    imagens_embedar: list | None = None,
 ) -> bytes | None:
     """Preenche um .docx modelo do escritorio.
 
@@ -393,6 +529,9 @@ def montar_docx_com_modelo(
     - travessao em dash (—) nos cabecalhos de secao
     - encerramento + assinatura
 
+    PR15 — `imagens_embedar` (list[ImagemEmbedavel]) sao inseridas no ROL DE
+    DOCUMENTOS final quando o tipo casa com algum item de documentos_anexos[].
+
     Retorna None em qualquer falha (caller faz fallback pro programatico).
     """
     modelo_bytes = _decodificar_modelo_b64(modelo_b64)
@@ -401,12 +540,15 @@ def montar_docx_com_modelo(
 
     return _safe_step(
         "montar .docx a partir do modelo", _build_docx_from_template,
-        modelo_bytes, dados, minuta,
+        modelo_bytes, dados, minuta, imagens_embedar,
     )
 
 
 def _build_docx_from_template(
-    modelo_bytes: bytes, dados: dict[str, Any], minuta: dict[str, Any]
+    modelo_bytes: bytes,
+    dados: dict[str, Any],
+    minuta: dict[str, Any],
+    imagens_embedar: list | None = None,
 ) -> bytes:
     """Implementacao do montar_docx_com_modelo (separada pro _safe_step)."""
     doc = Document(BytesIO(modelo_bytes))
@@ -416,13 +558,16 @@ def _build_docx_from_template(
     estilo_extraido = _extrair_estilo_modelo(doc)
     token_estilo = _ESTILO_ATIVO.set(estilo_extraido)
     try:
-        return _build_docx_from_template_inner(doc, dados, minuta)
+        return _build_docx_from_template_inner(doc, dados, minuta, imagens_embedar)
     finally:
         _ESTILO_ATIVO.reset(token_estilo)
 
 
 def _build_docx_from_template_inner(
-    doc: Any, dados: dict[str, Any], minuta: dict[str, Any]
+    doc: Any,
+    dados: dict[str, Any],
+    minuta: dict[str, Any],
+    imagens_embedar: list | None = None,
 ) -> bytes:
     """Lado pesado de _build_docx_from_template (apos extrair estilo)."""
 
@@ -558,14 +703,15 @@ def _build_docx_from_template_inner(
     secao_idx += 1
 
     # PR14 — ROL DE DOCUMENTOS PROBATORIOS A ANEXAR (logo apos PEDIDOS).
-    # So renderiza se Claude populou documentos_anexos[]. Numero romano segue
-    # a sequencia dinamica (depende de quais secoes opcionais apareceram).
+    # PR15 — Quando houver imagens_embedar, sao inseridas como imagens reais
+    # no lugar do placeholder [ANEXAR ARQUIVO] (match por tipo canonico).
     anexos = minuta.get("documentos_anexos")
-    if isinstance(anexos, list) and anexos:
+    if (isinstance(anexos, list) and anexos) or imagens_embedar:
         _escrever_rol_documentos(
             doc,
             anexos,
             titulo=f"{_ROMAN[secao_idx]} — ROL DE DOCUMENTOS QUE INSTRUEM A PRESENTE.",
+            imagens_embedar=imagens_embedar,
         )
         doc.add_paragraph("")
         secao_idx += 1

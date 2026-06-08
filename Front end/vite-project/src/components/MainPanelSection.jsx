@@ -67,11 +67,18 @@ export default function MainPanelSection({
   anexosError,
   onAdicionarAnexo,
   onRemoverAnexo,
+  // PR15: provas embedaveis no docx final (imagens FGTS/TRCT/laudos/prints).
+  embedFiles = [],
+  embedError,
+  onAdicionarEmbed,
+  onRemoverEmbed,
+  onChangeTipoEmbed,
 }) {
   const fileInputRef = useRef(null);
   const peticaoInputRef = useRef(null);
   const modeloBaseInputRef = useRef(null);
   const anexosInputRef = useRef(null);
+  const embedInputRef = useRef(null);
   const [dragging, setDragging] = useState(false);
   const [draggingPeticao, setDraggingPeticao] = useState(false);
   const [draggingModelo, setDraggingModelo] = useState(false);
@@ -393,6 +400,93 @@ export default function MainPanelSection({
                       {anexosError && (
                         <div className="upload-feedback-error">{anexosError}</div>
                       )}
+                    </Form.Group>
+
+                    {/* PR15: provas embedaveis no docx final (FGTS/TRCT/laudos/prints) */}
+                    <Form.Group className="mt-4">
+                      <Form.Label>
+                        Provas a embedar na peça (opcional — fotos, FGTS, TRCT, laudos, prints)
+                      </Form.Label>
+                      <div className="d-flex align-items-center gap-2 flex-wrap">
+                        <Button
+                          type="button"
+                          variant="outline-dark"
+                          size="sm"
+                          disabled={loading || embedFiles.length >= 10}
+                          onClick={() => embedInputRef.current?.click()}
+                        >
+                          <Paperclip className="me-1" /> Adicionar prova
+                        </Button>
+                        <small className="text-secondary">
+                          {embedFiles.length}/10 provas · JPG, PNG ou PDF (max 10MB cada)
+                        </small>
+                      </div>
+                      <input
+                        ref={embedInputRef}
+                        type="file"
+                        accept=".jpg,.jpeg,.png,.pdf"
+                        className="d-none"
+                        multiple
+                        onChange={(event) => {
+                          const files = Array.from(event.target.files || []);
+                          for (const f of files) onAdicionarEmbed?.(f, "outro");
+                          event.target.value = "";
+                        }}
+                      />
+                      {embedFiles.length > 0 && (
+                        <ul className="list-unstyled mt-2 mb-0">
+                          {embedFiles.map((item, idx) => (
+                            <li
+                              key={`${item.file.name}-${idx}`}
+                              className="upload-file-summary mt-2"
+                            >
+                              <div className="d-flex align-items-center gap-2 flex-grow-1">
+                                <Paperclip />
+                                <div className="flex-grow-1">
+                                  <div className="fw-semibold">{item.file.name}</div>
+                                  <small className="text-secondary">
+                                    {fileSizeLabel(item.file)}
+                                  </small>
+                                </div>
+                                <Form.Select
+                                  size="sm"
+                                  style={{ maxWidth: 200 }}
+                                  value={item.tipo}
+                                  onChange={(e) =>
+                                    onChangeTipoEmbed?.(idx, e.target.value)
+                                  }
+                                  disabled={loading}
+                                >
+                                  <option value="folha_ponto">Folha de Ponto</option>
+                                  <option value="fgts">Extrato FGTS</option>
+                                  <option value="trct">TRCT</option>
+                                  <option value="laudo_pericial">Laudo Pericial</option>
+                                  <option value="contrato">Contrato</option>
+                                  <option value="ctps">CTPS</option>
+                                  <option value="print">Print/E-mail</option>
+                                  <option value="outro">Outro</option>
+                                </Form.Select>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="link"
+                                className="upload-remove p-0"
+                                onClick={() => onRemoverEmbed?.(idx)}
+                              >
+                                <XCircle /> Remover
+                              </Button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {embedError && (
+                        <div className="upload-feedback-error">{embedError}</div>
+                      )}
+                      <small className="text-muted d-block mt-2">
+                        ℹ️ Provas serão inseridas como imagens no <b>ROL DE DOCUMENTOS</b> da
+                        peça gerada, no lugar do placeholder <code>[ANEXAR ARQUIVO]</code>.
+                        PDFs viram 1 imagem por página (até 5 págs/arquivo).
+                      </small>
                     </Form.Group>
 
                     <div className="d-flex flex-wrap gap-2 mt-4">
