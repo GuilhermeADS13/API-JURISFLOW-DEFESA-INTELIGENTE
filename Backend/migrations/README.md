@@ -8,6 +8,7 @@ Migrations aplicadas via Supabase MCP (`apply_migration`) e versionadas aqui pra
 | `20260604164246` | add_index_usuarios_sessoes_usuario_id | 🟠 performance |
 | `20260604164248` | rls_policies_baseline_5_tables | 🟠 segurança / docs |
 | `20260604164347` | deny_public_access_to_configuracoes | 🟠 segurança / docs |
+| `20260605000000` | add_fatos_tsv_for_hybrid_rag_search | 🟢 feature / RAG |
 
 ## Reaplicar em outro ambiente
 

@@ -10,6 +10,7 @@ Este modulo centraliza:
 """
 
 import os
+import re
 import threading
 import time
 from contextlib import contextmanager
@@ -1265,6 +1266,133 @@ def buscar_defesas_semanticas(
             rows = cursor.fetchall()
 
     return [_row_to_defesa_semantica(row) for row in rows]
+
+
+def _row_to_defesa_lexical(row: tuple) -> dict[str, Any]:
+    """Mapeia tupla do SELECT de `buscar_defesas_lexicais` para dict de resposta.
+
+    Mesmo shape de `_row_to_defesa_semantica`, mas com `rank` (ts_rank_cd) no
+    lugar de `similarity` — ambos serao normalizados via RRF na hibrida.
+    """
+    minuta = _extrair_minuta(row[4])
+    return {
+        "numero_processo": str(row[0] or ""),
+        "tipo_acao": str(row[1] or ""),
+        "fatos": str(row[2] or ""),
+        "pedido_autor": str(row[3] or ""),
+        "feedback_util": row[5],
+        "criado_em": _iso_or_str(row[6]),
+        "rank": float(row[7] or 0.0),
+        "tese_central": str(minuta.get("tese_central") or ""),
+        "resumo_estrategico": str(minuta.get("resumo_estrategico") or ""),
+        "fundamentos_curtos": str(minuta.get("fundamentos") or "")[:1500],
+        "riscos": list((minuta.get("riscos") or [])[:3]),
+    }
+
+
+# Tokens de stopwords/pontuacao que o `plainto_tsquery` consome silenciosamente
+# em portugues. Aqui filtramos no Python o que ja sabemos que nao vai ranquear
+# bem — evita query degenerada quando o input do extrator vem so com conectivos.
+_LEXICAL_STOPCHARS_RX = re.compile(r"[^\w\sÀ-ÿ]+")
+
+
+def _normalizar_query_lexical(texto: str) -> str:
+    """Normaliza a query antes de jogar no plainto_tsquery.
+
+    plainto_tsquery aceita texto livre (faz parsing interno), mas vale higienizar
+    para nao gerar 0 hits por uso de aspas/pontuacao que o dicionario portuguese
+    nao espera. Mantem acentos (dicionario faz folding).
+    """
+    if not texto:
+        return ""
+    limpa = _LEXICAL_STOPCHARS_RX.sub(" ", texto)
+    return " ".join(limpa.split())[:2000]  # cap defensivo
+
+
+def buscar_defesas_lexicais(
+    texto_query: str,
+    tipo_acao: str,
+    excluir_numero: str,
+    *,
+    usuario_id: str | None,
+    limit: int = 10,
+) -> list[dict[str, Any]]:
+    """Busca contestacoes anteriores por similaridade lexical (BM25-like via ts_rank_cd).
+
+    Complementa `buscar_defesas_semanticas`: a vetorial captura sinonimia/parafrase,
+    a lexical captura termos juridicos exatos (Sumulas, artigos, expressoes
+    cristalizadas) que embeddings densos de 384d podem ranquear baixo.
+
+    Usa o tsvector `fatos_tsv` (GENERATED ALWAYS, ver migration
+    `20260605000000_add_fatos_tsv_for_hybrid_rag_search`) com o dicionario
+    'portuguese' (stemming + stopwords). `ts_rank_cd` aplica peso 1.0 para o
+    documento inteiro — equivale a "BM25 sem normalizacao por tamanho", que e
+    o que queremos pra peticoes (tamanho varia muito sem refletir relevancia).
+
+    Multi-tenant + exemplares humanos: mesmo filtro de
+    `buscar_defesas_semanticas` (usuario_id OR provider='humano').
+    """
+    # Guards antes do _ensure_db_initialized() pra evitar custo de inicializar
+    # pool em chamadas degeneradas (texto vazio, tipo vazio).
+    if not tipo_acao or not tipo_acao.strip():
+        return []
+
+    query_normalizada = _normalizar_query_lexical(texto_query)
+    if not query_normalizada:
+        return []
+
+    raiz_tipo = tipo_acao.split("-", 1)[0].strip()
+    raiz_segura = (
+        raiz_tipo.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    )
+    if not raiz_segura:
+        return []
+    pattern_tipo = f"{raiz_segura}%"
+
+    safe_limit = max(1, min(int(limit), 20))
+
+    _ensure_db_initialized()
+
+    with _get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    numero_processo,
+                    tipo_acao,
+                    fatos,
+                    pedido_autor,
+                    n8n_resposta,
+                    feedback_util,
+                    criado_em,
+                    ts_rank_cd(fatos_tsv, plainto_tsquery('portuguese', %s)) AS rank
+                FROM contestacoes
+                WHERE status = 'ok'
+                  AND tipo_acao ILIKE %s ESCAPE '\\'
+                  AND fatos_tsv @@ plainto_tsquery('portuguese', %s)
+                  AND (
+                    usuario_id = %s
+                    OR (n8n_resposta::jsonb->'engine_ia'->>'provider' = 'humano')
+                  )
+                  AND (
+                    numero_processo != %s
+                    OR (n8n_resposta::jsonb->'engine_ia'->>'provider' = 'humano')
+                  )
+                ORDER BY rank DESC
+                LIMIT %s
+                """,
+                (
+                    query_normalizada,
+                    pattern_tipo,
+                    query_normalizada,
+                    usuario_id or "__sem_usuario__",
+                    excluir_numero,
+                    safe_limit,
+                ),
+            )
+            rows = cursor.fetchall()
+
+    return [_row_to_defesa_lexical(row) for row in rows]
 
 
 def salvar_exemplar(

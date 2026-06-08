@@ -346,10 +346,14 @@ class TestRagRoute:
             }
         )
 
-    def test_retorna_embedding_indisponivel_quando_embedding_none(self):
+    def test_retorna_embedding_indisponivel_quando_embedding_none_e_lexical_vazia(self):
+        """Hibrido (PR12 #4): so retorna embedding_indisponivel se AMBAS as buscas vazias."""
         from App.routes import rag as rag_route
 
-        with patch("App.routes.rag.gerar_embedding_query", return_value=None):
+        with (
+            patch("App.routes.rag.gerar_embedding_query", return_value=None),
+            patch("App.routes.rag.buscar_defesas_lexicais", return_value=[]),
+        ):
             resp = self._run(
                 rag_route.buscar_defesas_similares(
                     request=self._req(),
@@ -360,6 +364,38 @@ class TestRagRoute:
 
         assert resp["status"] == "embedding_indisponivel"
         assert resp["casos"] == []
+
+    def test_lexical_only_quando_embedding_indisponivel(self):
+        """Embeddings off + lexical com hits -> hibrida vira lexical-only (sucesso)."""
+        from App.routes import rag as rag_route
+
+        caso_lex = {
+            "numero_processo": "0LEX",
+            "tipo_acao": "Trabalhista",
+            "fatos": "demissao por justa causa",
+            "pedido_autor": "rescisao indireta",
+            "tese_central": "lex-tese",
+            "resumo_estrategico": "",
+            "fundamentos_curtos": "",
+            "riscos": [],
+            "criado_em": "2026-01-01",
+            "rank": 0.42,
+            "feedback_util": None,
+        }
+        with (
+            patch("App.routes.rag.gerar_embedding_query", return_value=None),
+            patch("App.routes.rag.buscar_defesas_lexicais", return_value=[caso_lex]),
+        ):
+            resp = self._run(
+                rag_route.buscar_defesas_similares(
+                    request=self._req(),
+                    payload=self._payload(),
+                    usuario=self._usuario_fake(),
+                )
+            )
+
+        assert resp["status"] == "sucesso"
+        assert resp["casos"][0]["numero_processo"] == "0LEX"
 
     def test_retorna_sem_texto_quando_fatos_e_pedidos_vazios(self):
         from App.routes import rag as rag_route
@@ -381,6 +417,7 @@ class TestRagRoute:
         with (
             patch("App.routes.rag.gerar_embedding_query", return_value=emb),
             patch("App.routes.rag.buscar_defesas_semanticas", return_value=[]),
+            patch("App.routes.rag.buscar_defesas_lexicais", return_value=[]),
         ):
             resp = self._run(
                 rag_route.buscar_defesas_similares(
@@ -424,6 +461,7 @@ class TestRagRoute:
         with (
             patch("App.routes.rag.gerar_embedding_query", return_value=emb),
             patch("App.routes.rag.buscar_defesas_semanticas", return_value=rows),
+            patch("App.routes.rag.buscar_defesas_lexicais", return_value=[]),
         ):
             resp = self._run(
                 rag_route.buscar_defesas_similares(
@@ -435,7 +473,8 @@ class TestRagRoute:
 
         assert resp["status"] == "sucesso"
         assert len(resp["casos"]) == 3
-        # caso2 (0.91) > caso1 (0.74) > caso3 (0.42)
+        # Sem lexical, RRF degenera pra ranking semantico puro.
+        # caso2 (feedback True) deve subir acima de caso1 mesmo com sim menor.
         assert resp["casos"][0]["numero_processo"] == "0002"
 
     def test_tipo_acao_obrigatorio(self):
@@ -453,16 +492,35 @@ class TestRagRoute:
 
         assert exc_info.value.status_code == 422
 
-    def test_erro_na_busca_retorna_status_erro(self):
+    def test_erro_em_uma_busca_nao_aborta_a_outra(self):
+        """Hibrido (PR12 #4): semantica caindo nao impede lexical de retornar.
+
+        Antes (PR6): erro na busca -> status=erro_busca. Agora, erro e silenciado
+        e a outra busca preenche o ranking. So retorna sem_resultados se AMBAS falharem.
+        """
         from App.routes import rag as rag_route
 
         emb = [0.1] * 384
+        caso_lex = {
+            "numero_processo": "0LEX",
+            "tipo_acao": "Trabalhista",
+            "fatos": "f",
+            "pedido_autor": "p",
+            "tese_central": "lex",
+            "resumo_estrategico": "",
+            "fundamentos_curtos": "",
+            "riscos": [],
+            "criado_em": "2026-01-01",
+            "rank": 0.5,
+            "feedback_util": None,
+        }
         with (
             patch("App.routes.rag.gerar_embedding_query", return_value=emb),
             patch(
                 "App.routes.rag.buscar_defesas_semanticas",
                 side_effect=RuntimeError("pgvector down"),
             ),
+            patch("App.routes.rag.buscar_defesas_lexicais", return_value=[caso_lex]),
         ):
             resp = self._run(
                 rag_route.buscar_defesas_similares(
@@ -472,8 +530,139 @@ class TestRagRoute:
                 )
             )
 
-        assert resp["status"] == "erro_busca"
-        assert "pgvector" in resp["detalhe"]
+        assert resp["status"] == "sucesso"
+        assert resp["casos"][0]["numero_processo"] == "0LEX"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RAG Hibrido (PR12 #4): mescla RRF e busca lexical
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestRagHibrido:
+    """Testes especificos da fusao RRF + busca lexical adicionada no PR12 #4."""
+
+    def _caso_sem(self, n, sim=0.8, fb=None):
+        return {
+            "numero_processo": f"S{n}",
+            "tipo_acao": "Trabalhista",
+            "fatos": f"fatos sem {n}",
+            "pedido_autor": "pedidos",
+            "tese_central": f"tese-sem-{n}",
+            "resumo_estrategico": "",
+            "fundamentos_curtos": "",
+            "riscos": [],
+            "criado_em": "2026-01-01",
+            "similarity": sim,
+            "feedback_util": fb,
+        }
+
+    def _caso_lex(self, n, rank=0.5, fb=None):
+        return {
+            "numero_processo": f"L{n}",
+            "tipo_acao": "Trabalhista",
+            "fatos": f"fatos lex {n}",
+            "pedido_autor": "pedidos",
+            "tese_central": f"tese-lex-{n}",
+            "resumo_estrategico": "",
+            "fundamentos_curtos": "",
+            "riscos": [],
+            "criado_em": "2026-01-01",
+            "rank": rank,
+            "feedback_util": fb,
+        }
+
+    def test_rrf_mescla_sem_duplicar_por_numero_processo(self):
+        """Caso que aparece em ambas listas conta como UM doc com score combinado."""
+        from App.routes.rag import _mesclar_rrf
+
+        # Mesmo numero_processo nas duas listas -> deve fundir
+        caso_compartilhado_sem = {**self._caso_sem(1), "numero_processo": "MESMO"}
+        caso_compartilhado_lex = {**self._caso_lex(1), "numero_processo": "MESMO"}
+        outro_sem = {**self._caso_sem(2), "numero_processo": "SO_SEM"}
+        outro_lex = {**self._caso_lex(2), "numero_processo": "SO_LEX"}
+
+        mesclado = _mesclar_rrf(
+            semanticos=[caso_compartilhado_sem, outro_sem],
+            lexicais=[caso_compartilhado_lex, outro_lex],
+        )
+
+        numeros = sorted(c["numero_processo"] for c in mesclado)
+        assert numeros == ["MESMO", "SO_LEX", "SO_SEM"]
+
+    def test_rrf_compartilhado_supera_exclusivo(self):
+        """Doc em ambas listas (rank 1+1) bate doc exclusivo (rank 1 so).
+
+        Math: shared = 2 * (1/61) = 0.0328. exclusive_sem = 1 * (1/61) = 0.0164.
+        Apos normalizar por (k+1=61): shared = 2.0, exclusive = 1.0.
+        """
+        from App.routes.rag import _mesclar_rrf
+
+        compartilhado_sem = {**self._caso_sem(1), "numero_processo": "SHARED"}
+        compartilhado_lex = {**self._caso_lex(1), "numero_processo": "SHARED"}
+        exclusivo_sem = {**self._caso_sem(2), "numero_processo": "ONLY_SEM"}
+
+        mesclado = _mesclar_rrf(
+            semanticos=[compartilhado_sem, exclusivo_sem],
+            lexicais=[compartilhado_lex],
+        )
+        mesclado.sort(key=lambda c: c["_rrf_score"], reverse=True)
+
+        assert mesclado[0]["numero_processo"] == "SHARED"
+        assert mesclado[0]["_rrf_score"] > mesclado[1]["_rrf_score"]
+
+    def test_rrf_lista_vazia_funciona(self):
+        """Uma das duas listas vazia -> RRF degenera pra ranking da outra."""
+        from App.routes.rag import _mesclar_rrf
+
+        sem = [self._caso_sem(1), self._caso_sem(2), self._caso_sem(3)]
+        mesclado = _mesclar_rrf(semanticos=sem, lexicais=[])
+
+        assert len(mesclado) == 3
+        # Ordem original preservada (rank 1, 2, 3 da semantica)
+        mesclado.sort(key=lambda c: c["_rrf_score"], reverse=True)
+        assert mesclado[0]["numero_processo"] == "S1"
+
+    def test_buscar_defesas_lexicais_retorna_vazio_sem_tipo_acao(self):
+        from App import database as db
+
+        resultado = db.buscar_defesas_lexicais(
+            texto_query="qualquer",
+            tipo_acao="",
+            excluir_numero="0001",
+            usuario_id="USR",
+        )
+        assert resultado == []
+
+    def test_buscar_defesas_lexicais_retorna_vazio_sem_query(self):
+        from App import database as db
+
+        resultado = db.buscar_defesas_lexicais(
+            texto_query="",
+            tipo_acao="Trabalhista",
+            excluir_numero="0001",
+            usuario_id="USR",
+        )
+        assert resultado == []
+
+    def test_normalizar_query_lexical_remove_pontuacao(self):
+        from App.database import _normalizar_query_lexical
+
+        resultado = _normalizar_query_lexical(
+            "horas extras! art. 7, XVI, CF/88 \"verbas\""
+        )
+        # Sem aspas/virgulas/exclamacao, mas mantem acentos e espacos colapsados
+        assert "!" not in resultado
+        assert '"' not in resultado
+        assert "horas" in resultado
+        assert "extras" in resultado
+
+    def test_normalizar_query_lexical_cap_2000_chars(self):
+        from App.database import _normalizar_query_lexical
+
+        texto = "palavra " * 500  # 4000 chars
+        resultado = _normalizar_query_lexical(texto)
+        assert len(resultado) <= 2000
 
 
 # ─────────────────────────────────────────────────────────────────────────────
