@@ -238,6 +238,9 @@ def _escrever_secoes_minuta(doc: Any, minuta: dict[str, Any]) -> None:
     impugnacao_pedidos NAO eh renderizada como secao romana separada:
     o merito ja deve conter as impugnacoes. Se vier dict nao-vazio,
     aparece como subsecao do merito (III.Z).
+
+    Apos PEDIDOS (V), renderiza o ROL DE DOCUMENTOS (VI) quando o Claude
+    populou `documentos_anexos[]` com a lista de probatorias a juntar.
     """
     for chave, titulo in _SECOES_TEXTO:
         _escrever_secao_texto(doc, titulo, minuta.get(chave))
@@ -246,6 +249,63 @@ def _escrever_secoes_minuta(doc: Any, minuta: dict[str, Any]) -> None:
 
     for chave, titulo in _SECOES_FINAIS:
         _escrever_secao_texto(doc, titulo, minuta.get(chave))
+
+    # PR14 — Rol de documentos probatorios que o advogado deve anexar.
+    _escrever_rol_documentos(doc, minuta.get("documentos_anexos"))
+
+
+def _escrever_rol_documentos(
+    doc: Any, anexos: Any, *, titulo: str = "VI — ROL DE DOCUMENTOS QUE INSTRUEM A PRESENTE"
+) -> None:
+    """Renderiza a secao ROL DE DOCUMENTOS com placeholders [ANEXAR ARQUIVO].
+
+    Espera lista de dicts {numero, tipo, descricao}. Cada item vira 2 paragrafos:
+    1. 'Doc. NN — TIPO: descricao' (justificado, com tipo em negrito)
+    2. '[ANEXAR ARQUIVO]' (centralizado, marcador visual pro advogado)
+
+    Itens malformados sao silenciosamente descartados pra nao quebrar o docx.
+    `titulo` permite ao template builder passar numeracao romana dinamica.
+    """
+    if not isinstance(anexos, list) or not anexos:
+        return
+
+    itens_validos = [
+        a for a in anexos
+        if isinstance(a, dict) and (a.get("tipo") or a.get("descricao"))
+    ]
+    if not itens_validos:
+        return
+
+    doc.add_heading(titulo, level=2)
+    _add_paragraph(
+        doc,
+        "Acompanham a presente defesa os documentos abaixo relacionados, "
+        "necessarios a comprovacao dos fatos impeditivos, modificativos e "
+        "extintivos do direito do autor (art. 818, II, CLT):",
+        justify=True,
+    )
+
+    for idx, item in enumerate(itens_validos[:10], start=1):
+        numero = str(item.get("numero") or f"Doc. {idx:02d}").strip()
+        tipo = str(item.get("tipo") or "").strip()
+        descricao = str(item.get("descricao") or "").strip()
+
+        para = doc.add_paragraph()
+        para.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        run_num = para.add_run(f"{numero} — ")
+        run_num.bold = True
+        if tipo:
+            run_tipo = para.add_run(f"{tipo}")
+            run_tipo.bold = True
+        if descricao:
+            sep = ": " if tipo else ""
+            para.add_run(f"{sep}{descricao}")
+
+        # Marcador visual centralizado pro advogado saber onde inserir o arquivo
+        placeholder = doc.add_paragraph()
+        placeholder.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run_ph = placeholder.add_run("[ANEXAR ARQUIVO]")
+        run_ph.italic = True
 
 
 def _strip_markdown(texto: Any) -> str:
@@ -492,9 +552,23 @@ def _build_docx_from_template_inner(
     doc.add_paragraph("")
     secao_idx += 1
 
-    # PEDIDOS (ultima secao)
+    # PEDIDOS
     _add_secao(doc, minuta.get("pedidos"), contador, numerar=False,
                cabecalho_padrao=f"{_ROMAN[secao_idx]} — DOS PEDIDOS.")
+    secao_idx += 1
+
+    # PR14 — ROL DE DOCUMENTOS PROBATORIOS A ANEXAR (logo apos PEDIDOS).
+    # So renderiza se Claude populou documentos_anexos[]. Numero romano segue
+    # a sequencia dinamica (depende de quais secoes opcionais apareceram).
+    anexos = minuta.get("documentos_anexos")
+    if isinstance(anexos, list) and anexos:
+        _escrever_rol_documentos(
+            doc,
+            anexos,
+            titulo=f"{_ROMAN[secao_idx]} — ROL DE DOCUMENTOS QUE INSTRUEM A PRESENTE.",
+        )
+        doc.add_paragraph("")
+        secao_idx += 1
 
     # Encerramento adicional (Claude tem que entregar com base legal correta)
     encerramento_texto = minuta.get("encerramento")
