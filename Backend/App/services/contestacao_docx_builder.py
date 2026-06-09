@@ -353,7 +353,12 @@ def _escrever_rol_documentos(
             _escrever_outras_provas(doc, list(imagens_embedar))
         return
 
-    doc.add_heading(titulo, level=2)
+    # PR16.2 fix: usar _add_heading (custom) em vez de doc.add_heading.
+    # O template builder limpa o body e o style "Heading 2" do modelo original
+    # do escritorio pode nao existir, causando KeyError. O helper custom usa
+    # paragraph + bold + underline preservando style_defaults — funciona em
+    # ambos os builders (programatico e via template).
+    _add_heading(doc, titulo, nivel=2)
     _add_paragraph(
         doc,
         "Acompanham a presente defesa os documentos abaixo relacionados, "
@@ -433,11 +438,16 @@ def _inserir_imagem(doc: Any, imagem: Any) -> None:
 
 
 def _escrever_outras_provas(doc: Any, imagens: list) -> None:
-    """Renderiza bloco final com imagens que nao casaram com itens do ROL."""
+    """Renderiza bloco final com imagens que nao casaram com itens do ROL.
+
+    PR16.2 fix: usa _add_heading (custom) em vez de doc.add_heading pra
+    evitar KeyError 'no style with name Heading 3' em modelos do escritorio
+    que nao tem esse style.
+    """
     if not imagens:
         return
     doc.add_paragraph("")
-    doc.add_heading("OUTRAS PROVAS ANEXAS", level=3)
+    _add_heading(doc, "OUTRAS PROVAS ANEXAS", nivel=2)
     for img in imagens:
         _inserir_imagem(doc, img)
 

@@ -370,3 +370,94 @@ def test_sem_anexos_mas_com_imagens_renderiza_outras_provas():
     texto = _texto_do_docx(docx_bytes)
     assert "OUTRAS PROVAS ANEXAS" in texto
     assert _contar_imagens_no_docx(docx_bytes) == 1
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PR16.2 — regressao: timbre/header/footer preservados quando ha documentos_anexos
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _modelo_b64_sem_heading_styles() -> str:
+    """Cria um .docx modelo MINIMO com header/footer customizado mas SEM
+    os styles 'Heading 1/2/3' definidos. Reproduz o modelo do escritorio
+    G. Trindade que causou a regressao da peca #44.
+    """
+    import base64
+
+    from docx import Document
+    from docx.shared import Pt
+
+    doc = Document()
+    # Adiciona header com "TIMBRE DO ESCRITORIO"
+    section = doc.sections[0]
+    h = section.header.paragraphs[0]
+    h.text = "TIMBRE G. TRINDADE ADVOGADOS"
+    section.footer.paragraphs[0].text = "Rodape do escritorio"
+    # 1 paragrafo no body (sera limpo pelo template builder)
+    doc.add_paragraph("placeholder")
+    # REMOVE os styles 'Heading X' do template — simula modelo do escritorio
+    # antigo que so tem o style 'Normal'
+    styles = doc.styles
+    for nome in ("Heading 1", "Heading 2", "Heading 3", "Heading 4"):
+        try:
+            styles[nome].delete()
+        except (KeyError, Exception):
+            pass
+
+    out = BytesIO()
+    doc.save(out)
+    return base64.b64encode(out.getvalue()).decode("ascii")
+
+
+def test_pr162_rol_documentos_nao_quebra_template_sem_heading_styles():
+    """REGRESSAO da peca #44: builder template caia em fallback porque
+    doc.add_heading('...', level=2) levantava KeyError quando o modelo
+    do escritorio nao tinha o style 'Heading 2'.
+    """
+    from App.services.contestacao_docx_builder import montar_docx_com_modelo
+
+    minuta = _minuta_minima(documentos_anexos=[
+        {"numero": "Doc. 01", "tipo": "Folha de Ponto", "descricao": "jornada"},
+    ])
+
+    modelo_b64 = _modelo_b64_sem_heading_styles()
+    docx_bytes = montar_docx_com_modelo(modelo_b64, _dados_minimos(), minuta)
+
+    # Pre-fix do PR16.2: retornaria None (KeyError em _safe_step) e cairia
+    # no fallback programatico — perdendo o timbre.
+    assert docx_bytes is not None, (
+        "Builder template retornou None — provavelmente caiu em fallback "
+        "por KeyError do Heading 2 (regressao PR14/15 pre-fix PR16.2)"
+    )
+    # Header preservado (timbre do escritorio aparece no docx final)
+    from docx import Document
+    d = Document(BytesIO(docx_bytes))
+    header_text = "\n".join(p.text for p in d.sections[0].header.paragraphs)
+    assert "TIMBRE G. TRINDADE" in header_text, (
+        "Header do modelo (timbre) sumiu — _build_docx_from_template provavelmente "
+        "limpou tudo ou caiu no fallback programatico"
+    )
+    # ROL DE DOCUMENTOS renderizado mesmo sem o style 'Heading 2'
+    body_text = "\n".join(p.text for p in d.paragraphs)
+    assert "ROL DE DOCUMENTOS" in body_text
+
+
+def test_pr162_outras_provas_nao_quebra_template_sem_heading_styles():
+    """Mesma regressao com bloco OUTRAS PROVAS ANEXAS (sem documentos_anexos mas
+    com imagens_embedar que nao casam)."""
+    from App.services.contestacao_docx_builder import montar_docx_com_modelo
+
+    imagens = [_imagem_embedavel("outro", "anexo.png")]
+    modelo_b64 = _modelo_b64_sem_heading_styles()
+    docx_bytes = montar_docx_com_modelo(
+        modelo_b64,
+        _dados_minimos(),
+        _minuta_minima(),
+        imagens_embedar=imagens,
+    )
+
+    assert docx_bytes is not None, "Builder template nao deve cair em fallback"
+    from docx import Document
+    d = Document(BytesIO(docx_bytes))
+    header_text = "\n".join(p.text for p in d.sections[0].header.paragraphs)
+    assert "TIMBRE G. TRINDADE" in header_text
