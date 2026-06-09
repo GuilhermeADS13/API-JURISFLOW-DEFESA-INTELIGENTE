@@ -1,59 +1,45 @@
-# `_dev/` — Scripts de manutenção (não versionados em produção)
+# `_dev/` — Scripts de manutenção (não fazem parte do produto)
 
-Esta pasta contém utilitários de desenvolvimento que **não fazem parte do produto**.
-Não são importados pelo backend nem pelo frontend.
+Utilitários de desenvolvimento que **não são importados pelo backend nem pelo frontend**.
 
-## `_fix_workflows.py`
+## Ativos (scripts em uso)
 
-Script Python que aplica patches de compatibilidade nos 3 workflows n8n
-(`n8n_workflow_contestar_por_peticao.json`, `n8n_workflow_editar_contestacao.json`,
-`n8n_workflow_contestacao_claude.json`) para fazê-los rodar no sandbox JS do
-**n8n 2.17.5 + JS Task Runner externo**, que é mais restritivo que o sandbox antigo.
+### Patches do workflow n8n
 
-### Bugs cobertos
+Cada um adiciona/altera um node ou regra do workflow `contestar-por-peticao` de forma idempotente. Detectam marker e não reaplicam:
 
-| Symptom | Causa | Patch aplicado |
+| Script | O que faz | PR |
 |---|---|---|
-| `process is not defined` | sandbox não expõe `process` global | substitui `process.env` por `__PROC` (try/catch) |
-| `AbortController is not defined` | sandbox não expõe `AbortController` | mock via `globalThis.AbortController` (no-op) |
-| `Illegal return statement` | sandbox detecta `if/block` no topo e roda como script global | helper usa só `const X = ...;` sem `if` no topo |
-| `fetch is not defined` | sandbox não expõe `fetch` | substitui `fetch(` por `__FETCH(` que tenta `globalThis.fetch.bind(globalThis)` |
+| `_patch_detector_contradicoes.py` | Adiciona node Haiku entre Self-Correction e Responder | PR12 #10 |
+| `_patch_extrator_area_juridica.py` | Faz Extrator pedir `area_juridica` no JSON | PR13 #B1 |
+| `_patch_legislacao_node.py` | Adiciona node "Buscar Legislacao Aplicavel" + injeta no SYSTEM | PR13 #B3 |
+| `_patch_documentos_anexos.py` | Adiciona `documentos_anexos[]` no JSON da minuta | PR14 |
+| `_patch_tipo_canonico_anexos.py` | Adiciona dica de nomenclatura canônica no SYSTEM | PR15 |
 
-### Como usar
+Após rodar qualquer patch, re-importe via:
 
-```bash
-PYTHONIOENCODING=utf-8 python docs/_dev/_fix_workflows.py
+```powershell
+docs/_dev/reimport_workflows.ps1
 ```
 
-Edita os 3 arquivos JSON in-place. Idempotente: detecta helpers antigos,
-remove e reaplica o atual. Depois de rodar:
+### Operações
 
-```bash
-docker exec autojuri_n8n sh -c '
-  n8n import:workflow --input=/data/workflows/n8n_workflow_contestar_por_peticao.json
-  n8n import:workflow --input=/data/workflows/n8n_workflow_editar_contestacao.json
-  n8n import:workflow --input=/data/workflows/n8n_workflow_contestacao_claude.json
-  n8n update:workflow --id=WF_AUTOJURI_CONTESTAR_POR_PETICAO --active=true
-  n8n update:workflow --id=WF_AUTOJURI_EDITAR_CONTESTACAO --active=true
-  n8n update:workflow --id=WF_AUTOJURI_CONTESTACAO_CLAUDE --active=true
-'
-docker restart autojuri_n8n
-```
+| Script | Função |
+|---|---|
+| `reimport_workflows.ps1` | Re-importa os 3 workflows JSON via n8n REST API (autentica com `N8N_API_KEY` do `Backend/.env`) |
+| `smoke_test_agente_claude.ps1` | Smoke test ponta-a-ponta do agente Claude via webhook |
 
-E testar:
+### Dependências
 
-```bash
-curl -s -X POST http://localhost:5678/webhook/contestar-por-peticao \
-  -H "Content-Type: application/json" \
-  -d '{"texto_peticao":"PETICAO INICIAL... (>=50 chars)","tipo_acao_hint":"Trabalhista","usuario_id":"t"}'
-```
+`package.json` + `package-lock.json` — deps Node dos scripts (`pdf2image`, etc.). Instalar com `npm install` dentro de `_dev/`.
 
-Resposta com `engine_ia.provider == "claude"` significa pipeline OK.
-`engine_ia.provider == "fallback"` + `api_error: "<algo> is not defined"` indica
-que ainda há um global bloqueado pelo sandbox que precisa ser shimmed.
+## `_archived/` — Scripts one-shot já rodados
 
-### Status (2026-05-06)
+Preservados em git para rastreabilidade. Não usar mais (a maioria foi migração ou geração de PDF acadêmico):
 
-Sessão parou no patch `__FETCH`. Os JSONs em `docs/` estão com o patch aplicado
-mas **não foram re-importados nem testados** após a substituição `fetch -> __FETCH`.
-Próxima sessão: re-importar via comando acima e testar com curl.
+- `_fix_workflows.py`, `_update_rag_node.py` — migrações pontuais do sandbox n8n
+- `backfill_embeddings.py`, `update_exemplar_id18.py` — backfills de dados
+- `gerar_pdf*.py`, `gerar_planilha_custos.py`, `gerar_relatorio_pdf.py`, `gerar_riscos_prioridades_pdf.py`, `converter_para_pdf.py` — geraram PDFs da pasta `docs/historico/`
+- `capturar_screenshots.mjs` + `gerar_entrega_final.ps1` — pipeline de entrega acadêmica
+- `start-stack.cmd` / `start-stack.ps1` — substituídos pelas skills `/ligarserver` e `/desligarserver`
+- `n8n_workflow_v3_legacy.json` — snapshot de workflow legado

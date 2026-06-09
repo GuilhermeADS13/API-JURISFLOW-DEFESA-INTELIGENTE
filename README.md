@@ -176,13 +176,21 @@ API-CONTESTACAO/
 │
 ├── docs/
 │   ├── n8n_workflow_contestacao_claude.json       # fluxo manual
-│   ├── n8n_workflow_contestar_por_peticao.json    # fluxo principal (RAG)
+│   ├── n8n_workflow_contestar_por_peticao.json    # fluxo principal (RAG + legislação)
 │   ├── n8n_workflow_editar_contestacao.json       # edição cirúrgica
-│   ├── ENTREGA_FINAL.md / .pdf
 │   ├── AGENTE_IA_AUTOJURI.md                # spec do agente
 │   ├── OPERACOES_N8N.md                     # admin REST API n8n
-│   ├── RELATORIO_METRICAS.md
-│   └── _dev/                                # scripts dev
+│   ├── CONTEXTO_PARA_CLAUDE.md              # contexto pro Claude Code
+│   ├── contestacoes_exemplares_seed.sql     # seed inicial do RAG
+│   ├── specs/                               # specs vivos por componente
+│   ├── screenshots/                         # capturas de tela do produto
+│   ├── historico/                           # entregas acadêmicas + relatórios antigos
+│   │   ├── ENTREGA_FINAL.md / .pdf
+│   │   ├── EVIDENCIAS_ETAPA5.md / .pdf
+│   │   ├── RELATORIO_METRICAS.md / .pdf
+│   │   └── ... (CHANGELOG_PR9_2, REVISAO_2026-04-29, RISCOS_E_PRIORIDADES, JurisFlow_*)
+│   └── _dev/                                # scripts dev ativos (patches workflow, reimport, smoke)
+│       └── _archived/                       # scripts one-shot já rodados (preservados em git)
 │
 ├── docker-compose.yml                       # backend + n8n + volumes nomeados
 ├── .env.example                             # template raiz (Anthropic+Supabase+n8n)
