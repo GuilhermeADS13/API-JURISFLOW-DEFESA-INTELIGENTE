@@ -138,7 +138,9 @@ export default function MainPanelSection({
     <section id="painel" className="py-5">
       <Container>
         <Row className="g-4">
-          <Col lg={7}>
+          {/* No modo peticao a coluna ocupa 100% — sem editor ao vivo a direita.
+              No modo manual mantemos 7/12 esquerda + 5/12 direita (editor). */}
+          <Col lg={modo === "manual" ? 7 : 12}>
             <Card className="panel-card panel-entry-primary border-0 h-100">
               <Card.Body className="p-4 p-lg-5">
                 <div className="mb-3">
@@ -793,61 +795,66 @@ export default function MainPanelSection({
             </Card>
           </Col>
 
-          <Col lg={5}>
-            <div className="d-grid gap-4 h-100">
-              <Card className="dashboard-card panel-entry-secondary border-0">
-                <Card.Body className="p-4">
-                  <h3 className="h5 mb-2">Edição ao vivo da defesa</h3>
-                  <p className="text-secondary small mb-3">
-                    Ajuste o texto livremente antes de exportar.
-                  </p>
+          {/* Editor ao vivo so faz sentido no modo manual — no fluxo de peticao
+              inicial, a peca gerada tem formatacao rica (negritos, imagens PR15,
+              etc.) que a textarea descarta. Modo peticao quer baixar pronto. */}
+          {modo === "manual" && (
+            <Col lg={5}>
+              <div className="d-grid gap-4 h-100">
+                <Card className="dashboard-card panel-entry-secondary border-0">
+                  <Card.Body className="p-4">
+                    <h3 className="h5 mb-2">Edição ao vivo da defesa</h3>
+                    <p className="text-secondary small mb-3">
+                      Ajuste o texto livremente antes de exportar.
+                    </p>
 
-                  <Form.Group>
-                    <Form.Control
-                      as="textarea"
-                      rows={16}
-                      value={liveDraft}
-                      onChange={onLiveDraftChange}
-                      className="live-editor-area"
-                      placeholder="A defesa editada em tempo real será exibida aqui."
-                    />
-                  </Form.Group>
+                    <Form.Group>
+                      <Form.Control
+                        as="textarea"
+                        rows={16}
+                        value={liveDraft}
+                        onChange={onLiveDraftChange}
+                        className="live-editor-area"
+                        placeholder="A defesa editada em tempo real será exibida aqui."
+                      />
+                    </Form.Group>
 
-                  <div className="d-flex justify-content-between align-items-center mt-1">
-                    <small className="text-secondary">
-                      {liveDraft.length} caractere{liveDraft.length === 1 ? "" : "s"}
-                    </small>
-                    <Button
-                      size="sm"
-                      variant="outline-secondary"
-                      disabled={!liveDraft}
-                      onClick={async () => {
-                        if (!liveDraft) return;
-                        try {
-                          await navigator.clipboard.writeText(liveDraft);
-                          setJustCopied(true);
-                          setTimeout(() => setJustCopied(false), 2000);
-                        } catch {
-                          // Fallback silencioso: browsers antigos sem clipboard API
-                        }
-                      }}
-                    >
-                      {justCopied ? "Copiado!" : "Copiar texto"}
-                    </Button>
-                  </div>
+                    <div className="d-flex justify-content-between align-items-center mt-1">
+                      <small className="text-secondary">
+                        {liveDraft.length} caractere{liveDraft.length === 1 ? "" : "s"}
+                      </small>
+                      <Button
+                        size="sm"
+                        variant="outline-secondary"
+                        disabled={!liveDraft}
+                        onClick={async () => {
+                          if (!liveDraft) return;
+                          try {
+                            await navigator.clipboard.writeText(liveDraft);
+                            setJustCopied(true);
+                            setTimeout(() => setJustCopied(false), 2000);
+                          } catch {
+                            // Fallback silencioso: browsers antigos sem clipboard API
+                          }
+                        }}
+                      >
+                        {justCopied ? "Copiado!" : "Copiar texto"}
+                      </Button>
+                    </div>
 
-                  <div className="d-flex justify-content-between align-items-center mt-3 gap-2 flex-wrap">
-                    <Button variant="outline-dark" size="sm" onClick={onResetLiveDraft}>
-                      Atualizar com texto gerado
-                    </Button>
-                    <small className="text-secondary">
-                      {liveDraftTouched ? "Edição manual ativa" : "Texto sincronizado com o formulário"}
-                    </small>
-                  </div>
-                </Card.Body>
-              </Card>
-            </div>
-          </Col>
+                    <div className="d-flex justify-content-between align-items-center mt-3 gap-2 flex-wrap">
+                      <Button variant="outline-dark" size="sm" onClick={onResetLiveDraft}>
+                        Atualizar com texto gerado
+                      </Button>
+                      <small className="text-secondary">
+                        {liveDraftTouched ? "Edição manual ativa" : "Texto sincronizado com o formulário"}
+                      </small>
+                    </div>
+                  </Card.Body>
+                </Card>
+              </div>
+            </Col>
+          )}
         </Row>
       </Container>
     </section>
