@@ -64,8 +64,21 @@ async def registrar_feedback(
 
 
 def _is_admin(usuario: dict[str, str]) -> bool:
-    """Verifica se o email do usuario esta na lista de admins do .env."""
+    """Verifica se o usuario eh admin.
+
+    Aceita duas vias:
+    1. Email do usuario na lista ADMIN_EMAILS do .env (admin humano)
+    2. auth_provider == 'backend_admin_token' (pseudo-user 'system:n8n'
+       usado pelas chamadas internas do workflow — n8n consultando
+       exemplares few-shot pra injetar no prompt do Gerador)
+    """
     import os
+
+    # PR16 fix: chamadas internas n8n -> backend via BACKEND_ADMIN_TOKEN
+    # tem auth_provider especial. Sao confiaveis por construcao (token
+    # de 32 hex compartilhado so entre containers).
+    if usuario.get("auth_provider") == "backend_admin_token":
+        return True
 
     admins_raw = os.getenv("ADMIN_EMAILS", "")
     admins = {e.strip().lower() for e in admins_raw.split(",") if e.strip()}
