@@ -264,7 +264,7 @@ export default function App() {
   // Guia Tecnico v2: modo de entrada do painel.
   // 'manual'  = formulario tradicional (envia para /gerar-contestacao)
   // 'peticao' = upload da peticao inicial (envia para /contestar-por-peticao)
-  const [modo, setModo] = useState(draftSeed.form?.modo || "manual");
+  const [modo, setModo] = useState(draftSeed.form?.modo || "peticao");
   const [peticaoFile, setPeticaoFile] = useState(null);
   const [peticaoError, setPeticaoError] = useState("");
   const [modeloBaseFile, setModeloBaseFile] = useState(null);
@@ -490,16 +490,6 @@ export default function App() {
       delete next[name];
       return next;
     });
-  };
-
-  const handleLiveDraftChange = (event) => {
-    setLiveDraftTouched(true);
-    setLiveDraft(event.target.value);
-  };
-
-  const handleResetLiveDraft = () => {
-    setLiveDraft(generatedDraftText);
-    setLiveDraftTouched(false);
   };
 
   const openAuthModal = (mode = "login") => {
@@ -2047,15 +2037,11 @@ export default function App() {
           uploadedFile={uploadedFile}
           draftInfo={draftInfo}
           feedback={feedback}
-          liveDraft={liveDraft}
-          liveDraftTouched={liveDraftTouched}
           onChange={handleChange}
           onSubmit={handleSubmit}
           onFileSelect={handleFileSelect}
           onRemoveFile={handleRemoveFile}
           onSaveDraft={handleSaveDraft}
-          onLiveDraftChange={handleLiveDraftChange}
-          onResetLiveDraft={handleResetLiveDraft}
           modo={modo}
           onModoChange={handleModoChange}
           peticaoFile={peticaoFile}
