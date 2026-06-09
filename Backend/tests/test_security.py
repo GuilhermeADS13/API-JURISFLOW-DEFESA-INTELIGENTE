@@ -172,3 +172,60 @@ def test_get_authenticated_user_bearer_invalido_retorna_401(monkeypatch):
         )
 
     assert exc_info.value.status_code == 401
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PR16 Bug #1 — BACKEND_ADMIN_TOKEN aceito como pseudo-user 'system:n8n'
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_backend_admin_token_autentica_chamada_interna_n8n(monkeypatch):
+    """n8n chama /api/rag e /api/legislacao via Bearer com BACKEND_ADMIN_TOKEN."""
+    monkeypatch.setenv("BACKEND_ADMIN_TOKEN", "token-do-n8n-32hex")
+    request = _request_com_headers([])
+
+    # Mocka sessao + Supabase como invalidos (so o admin token deve passar)
+    monkeypatch.setattr(security, "get_sessao_ativa", lambda token: None)
+    monkeypatch.setattr(security, "validate_supabase_bearer_token", lambda token: None)
+
+    result = asyncio.run(
+        security.get_authenticated_user(
+            request=request,
+            authorization="Bearer token-do-n8n-32hex",
+        )
+    )
+
+    assert result["id"] == "system:n8n"
+    assert result["auth_provider"] == "backend_admin_token"
+
+
+def test_backend_admin_token_errado_nao_autentica(monkeypatch):
+    """Token diferente do BACKEND_ADMIN_TOKEN cai no fluxo Supabase normal."""
+    monkeypatch.setenv("BACKEND_ADMIN_TOKEN", "token-correto-32hex")
+    request = _request_com_headers([])
+
+    monkeypatch.setattr(security, "get_sessao_ativa", lambda token: None)
+    monkeypatch.setattr(security, "validate_supabase_bearer_token", lambda token: None)
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            security.get_authenticated_user(
+                request=request,
+                authorization="Bearer token-errado",
+            )
+        )
+
+    assert exc_info.value.status_code == 401
+
+
+def test_backend_admin_token_vazio_no_env_nao_libera_nada(monkeypatch):
+    """Se BACKEND_ADMIN_TOKEN nao tiver env (ou for vazio), helper retorna None
+    e nao da bypass — defesa em profundidade."""
+    monkeypatch.delenv("BACKEND_ADMIN_TOKEN", raising=False)
+
+    # Bearer vazio NUNCA deve dar match com env vazio
+    assert security._validate_backend_admin_token("") is None
+    assert security._validate_backend_admin_token("qualquer-token") is None
+
+    monkeypatch.setenv("BACKEND_ADMIN_TOKEN", "")
+    assert security._validate_backend_admin_token("") is None

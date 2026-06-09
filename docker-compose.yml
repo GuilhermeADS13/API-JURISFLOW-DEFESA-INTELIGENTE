@@ -80,6 +80,12 @@ services:
       - HF_HOME=/app/hf_cache
       - TRANSFORMERS_OFFLINE=${TRANSFORMERS_OFFLINE:-0}
 
+      # PR16 Bug #1 fix — token compartilhado n8n -> backend pra autenticar
+      # chamadas internas (Buscar Defesas, Buscar Legislacao, /admin/exemplares).
+      # Sem isso, RAG semantico e Base de Legislacao Curada nao rodam.
+      - BACKEND_ADMIN_TOKEN=${BACKEND_ADMIN_TOKEN}
+      - ADMIN_EMAILS=${ADMIN_EMAILS:-}
+
     volumes:
       # Cache dos pesos do modelo HuggingFace (~120MB) entre rebuilds.
       - hf_cache:/app/hf_cache
@@ -158,6 +164,14 @@ services:
       # ── Seguranca ────────────────────────────────────────────────────────
       # Desative N8N_BASIC_AUTH em favor de autenticacao propria do n8n (>= 1.x)
       - N8N_AUTH_EXCLUDE_ENDPOINTS=healthz
+
+      # ── PR16 Bug #1 fix: token + URL do backend pros nodes RAG / Legislacao ──
+      # Sem essas envs, os nodes 'Buscar Defesas Anteriores Supabase' e
+      # 'Buscar Legislacao Aplicavel' pulam o backend silenciosamente:
+      # - Defesas cai no fallback TF-IDF (perde RAG hibrido/RRF do PR12)
+      # - Legislacao retorna [] (PR13 B3 nao roda)
+      - BACKEND_URL=${BACKEND_URL:-http://autojuri_backend:8000}
+      - BACKEND_ADMIN_TOKEN=${BACKEND_ADMIN_TOKEN}
 
     restart: unless-stopped
     healthcheck:

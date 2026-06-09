@@ -2186,12 +2186,11 @@ export default function App() {
             </div>
           )}
           {iaResult?.contradicoes?.length > 0 && (
-            <div className="mt-3 p-2 border border-danger rounded bg-danger bg-opacity-10">
-              <small className="text-danger fw-semibold d-block mb-1">
-                ⚠ Contradições detectadas entre petição inicial e contestação (
-                {iaResult.contradicoes.length})
-              </small>
-              <ul className="mb-0" style={{ fontSize: "0.82rem" }}>
+            <div className="mt-3 p-3 border border-danger rounded bg-danger bg-opacity-10">
+              <div className="text-danger fw-semibold d-block mb-3" style={{ fontSize: "0.95rem" }}>
+                ⚠ Contradições detectadas entre petição inicial e contestação ({iaResult.contradicoes.length})
+              </div>
+              <div className="d-flex flex-column gap-3">
                 {iaResult.contradicoes.map((c, i) => {
                   const badgeClass =
                     c.severidade === "alta"
@@ -2200,35 +2199,56 @@ export default function App() {
                       ? "bg-warning text-dark"
                       : "bg-secondary";
                   return (
-                    <li key={i} className="mb-2">
-                      <span className={`badge ${badgeClass} me-1`}>
-                        {c.severidade || "baixa"}
-                      </span>
-                      <span className="badge bg-light text-dark border me-1">
-                        {c.tipo || "outros"}
-                      </span>
-                      <strong>{c.descricao}</strong>
+                    <div
+                      key={i}
+                      className="p-3 rounded"
+                      style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
+                    >
+                      <div className="d-flex gap-2 align-items-center mb-2 flex-wrap">
+                        <span className={`badge ${badgeClass}`} style={{ fontSize: "0.7rem" }}>
+                          {c.severidade === "alta" ? "Grave" : c.severidade === "media" ? "Média" : "Leve"}
+                        </span>
+                        <span className="badge" style={{ background: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.9)", fontSize: "0.7rem" }}>
+                          {c.tipo || "outros"}
+                        </span>
+                      </div>
+                      <div className="mb-2" style={{ fontSize: "0.9rem", fontWeight: 500, color: "rgba(255,255,255,0.95)" }}>
+                        {c.descricao}
+                      </div>
                       {(c.trecho_peticao || c.trecho_minuta) && (
-                        <div
-                          className="text-muted mt-1"
-                          style={{ fontSize: "0.78rem" }}
-                        >
+                        <div className="d-flex flex-column gap-2 mt-2">
                           {c.trecho_peticao && (
-                            <div>
-                              📄 Petição: <em>{c.trecho_peticao}</em>
+                            <div
+                              className="p-2 rounded"
+                              style={{ background: "rgba(255,255,255,0.06)", borderLeft: "3px solid #4dabf7" }}
+                            >
+                              <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.6)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 2 }}>
+                                Na petição inicial
+                              </div>
+                              <div style={{ fontSize: "0.82rem", color: "rgba(255,255,255,0.85)", fontStyle: "italic" }}>
+                                "{c.trecho_peticao}"
+                              </div>
                             </div>
                           )}
                           {c.trecho_minuta && (
-                            <div>
-                              📝 Minuta: <em>{c.trecho_minuta}</em>
+                            <div
+                              className="p-2 rounded"
+                              style={{ background: "rgba(255,255,255,0.06)", borderLeft: "3px solid #ffa94d" }}
+                            >
+                              <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.6)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 2 }}>
+                                Na contestação gerada
+                              </div>
+                              <div style={{ fontSize: "0.82rem", color: "rgba(255,255,255,0.85)", fontStyle: "italic" }}>
+                                "{c.trecho_minuta}"
+                              </div>
                             </div>
                           )}
                         </div>
                       )}
-                    </li>
+                    </div>
                   );
                 })}
-              </ul>
+              </div>
             </div>
           )}
           {iaResult?.citacoesVerificadas?.length > 0 && (

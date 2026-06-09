@@ -223,6 +223,27 @@ def validate_supabase_bearer_token(token: str) -> dict[str, str] | None:
     return user
 
 
+def _validate_backend_admin_token(bearer_token: str) -> dict[str, str] | None:
+    """PR16 Bug #1 fix: aceita BACKEND_ADMIN_TOKEN compartilhado n8n -> backend.
+
+    Quando o workflow n8n chama /api/rag/defesas-similares ou
+    /api/legislacao/buscar internamente (dentro da rede Docker), nao tem
+    sessao de usuario nem JWT — autentica via Bearer com o token configurado
+    no docker-compose. Token de 32 hex (256 bits) eh nao-brute-forceable.
+
+    Retorna pseudo-user 'system:n8n' que satisfaz a assinatura do callback.
+    """
+    admin_token = os.getenv("BACKEND_ADMIN_TOKEN", "").strip()
+    if not admin_token or bearer_token != admin_token:
+        return None
+    return {
+        "id": "system:n8n",
+        "nome": "Sistema n8n (chamada interna do workflow)",
+        "email": "system@autojuri.internal",
+        "auth_provider": "backend_admin_token",
+    }
+
+
 async def get_authenticated_user(
     request: Request,
     authorization: str | None = Header(default=None),
@@ -237,6 +258,11 @@ async def get_authenticated_user(
 
     bearer_token = _extract_bearer_token(authorization)
     if bearer_token:
+        # PR16 Bug #1: tenta primeiro o admin token compartilhado com o n8n.
+        admin_user = _validate_backend_admin_token(bearer_token)
+        if admin_user:
+            return admin_user
+
         # Compatibilidade: aceita token opaco legado ou JWT do Supabase no header.
         try:
             session = get_sessao_ativa(bearer_token)
