@@ -13,7 +13,7 @@ import {
 } from "react-bootstrap";
 import { CheckCircle, FileEarmarkText, Paperclip, Upload, XCircle } from "react-bootstrap-icons";
 import { IMaskInput } from "react-imask";
-import { agentRules, legalBranchGroups, subtiposAcao } from "../data/mockData";
+import { legalBranchGroups, subtiposAcao } from "../data/mockData";
 
 /**
  * Formata tamanho do arquivo para exibicao amigavel ao usuario.
@@ -343,8 +343,14 @@ export default function MainPanelSection({
                     {/* PR5 multi-docs: anexos opcionais (max 5, total 50MB) */}
                     <Form.Group className="mt-4">
                       <Form.Label>
-                        Anexos da petição (opcional — contratos, e-mails, laudos)
+                        Documentos da petição (para a IA ler)
                       </Form.Label>
+                      <small
+                        className="d-block mb-2"
+                        style={{ color: "rgba(255, 255, 255, 0.7)" }}
+                      >
+                        Contratos, e-mails, laudos e outros documentos que ajudam a IA a entender o caso. Não vão para a peça final — só servem de contexto.
+                      </small>
                       <div className="d-flex align-items-center gap-2 flex-wrap">
                         <Button
                           type="button"
@@ -405,8 +411,14 @@ export default function MainPanelSection({
                     {/* PR15: provas embedaveis no docx final (FGTS/TRCT/laudos/prints) */}
                     <Form.Group className="mt-4">
                       <Form.Label>
-                        Provas a embedar na peça (opcional — fotos, FGTS, TRCT, laudos, prints)
+                        Provas para a peça
                       </Form.Label>
+                      <small
+                        className="d-block mb-2"
+                        style={{ color: "rgba(255, 255, 255, 0.7)" }}
+                      >
+                        Documentos que vão aparecer dentro da contestação como prova: FGTS, TRCT, folha de ponto, laudos, prints. Selecione o tipo de cada arquivo na lista.
+                      </small>
                       <div className="d-flex align-items-center gap-2 flex-wrap">
                         <Button
                           type="button"
@@ -482,11 +494,6 @@ export default function MainPanelSection({
                       {embedError && (
                         <div className="upload-feedback-error">{embedError}</div>
                       )}
-                      <small className="text-muted d-block mt-2">
-                        ℹ️ Provas serão inseridas como imagens no <b>ROL DE DOCUMENTOS</b> da
-                        peça gerada, no lugar do placeholder <code>[ANEXAR ARQUIVO]</code>.
-                        PDFs viram 1 imagem por página (até 5 págs/arquivo).
-                      </small>
                     </Form.Group>
 
                     <div className="d-flex flex-wrap gap-2 mt-4">
@@ -836,20 +843,6 @@ export default function MainPanelSection({
                     <small className="text-secondary">
                       {liveDraftTouched ? "Edição manual ativa" : "Texto sincronizado com o formulário"}
                     </small>
-                  </div>
-                </Card.Body>
-              </Card>
-
-              <Card className="side-info-card panel-entry-tertiary border-0">
-                <Card.Body className="p-4">
-                  <h3 className="h5 mb-3">Regras do agente jurídico</h3>
-                  <div className="agent-rule-list">
-                    {agentRules.map((rule) => (
-                      <div key={rule} className="rule-item">
-                        <span className="rule-marker" />
-                        <span>{rule}</span>
-                      </div>
-                    ))}
                   </div>
                 </Card.Body>
               </Card>

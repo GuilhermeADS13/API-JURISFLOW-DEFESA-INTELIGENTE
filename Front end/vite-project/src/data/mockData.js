@@ -167,14 +167,6 @@ export const historyItems = [
   },
 ];
 
-// Regras de uso exibidas ao lado do editor da defesa.
-export const agentRules = [
-  "Não alterar dados processuais sensíveis.",
-  "Não inventar jurisprudência nem citações.",
-  "Manter linguagem jurídica formal e objetiva.",
-  "Atuar apenas na edição da peça base.",
-];
-
 // Cards de resumo no topo da tela de dashboard.
 export const dashboardCards = [
   { label: "Casos em processamento", value: "07" },
