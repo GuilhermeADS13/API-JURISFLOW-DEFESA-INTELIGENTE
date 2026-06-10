@@ -12,11 +12,11 @@ export default function AppFooter() {
         <div className="footer-grid">
           <div>
             <div className="d-flex align-items-center gap-2 mb-3">
-              <span className="brand-mark">JF</span>
-              <div>
-                <div className="brand-name">JurisFlow AI</div>
-                <div className="brand-sub">Plataforma de automação de Defesas Jurídicas</div>
-              </div>
+              <img
+                src="/jurisflow-logo.png"
+                alt="JurisFlow — Automação Inteligente de Defesas Jurídicas"
+                className="brand-logo brand-logo-lg"
+              />
             </div>
             <p className="text-secondary mb-0">
               Plataforma pensada para organizar o fluxo de defesas com

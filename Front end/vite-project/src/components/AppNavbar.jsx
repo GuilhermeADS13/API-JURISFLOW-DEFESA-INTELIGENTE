@@ -40,11 +40,11 @@ export default function AppNavbar({
           className="d-flex align-items-center gap-2 border-0 bg-transparent p-0"
           onClick={() => onNavigate("inicio")}
         >
-          <span className="brand-mark">JF</span>
-          <span>
-            <span className="brand-name d-block">JurisFlow AI</span>
-            <span className="brand-sub d-block">Automação inteligente de defesas jurídicas</span>
-          </span>
+          <img
+            src="/jurisflow-logo.png"
+            alt="JurisFlow — Automação Inteligente de Defesas Jurídicas"
+            className="brand-logo"
+          />
         </Navbar.Brand>
 
         <Navbar.Toggle aria-controls="main-navbar" />
