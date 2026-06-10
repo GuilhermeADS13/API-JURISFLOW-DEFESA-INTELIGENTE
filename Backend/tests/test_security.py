@@ -229,3 +229,39 @@ def test_backend_admin_token_vazio_no_env_nao_libera_nada(monkeypatch):
 
     monkeypatch.setenv("BACKEND_ADMIN_TOKEN", "")
     assert security._validate_backend_admin_token("") is None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PR17 — caminho cookie tolera DB indisponivel (503 explicito, nao 500)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_cookie_com_db_indisponivel_retorna_503(monkeypatch):
+    """Sem Bearer (so cookie), get_sessao_ativa estourando RuntimeError deve
+    virar 503 explicito — antes vazava como 500 generico. O caminho Bearer ja
+    tinha esse tratamento; o cookie nao."""
+
+    def _db_fora(token):
+        raise RuntimeError("db indisponivel")
+
+    monkeypatch.setattr(security, "get_sessao_ativa", _db_fora)
+    cookie_header = f"{security.SESSION_COOKIE_NAME}=cookie-token".encode("utf-8")
+    request = _request_com_headers([(b"cookie", cookie_header)])
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(security.get_authenticated_user(request, None))
+
+    assert exc_info.value.status_code == 503
+
+
+def test_cookie_invalido_continua_retornando_401(monkeypatch):
+    """Sessao inexistente (DB ok) segue 401 — o try/except do PR17 nao pode
+    mudar o fluxo normal."""
+    monkeypatch.setattr(security, "get_sessao_ativa", lambda token: None)
+    cookie_header = f"{security.SESSION_COOKIE_NAME}=cookie-token".encode("utf-8")
+    request = _request_com_headers([(b"cookie", cookie_header)])
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(security.get_authenticated_user(request, None))
+
+    assert exc_info.value.status_code == 401

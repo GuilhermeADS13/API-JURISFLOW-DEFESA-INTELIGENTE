@@ -1,6 +1,7 @@
 """Utilitarios de autenticacao/sessao para rotas FastAPI."""
 
 import hashlib
+import hmac
 import json
 import logging
 import os
@@ -234,7 +235,9 @@ def _validate_backend_admin_token(bearer_token: str) -> dict[str, str] | None:
     Retorna pseudo-user 'system:n8n' que satisfaz a assinatura do callback.
     """
     admin_token = os.getenv("BACKEND_ADMIN_TOKEN", "").strip()
-    if not admin_token or bearer_token != admin_token:
+    # compare_digest: comparacao em tempo constante — `!=` permitiria timing
+    # attack pra reconstruir o token byte a byte.
+    if not admin_token or not hmac.compare_digest(bearer_token, admin_token):
         return None
     return {
         "id": "system:n8n",
@@ -285,7 +288,19 @@ async def get_authenticated_user(
             detail="Sessao invalida ou expirada. Faca login novamente.",
         )
 
-    session = get_sessao_ativa(token)
+    # Caminho cookie: mesmo tratamento de DB indisponivel do caminho Bearer —
+    # sem isso, erro de infra virava 500 generico em vez de 503 explicito.
+    try:
+        session = get_sessao_ativa(token)
+    except (RuntimeError, OSError, ValueError) as err:
+        logger.warning(
+            "Sessao local indisponivel ao validar cookie (%s).",
+            type(err).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Nao foi possivel validar a sessao. Tente novamente.",
+        ) from err
     if not session:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

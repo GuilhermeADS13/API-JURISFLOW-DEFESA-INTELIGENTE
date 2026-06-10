@@ -358,7 +358,10 @@ def _escrever_rol_documentos(
     # do escritorio pode nao existir, causando KeyError. O helper custom usa
     # paragraph + bold + underline preservando style_defaults — funciona em
     # ambos os builders (programatico e via template).
-    _add_heading(doc, titulo, nivel=2)
+    # nivel=1: o ROL eh secao romana de topo (VI —, VII —...) como as demais
+    # (PRELIMINARES, MERITO, PEDIDOS) — nivel 2 deixava o titulo com
+    # space_before menor que o dos irmaos.
+    _add_heading(doc, titulo, nivel=1)
     _add_paragraph(
         doc,
         "Acompanham a presente defesa os documentos abaixo relacionados, "
@@ -369,6 +372,13 @@ def _escrever_rol_documentos(
 
     # Copia mutavel — _achar_imagens_pra_tipo remove conforme casa.
     pendentes = list(imagens_embedar or [])
+
+    if len(itens_validos) > 10:
+        logger.warning(
+            "ROL com %d itens validos — renderizando apenas os 10 primeiros; "
+            "imagens dos itens descartados caem em OUTRAS PROVAS ANEXAS.",
+            len(itens_validos),
+        )
 
     for idx, item in enumerate(itens_validos[:10], start=1):
         numero = str(item.get("numero") or f"Doc. {idx:02d}").strip()

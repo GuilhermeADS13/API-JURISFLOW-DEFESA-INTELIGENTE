@@ -11,10 +11,9 @@ Por que esses valores especificos:
 - `LINE_SPACING_DEFAULT = 1.15`: espacamento entre linhas equivalente ao
   estilo "Normal" do Word. Word renderiza com `1.15 × font-size`; o
   LibreOffice tambem respeita exatamente esse valor quando a regra
-  `WD_LINE_SPACING.MULTIPLE` esta explicita. Cap subido pra 1.25 no PR16.3
-  pra acomodar modelos do escritorio G. Trindade que usam 1.25 — tradeoff:
-  PDF gerado via LibreOffice pode ter 1-2 paginas a mais que o Word, mas
-  o .docx final fica visualmente IGUAL ao modelo.
+  `WD_LINE_SPACING.MULTIPLE` esta explicita. Usado quando NAO ha modelo
+  base; quando ha, o valor lido do template eh limitado por
+  `LINE_SPACING_CAP_FROM_TEMPLATE` (ver comentario no cap).
 
 - `SPACE_AFTER_PT_DEFAULT = 4.0`: espaco apos cada paragrafo. 4pt mantem
   legibilidade sem inflar a peca. Templates antigos do escritorio
@@ -71,8 +70,8 @@ FONT_SIZE_PT_CAP_FROM_TEMPLATE: float = 12.0
 
 
 def cap_line_spacing(value: float) -> float:
-    """Garante que line_spacing nao excede o limite seguro pra render
-    igual em Word e LibreOffice (1.20)."""
+    """Garante que line_spacing lido do template nao excede
+    LINE_SPACING_CAP_FROM_TEMPLATE (1.25 desde o PR16.3)."""
     return min(float(value), LINE_SPACING_CAP_FROM_TEMPLATE)
 
 
