@@ -11,9 +11,10 @@ Por que esses valores especificos:
 - `LINE_SPACING_DEFAULT = 1.15`: espacamento entre linhas equivalente ao
   estilo "Normal" do Word. Word renderiza com `1.15 × font-size`; o
   LibreOffice tambem respeita exatamente esse valor quando a regra
-  `WD_LINE_SPACING.MULTIPLE` esta explicita. Acima de 1.20, o LO
-  comeca a adicionar leading extra e a renderizacao deixa de bater com o
-  Word — daí o cap em `LINE_SPACING_CAP_FROM_TEMPLATE`.
+  `WD_LINE_SPACING.MULTIPLE` esta explicita. Cap subido pra 1.25 no PR16.3
+  pra acomodar modelos do escritorio G. Trindade que usam 1.25 — tradeoff:
+  PDF gerado via LibreOffice pode ter 1-2 paginas a mais que o Word, mas
+  o .docx final fica visualmente IGUAL ao modelo.
 
 - `SPACE_AFTER_PT_DEFAULT = 4.0`: espaco apos cada paragrafo. 4pt mantem
   legibilidade sem inflar a peca. Templates antigos do escritorio
@@ -51,7 +52,14 @@ FONT_SIZE_PT_DEFAULT: float = 12.0  # ← era 11.0; alinhado com exemplar G. Tri
 # Templates dos escritorios costumam ter line_spacing 1.5 (padrao Word
 # legado) — bom no Word, gera 1-2 paginas extras no LibreOffice. Cap
 # protege contra esse cenario.
-LINE_SPACING_CAP_FROM_TEMPLATE: float = 1.20
+#
+# PR16.3 (2026-06-09): cap subido de 1.20 -> 1.25 pra acomodar modelos
+# que usam 1.25 (caso do G. Trindade Advogados). Tradeoff aceito: PDF
+# gerado via LibreOffice pode ter 1-2 paginas a mais que o Word; o
+# advogado normalmente protocola o .docx, nao o PDF, e prefere a peca
+# IGUAL ao modelo do escritorio. Modelos com 1.5 continuam capeados em
+# 1.25 (suficiente pra evitar inflar peca demais).
+LINE_SPACING_CAP_FROM_TEMPLATE: float = 1.25
 SPACE_AFTER_PT_CAP_FROM_TEMPLATE: float = 6.0
 
 # Font size clamp pra protege contra templates com tamanho exotico

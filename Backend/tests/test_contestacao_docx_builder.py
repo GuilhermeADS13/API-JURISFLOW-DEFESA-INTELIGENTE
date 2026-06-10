@@ -461,3 +461,28 @@ def test_pr162_outras_provas_nao_quebra_template_sem_heading_styles():
     d = Document(BytesIO(docx_bytes))
     header_text = "\n".join(p.text for p in d.sections[0].header.paragraphs)
     assert "TIMBRE G. TRINDADE" in header_text
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PR16.3 — line_spacing cap subido p/ 1.25 (fidelidade ao modelo G. Trindade)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_pr163_cap_line_spacing_preserva_125_do_modelo():
+    """cap_line_spacing(1.25) deve devolver 1.25, nao 1.20 (cap antigo do PR
+    de 02/06). Modelos do escritorio que usam 1.25 nao podem ser empurrados
+    pra 1.20 — isso era a causa de o docx gerado renderizar diferente.
+    """
+    from App.services.docx_style_defaults import (
+        LINE_SPACING_CAP_FROM_TEMPLATE,
+        cap_line_spacing,
+    )
+
+    assert LINE_SPACING_CAP_FROM_TEMPLATE == 1.25
+    assert cap_line_spacing(1.25) == 1.25
+    assert cap_line_spacing(1.20) == 1.20
+    assert cap_line_spacing(1.15) == 1.15
+    # Modelos com 1.5 ou 2.0 continuam capeados em 1.25 (defesa contra
+    # templates legados Word com line_spacing exagerado)
+    assert cap_line_spacing(1.50) == 1.25
+    assert cap_line_spacing(2.00) == 1.25
