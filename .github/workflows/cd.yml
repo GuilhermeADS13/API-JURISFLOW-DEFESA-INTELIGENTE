@@ -32,6 +32,9 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # NAO passar VITE_API_BASE_URL aqui: um secret vazio (unset) sobrescreve
+          # o valor de .env.production com "" (testado). A URL publica do backend e
+          # a fonte unica de verdade em Front end/vite-project/.env.production.
 
       - name: Instalar Vercel CLI
         run: npm install -g vercel@latest

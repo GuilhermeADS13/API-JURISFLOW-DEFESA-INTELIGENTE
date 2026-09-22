@@ -1,0 +1,49 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AutoJuri — Reverse proxy do backend no VPS (Caddy 2)
+#
+# O Caddy termina o HTTPS (certificado Let's Encrypt automatico) e encaminha
+# para o backend FastAPI que o docker-compose ja publica em 127.0.0.1:8000.
+#
+# PRE-REQUISITOS
+#   1) Um dominio/subdominio apontando (registro DNS A) para o IP do VPS.
+#      Ex: api.seu-dominio.com  ->  <IP_DO_VPS>
+#   2) Portas 80 e 443 abertas no firewall (ver docs/deploy_backend.md).
+#   3) docker compose up -d rodando (backend publicado em 8000).
+#
+# COMO USAR
+#   - Troque "api.seu-dominio.com" pelo seu subdominio real (2 lugares).
+#   - Instale o Caddy no VPS (apt) e aponte para este arquivo, OU rode o Caddy
+#     em container. Passo-a-passo completo em docs/deploy_backend.md.
+# ─────────────────────────────────────────────────────────────────────────────
+
+api.seu-dominio.com {
+	encode zstd gzip
+
+	# Backend FastAPI — container autojuri_backend, porta publicada 8000 no host.
+	reverse_proxy 127.0.0.1:8000
+
+	# Logs de acesso (opcional).
+	log {
+		output file /var/log/caddy/autojuri-api.log
+		format json
+	}
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# (OPCIONAL) UI do n8n exposta num subdominio SEPARADO, protegida por basic auth.
+#
+# NAO e obrigatorio: o backend fala com o n8n internamente pela rede Docker
+# (http://n8n:5678), entao o n8n NAO precisa estar publico para o sistema rodar.
+# Exponha isto so se voce quiser abrir o editor do n8n pela internet — e mesmo
+# assim, protegido. A porta 5678 publicada pelo compose deve ficar BLOQUEADA no
+# firewall (ver guia); o acesso ao editor passa a ser so por este subdominio.
+#
+# Gere o hash da senha com:  caddy hash-password
+# Depois descomente o bloco abaixo e troque o hash.
+# ─────────────────────────────────────────────────────────────────────────────
+# n8n.seu-dominio.com {
+# 	basic_auth {
+# 		admin $2a$14$TROQUE_PELO_HASH_GERADO_POR_caddy_hash-password
+# 	}
+# 	reverse_proxy 127.0.0.1:5678
+# }

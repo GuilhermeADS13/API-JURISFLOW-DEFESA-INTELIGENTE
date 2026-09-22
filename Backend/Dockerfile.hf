@@ -1,0 +1,93 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AutoJuri — imagem UNICA para Hugging Face Spaces (Docker SDK)  [EXPERIMENTAL]
+#
+# Backend FastAPI (porta 7860 — a UNICA exposta no HF) + n8n (5678, interno) no
+# MESMO container, orquestrados por Backend/deploy/hf_entrypoint.sh.
+#
+# >>> O caminho testado/recomendado e o VPS (Backend/Dockerfile + docker-compose,
+#     ja em producao local). Este arquivo NAO altera nada disso — e uma imagem a
+#     parte, so para quem quiser tentar o HF Spaces free. Ver docs/deploy_backend.md.
+#
+# CAVEATS (leia a secao HF do guia):
+#   - Storage do HF free e EFEMERO: o SQLite do n8n some a cada restart -> os
+#     workflows sao re-importados do repo a cada boot (hf_entrypoint.sh).
+#   - Espaco "dorme" apos ~48h sem trafego; a 1a request depois acorda (lenta).
+#   - Contexto de build = RAIZ do repo (precisa de Backend/ E docs/).
+#
+# BUILD LOCAL DE TESTE (a partir da RAIZ do repo):
+#   docker build -f Backend/Dockerfile.hf -t autojuri-hf .
+#   docker run -p 7860:7860 --env-file .env autojuri-hf
+#
+# NO HF SPACES: copie este arquivo para a raiz do Space como `Dockerfile`
+# (o HF exige esse nome) e faca push do repo. Ver docs/deploy_backend.md.
+# ─────────────────────────────────────────────────────────────────────────────
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Node 22 (para o n8n) + deps de runtime do backend (mesma lista do Dockerfile real:
+# libpq5, OCR, poppler, LibreOffice, libs do Chromium/Playwright).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      curl ca-certificates gnupg \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends \
+      nodejs \
+      libpq5 \
+      tesseract-ocr tesseract-ocr-por \
+      poppler-utils \
+      libreoffice-writer libreoffice-core \
+      libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libxcomposite1 \
+      libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2 \
+      libpango-1.0-0 libcairo2 libatspi2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# n8n pinado na MESMA versao do compose (2.17.5).
+RUN npm install -g n8n@2.17.5
+
+# Deps Python — torch CPU-only primeiro (evita puxar CUDA ~2GB e estourar RAM).
+COPY Backend/requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir torch==2.5.1+cpu \
+       --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --no-cache-dir -r requirements.txt
+
+# Chromium do Playwright (scraper STJ).
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
+RUN python -m playwright install chromium && chmod -R 755 /opt/ms-playwright
+
+# Codigo do backend (contexto = raiz do repo).
+COPY Backend/ /app/
+
+# Workflows do n8n — re-importados a cada boot (storage efemero).
+COPY docs/*.json /app/workflows/
+
+# Cache do modelo HuggingFace (efemero no HF free: re-baixa ~120MB apos restart).
+ENV HF_HOME=/app/hf_cache
+
+# ── Wiring interno (backend <-> n8n no MESMO container via localhost) ─────────
+#   backend  ->  n8n     : N8N_WEBHOOK_* apontam pra localhost:5678
+#   n8n      ->  backend : BACKEND_URL aponta pra localhost:7860
+ENV N8N_HOST=0.0.0.0 \
+    N8N_PORT=5678 \
+    N8N_USER_FOLDER=/app/.n8n \
+    N8N_RUNNERS_ENABLED=true \
+    N8N_SECURE_COOKIE=false \
+    GENERIC_TIMEZONE=America/Sao_Paulo \
+    DB_TYPE=sqlite \
+    BACKEND_URL=http://localhost:7860 \
+    N8N_WEBHOOK_URL=http://localhost:5678/webhook/contestacao-claude \
+    N8N_EDICAO_WEBHOOK_URL=http://localhost:5678/webhook/editar-contestacao \
+    N8N_WEBHOOK_PETICAO=http://localhost:5678/webhook/contestar-por-peticao
+
+# ── HF Spaces roda o container como UID 1000 ─────────────────────────────────
+# Tudo que precisa ser gravavel em runtime (codigo, cache do modelo, dados do
+# n8n) precisa pertencer a esse usuario, senao da "Permission denied".
+RUN adduser --disabled-password --gecos "" --uid 1000 appuser \
+    && mkdir -p /app/hf_cache /app/.n8n \
+    && chown -R appuser:appuser /app
+USER appuser
+
+# Porta publica no HF Spaces.
+EXPOSE 7860
+
+ENTRYPOINT ["bash", "/app/deploy/hf_entrypoint.sh"]

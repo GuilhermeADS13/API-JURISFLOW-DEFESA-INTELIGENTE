@@ -41,8 +41,12 @@ services:
       - SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
 
-      # CORS — origens permitidas separadas por virgula
-      - FRONTEND_ORIGINS=${FRONTEND_ORIGINS:-http://localhost:5173}
+      # CORS — origens permitidas separadas por virgula. O default ja inclui o
+      # front de producao no Vercel, entao o mesmo compose num VPS libera o
+      # front sem precisar setar nada. Localmente so o localhost:5173 e usado;
+      # a origem extra fica na allowlist sem efeito. Sobrescreva no .env se o
+      # dominio do Vercel mudar.
+      - FRONTEND_ORIGINS=${FRONTEND_ORIGINS:-http://localhost:5173,https://jurisflow-contestacao.vercel.app}
 
       # n8n webhooks (backend chama o n8n internamente via rede Docker)
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook/contestacao-claude

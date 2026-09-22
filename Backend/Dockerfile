@@ -13,9 +13,16 @@ COPY requirements.txt .
 # Pre-instala PyTorch CPU-only (~250MB em vez de ~2GB com CUDA), evitando estouro
 # de RAM em hosts pequenos (Docker Desktop default = 2GB). sentence-transformers
 # nao tentara reinstalar torch porque a constraint ja sera satisfeita.
+# Multi-arch: em x86_64 usa o wheel +cpu do indice do PyTorch (comportamento
+# atual, inalterado no build local). Em aarch64 (ARM — ex: Oracle Ampere) usa o
+# wheel CPU do PyPI, porque nao existe variante "+cpu" pra ARM.
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir torch==2.5.1+cpu \
-       --index-url https://download.pytorch.org/whl/cpu \
+    && if [ "$(uname -m)" = "x86_64" ]; then \
+         pip install --no-cache-dir torch==2.5.1+cpu \
+           --index-url https://download.pytorch.org/whl/cpu; \
+       else \
+         pip install --no-cache-dir torch==2.5.1; \
+       fi \
     && pip install --no-cache-dir -r requirements.txt
 
 # ── Imagem final (menor) ──────────────────────────────────────────────────────

@@ -1,0 +1,9 @@
+# Scripts e arquivos que RODAM em Linux (VPS/containers) precisam de LF sempre.
+# Sem isso, um checkout no Windows (autocrlf) pode gravar CRLF e quebrar o bash
+# no servidor ("$'\r': command not found").
+*.sh            text eol=lf
+Dockerfile      text eol=lf
+Dockerfile.*    text eol=lf
+Caddyfile       text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
