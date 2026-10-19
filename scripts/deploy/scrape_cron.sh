@@ -27,12 +27,17 @@ if [[ "${1:-}" == "--instalar" ]]; then
 	exit 0
 fi
 
-TOKEN="$(grep -E '^BACKEND_ADMIN_TOKEN=' "$RAIZ/.env" | head -1 | cut -d= -f2- | tr -d '"\r')"
+# `|| true`: chave ausente nao pode abortar o script (set -e + pipefail).
+ler_env() { { grep -E "^$1=" "$RAIZ/.env" || true; } | head -1 | cut -d= -f2- | tr -d '"\r'; }
+TOKEN="$(ler_env BACKEND_ADMIN_TOKEN)"
 [[ -n "$TOKEN" ]] || { echo "[scrape] BACKEND_ADMIN_TOKEN ausente em $RAIZ/.env" >&2; exit 1; }
+# O cron nao exporta o .env; a porta publicada pelo compose vem de la.
+PORTA="$(ler_env BACKEND_PORT)"
+PORTA="${PORTA:-8000}"
 
 # 202 = coleta agendada em background no backend (~50-80s por fonte).
 status="$(curl -sS -o /dev/null -w '%{http_code}' -X POST \
-	"http://127.0.0.1:${BACKEND_PORT:-8000}/api/admin/jurisprudencia/scrape" \
+	"http://127.0.0.1:$PORTA/api/admin/jurisprudencia/scrape" \
 	-H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
 	-d '{"fonte": "todas", "max_por_tema": 4}')"
 echo "[scrape] $(date -u +%FT%TZ) HTTP $status"
