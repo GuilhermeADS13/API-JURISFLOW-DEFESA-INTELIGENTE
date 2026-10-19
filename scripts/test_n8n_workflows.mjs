@@ -126,6 +126,13 @@ await caso('mesmo processo mantem tese literal mesmo sem cosseno', async () => {
   assert.equal(out.engine_ia.tese_rag.modo, 'literal');
 });
 
+await caso('modelo base e defesas anteriores nao sao fonte de numeros deste caso', async () => {
+  const { chamadas } = await rodar(P, 'Claude Gerador de Contestacao', envGerador, ENV, claudeOk(jsonMinuta));
+  const sistema = bodyDe(chamadas[0]).system[0].text;
+  assert.ok(sistema.includes('[DADOS_DE_OUTRO_CASO]'));
+  assert.equal(/do modelo base, das defesas RAG ou dos pontos do advogado/.test(sistema), false);
+});
+
 console.log('Extrator');
 await caso('prompt sem comentario de codigo e sem temperature no sonnet-5', async () => {
   const envE = { status: 'ok', contexto: { texto_peticao: 'x'.repeat(100) } };
