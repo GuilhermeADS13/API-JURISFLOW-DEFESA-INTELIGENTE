@@ -9,9 +9,7 @@ Garante que:
 
 import json
 from pathlib import Path
-from unittest.mock import patch
 
-import pytest
 
 
 SEED_PATH = Path(__file__).resolve().parents[1] / "data" / "jurisprudencia_seed.json"

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, Request
 
 from App.database import buscar_legislacao_lexical, buscar_legislacao_semantica
 from App.limiter import limiter
@@ -104,7 +104,7 @@ def _mesclar_rrf(
         lei = dict(leis_por_chave[chave])
         lei["rrf_score"] = score * (_RRF_K + 1)
         resultado.append(lei)
-    resultado.sort(key=lambda l: l["rrf_score"], reverse=True)
+    resultado.sort(key=lambda lei: lei["rrf_score"], reverse=True)
     return resultado[:_TOP_N_FINAL]
 
 
@@ -148,13 +148,13 @@ async def buscar_legislacao(
     mesclados = _mesclar_rrf(semanticos, lexicais)
     leis = [
         {
-            "origem": l["origem"],
-            "numero": l["numero"],
-            "texto": l["texto"],
-            "area_juridica": l.get("area_juridica"),
-            "score": round(l.get("rrf_score", 0.0), 4),
+            "origem": lei["origem"],
+            "numero": lei["numero"],
+            "texto": lei["texto"],
+            "area_juridica": lei.get("area_juridica"),
+            "score": round(lei.get("rrf_score", 0.0), 4),
         }
-        for l in mesclados
+        for lei in mesclados
     ]
 
     return {

@@ -962,8 +962,8 @@ def _add_secao(
         m2 = _RE_HEADING2.match(primeira_linha)
 
         # Detecta blockquote: todas as linhas (nao vazias) comecam com '>'
-        linhas_bloco = [l for l in bloco.split("\n") if l.strip()]
-        is_quote = all(_RE_QUOTE_LINE.match(l) for l in linhas_bloco) if linhas_bloco else False
+        linhas_bloco = [linha for linha in bloco.split("\n") if linha.strip()]
+        is_quote = all(_RE_QUOTE_LINE.match(linha) for linha in linhas_bloco) if linhas_bloco else False
 
         if is_quote:
             _add_quote_para(doc, bloco)
@@ -993,11 +993,11 @@ def _add_quote_para(doc: Any, bloco: str) -> None:
     Mimetiza o estilo do modelo G. Trindade pra citacoes de lei/sumula.
     """
     linhas = []
-    for l in bloco.split("\n"):
-        m = _RE_QUOTE_LINE.match(l)
+    for linha in bloco.split("\n"):
+        m = _RE_QUOTE_LINE.match(linha)
         if m:
             linhas.append(m.group(1).strip())
-    texto = " ".join(l for l in linhas if l)
+    texto = " ".join(linha for linha in linhas if linha)
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     # Recuo do blockquote lido do modelo (default 3.0cm)

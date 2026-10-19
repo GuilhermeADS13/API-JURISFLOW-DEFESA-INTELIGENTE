@@ -730,7 +730,7 @@ class TestFiltroAreaJuridicaNaBusca:
     def test_route_propaga_area_para_buscas(self):
         """area_juridica do payload chega como kwarg pras duas buscas."""
         from App.routes import rag as rag_route
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import patch
 
         captured_kwargs = {}
 

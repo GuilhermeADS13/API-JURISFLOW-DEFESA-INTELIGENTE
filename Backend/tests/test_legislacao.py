@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import patch
 
-import pytest
 
 
 def _usuario_fake():
@@ -118,7 +117,7 @@ class TestRotaBuscarLegislacao:
 
         assert resp["status"] == "sucesso"
         # Sem duplicacao: 3 + 2 - 1 (compartilhado) = 4 unicos
-        chaves = {(l["origem"], l["numero"]) for l in resp["leis"]}
+        chaves = {(lei["origem"], lei["numero"]) for lei in resp["leis"]}
         assert len(chaves) == 4
         # art. 818 aparece em ambas → maior RRF, top-1
         assert resp["leis"][0]["origem"] == "CLT"
