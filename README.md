@@ -111,7 +111,7 @@ Sistema web fullstack para geração automatizada de contestações trabalhistas
 10. Resposta: {arquivo_editado_base64, nome.pdf, riscos[], citacoes_incertas[]}
 ```
 
-Tempo médio: **~2–6 min** end-to-end (mais rápido em Sonnet, mais lento em Opus). Custo por peça depende do roteamento: **~US$ 0,16** em Sonnet 5 (caso rotineiro) a **~US$ 0,78** em Opus 5 (caso complexo). O agendamento de scrape **não** consome token (scrape público + embedding local).
+Tempo médio: **~2–6 min** end-to-end (mais rápido em Sonnet, mais lento em Opus). Custo por peça depende do roteamento: **~US$ 0,20** em Sonnet 5 (caso rotineiro) a **~US$ 0,46** em Opus 5 (caso complexo), somando Gerador + verificação de citações (Haiku 4.5), com os preços de out/2026 (Sonnet 5 US$ 2/10, Opus 5 US$ 5/25 por milhão de tokens). Base: média de tokens das peças registradas no banco (amostra pequena, de jun/2026); extração e detector de contradições não eram medidos e somam alguns centavos, e o raciocínio adaptativo dos modelos Claude 5 pode aumentar a saída. O valor real de cada peça fica em `engine_ia.custo_estimado_usd`. O agendamento de scrape **não** consome token (scrape público + embedding local).
 
 ---
 

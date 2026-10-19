@@ -81,6 +81,9 @@ done
 # ── 4. Importar + ativar os 4 workflows do n8n ───────────────────────────────
 log "Importando/ativando workflows do n8n..."
 bash scripts/deploy/import_n8n_workflows.sh || warn "import de workflows falhou — rode manualmente depois: bash scripts/deploy/import_n8n_workflows.sh"
+# Scrape de jurisprudencia agendado via cron (o workflow de agendamento do n8n
+# depende de credential que so a API REST cria).
+bash scripts/deploy/scrape_cron.sh --instalar || warn "agendamento do scrape falhou — rode: bash scripts/deploy/scrape_cron.sh --instalar"
 
 # ── 5. Caddy (HTTPS automatico) ──────────────────────────────────────────────
 if command -v caddy >/dev/null 2>&1; then
