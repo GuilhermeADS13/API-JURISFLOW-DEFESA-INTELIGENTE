@@ -2,9 +2,10 @@
 
 Fluxo:
 1. Backend valida o payload (Pydantic) e decodifica o .docx.
-2. Backend extrai texto do .docx e envia para o n8n com os 3 campos novos.
-3. Workflow n8n editar-contestacao chama Claude para identificar pares
-   antigo<->novo e responde JSON com `substituicoes` e `campos_ausentes`.
+2. Backend extrai texto do .docx e envia os 3 campos novos ao agente.
+3. O agente (App/services/agente_edicao.py; ou o workflow n8n
+   editar-contestacao com EDICAO_ENGINE=n8n) chama o Claude para identificar
+   pares antigo<->novo e devolve `substituicoes` e `campos_ausentes`.
 4. Backend valida que cada `antigo` aparece exatamente `ocorrencias_esperadas`
    vezes no texto extraido (impede troca de ocorrencia errada).
 5. Backend aplica substituicoes com python-docx, retorna .docx editado em
@@ -14,6 +15,7 @@ Fluxo:
 import base64
 import binascii
 import logging
+import os
 import time
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
@@ -22,6 +24,7 @@ from pydantic import ValidationError
 from App.limiter import limiter
 from App.models.edicao import EdicaoContestacao, RespostaAgenteEdicao, SubstituicaoIA
 from App.security import get_authenticated_user
+from App.services.agente_edicao import gerar_substituicoes
 from App.services.docx_editor import (
     SubstituicaoError,
     aplicar_substituicoes,
@@ -173,7 +176,14 @@ async def _chamar_workflow_edicao(
     try:
         # PR8 P3.1 — mede tempo end-to-end da chamada ao n8n para observabilidade.
         t_inicio = time.monotonic()
-        resposta_bruta = await enviar_para_n8n_edicao(payload_n8n)
+        # Piloto da migracao: o agente roda no proprio backend; EDICAO_ENGINE=n8n
+        # volta pro workflow antigo sem deploy de codigo (rollback).
+        if os.getenv("EDICAO_ENGINE", "python").strip().lower() == "n8n":
+            resposta_bruta = await enviar_para_n8n_edicao(payload_n8n)
+        else:
+            resposta_bruta = await gerar_substituicoes(
+                payload_n8n["texto_documento"], payload_n8n["campos_novos"]
+            )
         tempo_processamento_ms = int((time.monotonic() - t_inicio) * 1000)
     except N8NServiceError as error:
         # Mensagem generica ao cliente; detalhe completo no log do servico.

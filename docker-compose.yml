@@ -61,6 +61,12 @@ services:
       # n8n responder e o usuario ve erro com pipeline ainda rodando.
       - N8N_TIMEOUT_SECONDS=${N8N_TIMEOUT_SECONDS:-600}
 
+      # Agente de edicao roda no proprio backend (piloto da migracao do n8n).
+      # EDICAO_ENGINE=n8n volta pro workflow editar-contestacao (rollback).
+      - EDICAO_ENGINE=${EDICAO_ENGINE:-python}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-sonnet-5}
+
       # Sessao
       - SESSION_COOKIE_SAMESITE=${SESSION_COOKIE_SAMESITE:-lax}
       - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-false}
