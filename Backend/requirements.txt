@@ -34,6 +34,10 @@ requests==2.32.3
 curl_cffi==0.7.4
 playwright==1.49.1
 
+# Agente de edicao no backend (piloto da migracao n8n -> backend): chama o
+# Claude direto com saida estruturada. SDK oficial; a serie 1.x usa httpx2.
+anthropic==1.11.0
+
 # Transitivas pinadas para reproducibilidade do build
 annotated-types==0.7.0
 Babel==2.18.0
@@ -46,7 +50,7 @@ click==8.3.3
 Deprecated==1.3.1
 h11==0.16.0
 httptools==0.7.1
-idna==3.13
+idna==3.20
 limits==5.8.0
 lxml==6.0.4
 packaging==26.1
@@ -60,3 +64,10 @@ uvloop==0.22.1; sys_platform != "win32"
 watchfiles==1.1.1
 websockets==16.0
 wrapt==2.1.2
+# Transitivas do anthropic
+docstring-parser==0.18.0
+httpcore2==2.14.0
+httpx2==2.14.0
+jiter==0.17.0
+sniffio==1.3.1
+truststore==0.10.5

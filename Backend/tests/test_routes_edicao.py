@@ -14,6 +14,13 @@ from App.routes import edicao as edicao_route
 from App.services.n8n_service import N8NServiceError
 
 
+@pytest.fixture(autouse=True)
+def _engine_n8n(monkeypatch):
+    """Estes testes cobrem o caminho n8n (rollback via EDICAO_ENGINE=n8n).
+    O agente no backend (default) e coberto em test_agente_edicao.py."""
+    monkeypatch.setenv("EDICAO_ENGINE", "n8n")
+
+
 def _docx_base_bytes() -> bytes:
     """Constroi um .docx base parecido com o caso de uso real."""
     doc = Document()
