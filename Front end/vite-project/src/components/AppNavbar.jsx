@@ -50,7 +50,7 @@ export default function AppNavbar({
           onClick={() => onNavigate("inicio")}
         >
           <img
-            src="/jurisflow-logo.png"
+            src="/jurisflow-logo-256.png"
             alt="JurisFlow — Automação Inteligente de Defesas Jurídicas"
             className="brand-logo"
           />

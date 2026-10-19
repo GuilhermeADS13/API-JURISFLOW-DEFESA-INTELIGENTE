@@ -13,7 +13,7 @@ export default function AppFooter() {
           <div>
             <div className="d-flex align-items-center gap-2 mb-3">
               <img
-                src="/jurisflow-logo.png"
+                src="/jurisflow-logo-256.png"
                 alt="JurisFlow — Automação Inteligente de Defesas Jurídicas"
                 className="brand-logo brand-logo-lg"
               />
