@@ -11,9 +11,8 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-import pytest
 
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "stj_sample.html"
@@ -198,7 +197,8 @@ def test_scraper_carrega_cookies_do_json(tmp_path, monkeypatch):
     # Deve ter marcado _cookies_obtidos=True pra pular visita a HOME
     assert scraper._cookies_obtidos is True
     # Cookies aplicados na session
-    cookie_names = {c.name for c in scraper.session.cookies}
+    # .keys(): iterar curl_cffi.Cookies devolve nomes (str), nao objetos Cookie
+    cookie_names = set(scraper.session.cookies.keys())
     assert "JSESSIONID" in cookie_names
     assert "cf_clearance" in cookie_names
 

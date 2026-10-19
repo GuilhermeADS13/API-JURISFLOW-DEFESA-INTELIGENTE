@@ -6,9 +6,9 @@ Strategy: invocar `montar_docx_programatico` com diferentes shapes de
 
 from __future__ import annotations
 
+import itertools
 from io import BytesIO
 
-import pytest
 from docx import Document
 
 
@@ -203,15 +203,18 @@ def _png_colorido(cor: str = "white") -> bytes:
 
 # Contador global pra gerar PNGs unicos em cada chamada (cor sequencial).
 _CORES_TESTE = ("red", "green", "blue", "yellow", "purple", "orange", "cyan", "magenta", "pink", "brown")
+_proxima_cor = itertools.count()
 
 
 def _imagem_embedavel(tipo: str, nome: str = "fake.png", cor_idx: int | None = None):
     """Helper pra criar ImagemEmbedavel com PNG UNICO (evita dedup do docx)."""
     from App.services.embed_processor import ImagemEmbedavel
 
-    # Cor diferente por chamada — se cor_idx for None, hash do nome decide.
+    # Cor diferente por chamada — se cor_idx for None, contador sequencial
+    # decide. (hash(nome) era aleatorio por processo e as vezes colidia ->
+    # mesmo PNG -> docx deduplicava -> teste intermitente.)
     if cor_idx is None:
-        cor_idx = hash(nome) % len(_CORES_TESTE)
+        cor_idx = next(_proxima_cor)
     cor = _CORES_TESTE[cor_idx % len(_CORES_TESTE)]
     return ImagemEmbedavel(
         tipo=tipo,
@@ -385,7 +388,6 @@ def _modelo_b64_sem_heading_styles() -> str:
     import base64
 
     from docx import Document
-    from docx.shared import Pt
 
     doc = Document()
     # Adiciona header com "TIMBRE DO ESCRITORIO"
