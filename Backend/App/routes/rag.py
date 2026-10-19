@@ -170,6 +170,10 @@ def _mesclar_rrf(
         # o score normalizado pode passar de 1.0 — ok, a hierarquia importa.
         caso = dict(caso)  # nao mutar referencia das listas originais
         caso["_rrf_score"] = rrf_score * (_RRF_K + 1)
+        # Cosseno real (so existe se o caso veio da busca semantica). O RRF e
+        # posicional — o 1o colocado tem score alto mesmo sendo pouco parecido —,
+        # entao o Gerador usa ESTE valor pra decidir se copia a tese literalmente.
+        caso["similaridade_semantica"] = caso.get("similarity")
         # `similarity` mantem-se quando vem da semantica; senao usa rrf_score
         # como proxy (frontend/n8n esperam esse campo).
         if "similarity" not in caso:
@@ -200,6 +204,11 @@ def _rerankear_e_montar_casos(rows: list[dict]) -> list[dict]:
             "riscos": c["riscos"],
             "criado_em": c["criado_em"],
             "similarity": round(c.get("similarity", 0.0), 4),
+            "similaridade_semantica": (
+                round(c["similaridade_semantica"], 4)
+                if c.get("similaridade_semantica") is not None
+                else None
+            ),
         }
         for c in rows[:3]
     ]
