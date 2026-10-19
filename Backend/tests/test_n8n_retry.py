@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request
 
 import pytest
@@ -83,3 +83,29 @@ def test_retry_sucesso_na_primeira_tentativa_nao_dorme(fake_request, monkeypatch
 
     assert resultado == b'{"ok":true}'
     sleep_mock.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "erro",
+    [
+        HTTPError("http://localhost:5678/webhook/test", 500, "workflow falhou", None, None),
+        TimeoutError("read timeout"),
+    ],
+    ids=["http_500", "read_timeout"],
+)
+def test_nao_repete_quando_n8n_ja_recebeu_o_request(fake_request, monkeypatch, erro):
+    """HTTP de erro ou timeout de leitura = workflow ja rodou (ou segue rodando)
+    e ja chamou o Claude. Repetir reexecutaria o pipeline e multiplicaria o custo."""
+    monkeypatch.setenv("N8N_MAX_RETRIES", "3")
+    import importlib
+
+    from App.services import n8n_service
+
+    importlib.reload(n8n_service)
+
+    with patch.object(n8n_service, "urlopen", side_effect=erro) as urlopen_mock:
+        with patch.object(n8n_service.time, "sleep"):
+            with pytest.raises(type(erro)):
+                n8n_service._enviar_com_retry(fake_request, 10, "peticao")
+
+    assert urlopen_mock.call_count == 1

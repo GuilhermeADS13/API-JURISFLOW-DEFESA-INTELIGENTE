@@ -74,6 +74,13 @@ def _enviar_com_retry(request: Request, timeout: int, label: str) -> bytes:
             with urlopen(request, timeout=timeout) as response:
                 return response.read()
         except _REDE_ERRORS as error:
+            # So repete falha de CONEXAO (URLError puro: n8n fora/cold-start —
+            # o request nao chegou). HTTPError (subclasse de URLError) ou
+            # timeout de leitura = o workflow ja rodou ou segue rodando e ja
+            # chamou o Claude: repetir reexecutaria o pipeline e multiplicaria
+            # custo/tempo. Esses sobem direto.
+            if isinstance(error, HTTPError) or not isinstance(error, URLError):
+                raise
             last_error = error
             if attempt < N8N_MAX_RETRIES:
                 wait = N8N_RETRY_BACKOFF_BASE * (2 ** (attempt - 1))
