@@ -88,7 +88,9 @@ def test_retry_sucesso_na_primeira_tentativa_nao_dorme(fake_request, monkeypatch
 @pytest.mark.parametrize(
     "erro",
     [
-        HTTPError("http://localhost:5678/webhook/test", 500, "workflow falhou", None, None),
+        HTTPError(
+            "http://localhost:5678/webhook/test", 500, "workflow falhou", None, None
+        ),
         TimeoutError("read timeout"),
     ],
     ids=["http_500", "read_timeout"],

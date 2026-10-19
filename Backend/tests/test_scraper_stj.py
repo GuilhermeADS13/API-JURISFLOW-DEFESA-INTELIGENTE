@@ -14,7 +14,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 
-
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "stj_sample.html"
 
 
@@ -63,9 +62,7 @@ def test_parse_identifica_repetitivo_e_atribui_peso_maior():
     from App.services.scrapers.stj import STJScraper
 
     acordaos = STJScraper()._parse_pagina_resultados(_html_fixture())
-    repetitivo = next(
-        a for a in acordaos if "1.555.555/MG" in a["numero_processo"]
-    )
+    repetitivo = next(a for a in acordaos if "1.555.555/MG" in a["numero_processo"])
 
     assert repetitivo["tipo_decisao"] == "Repetitivo"
     assert repetitivo["peso_relevancia_sugerido"] == 8
@@ -75,9 +72,7 @@ def test_parse_extrai_tese_firmada_quando_presente_na_ementa():
     from App.services.scrapers.stj import STJScraper
 
     acordaos = STJScraper()._parse_pagina_resultados(_html_fixture())
-    repetitivo = next(
-        a for a in acordaos if "1.555.555/MG" in a["numero_processo"]
-    )
+    repetitivo = next(a for a in acordaos if "1.555.555/MG" in a["numero_processo"])
 
     assert repetitivo["tese_firmada"] is not None
     assert "Selic" in repetitivo["tese_firmada"]
@@ -154,6 +149,7 @@ def test_garantir_cookies_sessao_visita_home_antes_da_busca(monkeypatch):
     class _FakeResp:
         def __init__(self, text=""):
             self.text = text
+
         def raise_for_status(self):
             pass
 
@@ -183,12 +179,22 @@ def test_scraper_carrega_cookies_do_json(tmp_path, monkeypatch):
 
     cookies_file = tmp_path / "stj_cookies.json"
     cookies_file.write_text(
-        _json.dumps([
-            {"name": "JSESSIONID", "value": "ABC123",
-             "domain": ".stj.jus.br", "path": "/"},
-            {"name": "cf_clearance", "value": "TURNSTILE_TOKEN_XYZ",
-             "domain": ".stj.jus.br", "path": "/"},
-        ]),
+        _json.dumps(
+            [
+                {
+                    "name": "JSESSIONID",
+                    "value": "ABC123",
+                    "domain": ".stj.jus.br",
+                    "path": "/",
+                },
+                {
+                    "name": "cf_clearance",
+                    "value": "TURNSTILE_TOKEN_XYZ",
+                    "domain": ".stj.jus.br",
+                    "path": "/",
+                },
+            ]
+        ),
         encoding="utf-8",
     )
 
@@ -220,6 +226,7 @@ def test_scraper_com_cookies_pula_visita_ao_home(tmp_path, monkeypatch):
     class _FakeResp:
         def __init__(self, text=""):
             self.text = text
+
         def raise_for_status(self):
             pass
 
@@ -295,8 +302,10 @@ def test_buscar_falha_http_retorna_lista_vazia(monkeypatch):
     from App.services.scrapers.stj import STJScraper
 
     scraper = STJScraper()
+
     def boom(q):
         raise req_lib.ConnectionError("portal offline")
+
     monkeypatch.setattr(scraper, "_fetch_pagina", boom)
 
     assert scraper.buscar("teste") == []

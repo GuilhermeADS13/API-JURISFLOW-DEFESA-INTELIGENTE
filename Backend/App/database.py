@@ -657,9 +657,7 @@ def _extrair_metadados_arquivo(
     payload: dict[str, Any],
 ) -> tuple[str, str, str, int | None]:
     """Extrai (nome, conteudo_base64, mime_type, tamanho) com fallbacks seguros."""
-    nome = str(
-        payload.get("arquivo_base_nome") or payload.get("arquivo_base") or ""
-    )
+    nome = str(payload.get("arquivo_base_nome") or payload.get("arquivo_base") or "")
     conteudo = str(payload.get("arquivo_base_conteudo_base64") or "")
     mime_type = str(payload.get("arquivo_base_mime_type") or "")
 
@@ -719,7 +717,12 @@ def save_contestacao(
     if area_juridica not in AREAS_JURIDICAS_CANONICAS:
         area_juridica = _classificar_area_juridica(tipo_acao_str)
     resultado_payload = payload.get("resultado")
-    if resultado_payload not in ("procedente", "improcedente", "parcial", "em_andamento"):
+    if resultado_payload not in (
+        "procedente",
+        "improcedente",
+        "parcial",
+        "em_andamento",
+    ):
         resultado_payload = None
 
     params = (
@@ -842,8 +845,13 @@ def list_contestacoes_por_usuario(
         status_label, tipo_label = _map_dashboard_status(status_raw)
         # Converte para fuso Brasil (UTC-3). criado_em vem aware do Postgres.
         from datetime import timedelta, timezone
+
         tz_br = timezone(timedelta(hours=-3))
-        criado_local = (criado_em or datetime.now(tz_br)).astimezone(tz_br) if criado_em else datetime.now(tz_br)
+        criado_local = (
+            (criado_em or datetime.now(tz_br)).astimezone(tz_br)
+            if criado_em
+            else datetime.now(tz_br)
+        )
         display_date = criado_local.strftime("%d/%m/%Y %H:%M")
 
         history.append(
@@ -1174,24 +1182,67 @@ def _iso_or_str(value: Any) -> str:
 # PR13 #B1: areas juridicas canonicas. Lista fechada — qualquer string fora
 # disso fica como None em area_juridica (conservador). Filtros do RAG
 # downstream so usam essas chaves.
-AREAS_JURIDICAS_CANONICAS = frozenset({
-    "trabalhista",
-    "tributario",
-    "consumidor",
-    "bancario",
-    "previdenciario",
-    "civel",
-})
+AREAS_JURIDICAS_CANONICAS = frozenset(
+    {
+        "trabalhista",
+        "tributario",
+        "consumidor",
+        "bancario",
+        "previdenciario",
+        "civel",
+    }
+)
 
 # Mapeamento keyword -> area canonica. Primeira chave que casa decide.
 # Mantemos ordenado por especificidade (mais especifico primeiro) pra evitar
 # que "previdenciario" case com "civel" generico via "responsab".
 _AREA_KEYWORDS = (
-    ("tributario", ("tribut", "icms", "cofins", "pis/pasep", "irpj", "csll", " ipi", " iss", "carf", "lancamento fiscal", "credito presumido", "planejamento tribut")),
-    ("trabalhista", ("trabalh", "clt ", "celetist", "rescis", "horas extras", "fgts", "ctps", "verbas rescis")),
+    (
+        "tributario",
+        (
+            "tribut",
+            "icms",
+            "cofins",
+            "pis/pasep",
+            "irpj",
+            "csll",
+            " ipi",
+            " iss",
+            "carf",
+            "lancamento fiscal",
+            "credito presumido",
+            "planejamento tribut",
+        ),
+    ),
+    (
+        "trabalhista",
+        (
+            "trabalh",
+            "clt ",
+            "celetist",
+            "rescis",
+            "horas extras",
+            "fgts",
+            "ctps",
+            "verbas rescis",
+        ),
+    ),
     ("previdenciario", ("previd", "inss", "aposent", "beneficio", "lei 8213")),
-    ("consumidor", ("consumidor", "cdc", "compra ", "produto defeituoso", "vicio do produto", "lei 8078")),
-    ("bancario", ("banc", "financ", "emprestim", "credito consig", "cartao de credito")),
+    (
+        "consumidor",
+        (
+            "consumidor",
+            "cdc",
+            "compra ",
+            "produto defeituoso",
+            "vicio do produto",
+            "lei 8078",
+        ),
+    ),
+    (
+        "bancario",
+        ("banc", "financ", "emprestim", "credito consig", "cartao de credito"),
+    ),
     ("civel", ("civel", "contrat", "responsabil", "danos materiais", "cpc ")),
 )
 
@@ -1338,7 +1389,9 @@ def buscar_defesas_semanticas(
 
     # PR13 #B1: filtro opcional por area_juridica canonica. Quando preenchida,
     # restringe ainda mais o universo de candidatos antes do ANN. None = sem filtro.
-    area_canonica = area_juridica if area_juridica in AREAS_JURIDICAS_CANONICAS else None
+    area_canonica = (
+        area_juridica if area_juridica in AREAS_JURIDICAS_CANONICAS else None
+    )
 
     with _get_connection() as connection:
         with connection.cursor() as cursor:
@@ -1470,7 +1523,9 @@ def buscar_defesas_lexicais(
     safe_limit = max(1, min(int(limit), 20))
 
     # PR13 #B1: filtro opcional por area_juridica canonica (mesmo padrao da semantica).
-    area_canonica = area_juridica if area_juridica in AREAS_JURIDICAS_CANONICAS else None
+    area_canonica = (
+        area_juridica if area_juridica in AREAS_JURIDICAS_CANONICAS else None
+    )
 
     _ensure_db_initialized()
 
@@ -1580,7 +1635,9 @@ def buscar_legislacao_semantica(
     _ensure_db_initialized()
     vec_str = _format_pgvector(embedding)
     safe_limit = max(1, min(int(limit), 10))
-    area_canonica = area_juridica if area_juridica in AREAS_JURIDICAS_CANONICAS else None
+    area_canonica = (
+        area_juridica if area_juridica in AREAS_JURIDICAS_CANONICAS else None
+    )
 
     with _get_connection() as connection:
         with connection.cursor() as cursor:
@@ -1612,7 +1669,9 @@ def buscar_legislacao_lexical(
     if not query_normalizada:
         return []
     safe_limit = max(1, min(int(limit), 10))
-    area_canonica = area_juridica if area_juridica in AREAS_JURIDICAS_CANONICAS else None
+    area_canonica = (
+        area_juridica if area_juridica in AREAS_JURIDICAS_CANONICAS else None
+    )
 
     _ensure_db_initialized()
     with _get_connection() as connection:
@@ -1713,9 +1772,18 @@ def upsert_jurisprudencia(
                       scraped_at = now()
                 """,
                 (
-                    tribunal, tipo_decisao, numero_processo, relator,
-                    data_julgamento, ementa, tese_firmada, area,
-                    peso, fonte_url, vec_str, texto_integral,
+                    tribunal,
+                    tipo_decisao,
+                    numero_processo,
+                    relator,
+                    data_julgamento,
+                    ementa,
+                    tese_firmada,
+                    area,
+                    peso,
+                    fonte_url,
+                    vec_str,
+                    texto_integral,
                 ),
             )
         connection.commit()
@@ -1754,7 +1822,9 @@ def buscar_jurisprudencia_semantica(
     _ensure_db_initialized()
     vec_str = _format_pgvector(embedding)
     safe_limit = max(1, min(int(limit), 10))
-    area_canonica = area_juridica if area_juridica in AREAS_JURIDICAS_CANONICAS else None
+    area_canonica = (
+        area_juridica if area_juridica in AREAS_JURIDICAS_CANONICAS else None
+    )
 
     with _get_connection() as connection:
         with connection.cursor() as cursor:
@@ -1790,7 +1860,9 @@ def buscar_jurisprudencia_lexical(
     if not query_normalizada:
         return []
     safe_limit = max(1, min(int(limit), 10))
-    area_canonica = area_juridica if area_juridica in AREAS_JURIDICAS_CANONICAS else None
+    area_canonica = (
+        area_juridica if area_juridica in AREAS_JURIDICAS_CANONICAS else None
+    )
 
     _ensure_db_initialized()
     with _get_connection() as connection:
@@ -1990,9 +2062,17 @@ def obter_jurisprudencia(jurisprudencia_id: int) -> dict[str, Any] | None:
 
 
 _JURISPRUDENCIA_UPDATABLE = {
-    "tribunal", "tipo_decisao", "numero_processo", "relator",
-    "data_julgamento", "ementa", "tese_firmada", "area_juridica",
-    "peso_relevancia", "fonte_url", "texto_integral",
+    "tribunal",
+    "tipo_decisao",
+    "numero_processo",
+    "relator",
+    "data_julgamento",
+    "ementa",
+    "tese_firmada",
+    "area_juridica",
+    "peso_relevancia",
+    "fonte_url",
+    "texto_integral",
 }
 
 

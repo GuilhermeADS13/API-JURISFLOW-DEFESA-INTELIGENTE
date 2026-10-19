@@ -28,13 +28,23 @@ logging.basicConfig(
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Ingestao em lote de jurisprudencia por fonte.")
-    p.add_argument("--fonte", default="tst", choices=[*sorted(FONTES), "todas"],
-                   help="Fonte: tst (trabalhista), carf (tributario) ou todas.")
-    p.add_argument("--max-por-tema", type=int, default=4,
-                   help="Max acordaos por tema (default 4).")
-    p.add_argument("--temas", default=None,
-                   help="Lista de temas separada por virgula (sobrescreve a curada).")
+    p = argparse.ArgumentParser(
+        description="Ingestao em lote de jurisprudencia por fonte."
+    )
+    p.add_argument(
+        "--fonte",
+        default="tst",
+        choices=[*sorted(FONTES), "todas"],
+        help="Fonte: tst (trabalhista), carf (tributario) ou todas.",
+    )
+    p.add_argument(
+        "--max-por-tema", type=int, default=4, help="Max acordaos por tema (default 4)."
+    )
+    p.add_argument(
+        "--temas",
+        default=None,
+        help="Lista de temas separada por virgula (sobrescreve a curada).",
+    )
     p.add_argument("--dry-run", action="store_true", help="Nao grava no banco.")
     return p.parse_args()
 
@@ -46,8 +56,10 @@ def main() -> int:
     falhas_total = 0
     for f in fontes:
         stats = ingerir_lote(
-            f, temas if args.fonte != "todas" else None,
-            max_por_tema=args.max_por_tema, dry_run=args.dry_run,
+            f,
+            temas if args.fonte != "todas" else None,
+            max_por_tema=args.max_por_tema,
+            dry_run=args.dry_run,
         )
         falhas_total += stats["falhas"]
     return 0 if falhas_total == 0 else 1

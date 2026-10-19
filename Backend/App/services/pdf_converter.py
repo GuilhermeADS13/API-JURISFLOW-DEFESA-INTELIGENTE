@@ -4,6 +4,7 @@ Usado pelo endpoint /baixar?formato=pdf. O LibreOffice eh chamado por
 subprocess com um UserInstallation isolado por chamada (evita lock do
 profile global em chamadas concorrentes).
 """
+
 from __future__ import annotations
 
 import logging

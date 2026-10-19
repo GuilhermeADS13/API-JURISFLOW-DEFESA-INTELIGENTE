@@ -41,7 +41,8 @@ def _carregar_deps() -> bool:
     except ImportError as err:
         logger.warning(
             "opencv-python-headless / numpy ausentes: preprocessing captcha "
-            "desativado (%s)", err,
+            "desativado (%s)",
+            err,
         )
         return False
     _cv2, _np = cv2, np
@@ -73,7 +74,9 @@ def preprocessar(image_bytes: bytes) -> Any | None:
         img_resized = _cv2.resize(img, (IMG_WIDTH, IMG_HEIGHT))
         # Otsu: automatico define threshold; INV pra letras ficarem brancas em fundo preto
         _, img_thresh = _cv2.threshold(
-            img_resized, 0, 255,
+            img_resized,
+            0,
+            255,
             _cv2.THRESH_BINARY_INV + _cv2.THRESH_OTSU,
         )
         img_norm = img_thresh.astype(_np.float32) / 255.0

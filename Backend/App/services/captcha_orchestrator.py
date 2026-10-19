@@ -131,7 +131,9 @@ def _tentar_crnn(image_bytes: bytes) -> Optional[str]:
         # captcha_solver existe mas nao tem `resolver_visual` ainda
         return None
     except Exception as err:  # noqa: BLE001 — fallback amplo
-        logger.warning("CRNN captcha_solver falhou: %s — caindo pra proximo estagio", err)
+        logger.warning(
+            "CRNN captcha_solver falhou: %s — caindo pra proximo estagio", err
+        )
         return None
 
 
@@ -193,32 +195,40 @@ def resolver(
             if existente is not None:
                 logger.info(
                     "CAPTCHA dedup: reusando task %s (dedup_key=%s) — sem novo ping",
-                    existente.token, dedup_key,
+                    existente.token,
+                    dedup_key,
                 )
                 return ResultadoCaptcha(
-                    status="pending", token=existente.token,
+                    status="pending",
+                    token=existente.token,
                     mensagem="Reusando notificacao pendente (dedup).",
                 )
 
     # Estagio 3: notify humano
     token = _gerar_token()
     tarefa = _TarefaPending(
-        token=token, tipo=tipo, tribunal=tribunal,
-        criado_em=time.time(), ttl_sec=ttl_sec, dedup_key=dedup_key,
+        token=token,
+        tipo=tipo,
+        tribunal=tribunal,
+        criado_em=time.time(),
+        ttl_sec=ttl_sec,
+        dedup_key=dedup_key,
     )
     with _lock:
         _pendentes[token] = tarefa
 
     resultado_notif = notificar_humano(
-        token_pending=token, tipo_captcha=tipo,
-        tribunal=tribunal, image_bytes=image_bytes,
+        token_pending=token,
+        tipo_captcha=tipo,
+        tribunal=tribunal,
+        image_bytes=image_bytes,
     )
     if not resultado_notif.enviado:
         with _lock:
             _pendentes.pop(token, None)
         return ResultadoCaptcha(
             status="sem_canal",
-            mensagem="Nenhum canal de notificacao configurado (TELEGRAM_* ou SUPPORT_SMTP_*)."
+            mensagem="Nenhum canal de notificacao configurado (TELEGRAM_* ou SUPPORT_SMTP_*).",
         )
 
     # Se foi via Telegram, guarda message_id pra correlacionar reply + liga poller
@@ -229,7 +239,8 @@ def resolver(
         _iniciar_poller_telegram()
 
     return ResultadoCaptcha(
-        status="pending", token=token,
+        status="pending",
+        token=token,
         mensagem=f"Humano notificado (tipo={tipo}, tribunal={tribunal or '?'}).",
     )
 
@@ -242,6 +253,7 @@ def _iniciar_poller_telegram() -> None:
     """
     try:
         from App.services import captcha_telegram_poller
+
         captcha_telegram_poller.iniciar_se_preciso()
     except Exception as err:  # noqa: BLE001 — poller e best-effort
         logger.warning("Nao consegui iniciar poller Telegram: %s", err)
@@ -289,17 +301,22 @@ def consultar_status(token: str) -> ResultadoCaptcha:
         tarefa = _pendentes.get(token)
         if tarefa is None:
             return ResultadoCaptcha(
-                status="expirado", token=token,
+                status="expirado",
+                token=token,
                 mensagem="Token nao encontrado (expirou ou nunca existiu).",
             )
         if tarefa.respondido_em is not None:
             return ResultadoCaptcha(
-                status="ok", token=token, texto=tarefa.resposta,
+                status="ok",
+                token=token,
+                texto=tarefa.resposta,
             )
     return ResultadoCaptcha(status="pending", token=token)
 
 
-def aguardar_resposta(token: str, *, timeout_sec: int = _TTL_SEC_DEFAULT) -> ResultadoCaptcha:
+def aguardar_resposta(
+    token: str, *, timeout_sec: int = _TTL_SEC_DEFAULT
+) -> ResultadoCaptcha:
     """Bloqueia ate humano responder ou timeout. Usado pelo scraper Python
     interno (nao pelo n8n — n8n usa /status polling).
     """
@@ -313,7 +330,8 @@ def aguardar_resposta(token: str, *, timeout_sec: int = _TTL_SEC_DEFAULT) -> Res
         with _lock:
             _pendentes.pop(token, None)
         return ResultadoCaptcha(
-            status="expirado", token=token,
+            status="expirado",
+            token=token,
             mensagem=f"Timeout apos {timeout_sec}s sem resposta humana.",
         )
     with _lock:

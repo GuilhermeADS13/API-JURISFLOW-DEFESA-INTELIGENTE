@@ -66,7 +66,9 @@ def _executar_semantica(
             limit=_CANDIDATOS_POR_BUSCA,
         )
     except Exception as err:
-        logger.error("Falha na busca semantica de legislacao area=%s erro=%s", area_juridica, err)
+        logger.error(
+            "Falha na busca semantica de legislacao area=%s erro=%s", area_juridica, err
+        )
         return []
 
 
@@ -78,13 +80,13 @@ def _executar_lexical(texto_query: str, area_juridica: str | None) -> list[dict]
             limit=_CANDIDATOS_POR_BUSCA,
         )
     except Exception as err:
-        logger.error("Falha na busca lexical de legislacao area=%s erro=%s", area_juridica, err)
+        logger.error(
+            "Falha na busca lexical de legislacao area=%s erro=%s", area_juridica, err
+        )
         return []
 
 
-def _mesclar_rrf(
-    semanticos: list[dict], lexicais: list[dict]
-) -> list[dict]:
+def _mesclar_rrf(semanticos: list[dict], lexicais: list[dict]) -> list[dict]:
     """RRF sobre (origem, numero) — chave unica em public.legislacao."""
     rrf_scores: dict[tuple[str, str], float] = {}
     leis_por_chave: dict[tuple[str, str], dict] = {}

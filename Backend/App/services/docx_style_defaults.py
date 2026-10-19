@@ -31,6 +31,7 @@ Por que esses valores especificos:
   diferentes, mas o clamp em [11, 12] garante que nao saimos da faixa
   profissional/legivel.
 """
+
 from __future__ import annotations
 
 from typing import Any

@@ -95,7 +95,9 @@ def _enviar_telegram(
             data = resp.json()
             return data.get("result", {}).get("message_id")
         logger.warning(
-            "Telegram HTTP %d: %s", resp.status_code, resp.text[:200],
+            "Telegram HTTP %d: %s",
+            resp.status_code,
+            resp.text[:200],
         )
     except requests.RequestException as err:
         logger.warning("Telegram falhou: %s", err)
@@ -113,7 +115,9 @@ def _enviar_email(
     Retorna True se enviou; False se config ausente ou erro SMTP.
     """
     host = os.getenv("SUPPORT_SMTP_HOST", "").strip()
-    to_email = os.getenv("CAPTCHA_NOTIFY_EMAIL", os.getenv("SUPPORT_EMAIL_TO", "")).strip()
+    to_email = os.getenv(
+        "CAPTCHA_NOTIFY_EMAIL", os.getenv("SUPPORT_EMAIL_TO", "")
+    ).strip()
     if not host or not to_email:
         return False
 
@@ -144,7 +148,10 @@ def _enviar_email(
     )
     if image_bytes:
         msg.add_attachment(
-            image_bytes, maintype="image", subtype="png", filename="captcha.png",
+            image_bytes,
+            maintype="image",
+            subtype="png",
+            filename="captcha.png",
         )
 
     try:
@@ -199,21 +206,29 @@ def notificar_humano(
     tg_chat = os.getenv("TELEGRAM_CHAT_ID", "").strip()
     if tg_token and tg_chat:
         msg_id = _enviar_telegram(
-            token=tg_token, chat_id=tg_chat,
-            caption=caption, image_bytes=image_bytes, answer_url=answer_url,
+            token=tg_token,
+            chat_id=tg_chat,
+            caption=caption,
+            image_bytes=image_bytes,
+            answer_url=answer_url,
         )
         if msg_id is not None:
             logger.info(
                 "CAPTCHA pending %s notificado via Telegram (msg_id=%s)",
-                token_pending, msg_id,
+                token_pending,
+                msg_id,
             )
             return ResultadoNotificacao(
-                enviado=True, canal="telegram", telegram_message_id=msg_id,
+                enviado=True,
+                canal="telegram",
+                telegram_message_id=msg_id,
             )
         # Se Telegram configurado mas falhou, cai pra email
 
     if _enviar_email(
-        caption=caption, image_bytes=image_bytes, answer_url=answer_url,
+        caption=caption,
+        image_bytes=image_bytes,
+        answer_url=answer_url,
     ):
         logger.info("CAPTCHA pending %s notificado via email SMTP", token_pending)
         return ResultadoNotificacao(enviado=True, canal="email")

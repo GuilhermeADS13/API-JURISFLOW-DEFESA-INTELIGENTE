@@ -87,7 +87,10 @@ async def validar_processo(
 
     logger.info(
         "DataJud validacao numero=%s tribunal=%s existe=%s usuario=%s",
-        numero, tribunal, resultado["existe"], usuario.get("usuario_id", "?"),
+        numero,
+        tribunal,
+        resultado["existe"],
+        usuario.get("usuario_id", "?"),
     )
     return resultado
 

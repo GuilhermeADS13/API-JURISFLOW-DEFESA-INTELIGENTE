@@ -649,7 +649,7 @@ class TestRagHibrido:
         from App.database import _normalizar_query_lexical
 
         resultado = _normalizar_query_lexical(
-            "horas extras! art. 7, XVI, CF/88 \"verbas\""
+            'horas extras! art. 7, XVI, CF/88 "verbas"'
         )
         # Sem aspas/virgulas/exclamacao, mas mantem acentos e espacos colapsados
         assert "!" not in resultado
@@ -699,9 +699,16 @@ class TestClassificadorAreaJuridica:
     def test_areas_canonicas_fechadas(self):
         from App.database import AREAS_JURIDICAS_CANONICAS
 
-        assert AREAS_JURIDICAS_CANONICAS == frozenset({
-            "trabalhista", "tributario", "consumidor", "bancario", "previdenciario", "civel",
-        })
+        assert AREAS_JURIDICAS_CANONICAS == frozenset(
+            {
+                "trabalhista",
+                "tributario",
+                "consumidor",
+                "bancario",
+                "previdenciario",
+                "civel",
+            }
+        )
 
 
 class TestFiltroAreaJuridicaNaBusca:
@@ -715,16 +722,20 @@ class TestFiltroAreaJuridicaNaBusca:
         from App.routes.rag import _normalizar_input
 
         # Com area
-        _, _, _, area = _normalizar_input({
-            "tipo_acao": "Trabalhista",
-            "fatos": "x",
-            "pedidos": [],
-            "area_juridica": "TRABALHISTA",  # case-insensitive
-        })
+        _, _, _, area = _normalizar_input(
+            {
+                "tipo_acao": "Trabalhista",
+                "fatos": "x",
+                "pedidos": [],
+                "area_juridica": "TRABALHISTA",  # case-insensitive
+            }
+        )
         assert area == "trabalhista"
 
         # Sem area
-        _, _, _, area = _normalizar_input({"tipo_acao": "x", "fatos": "y", "pedidos": []})
+        _, _, _, area = _normalizar_input(
+            {"tipo_acao": "x", "fatos": "y", "pedidos": []}
+        )
         assert area is None
 
     def test_route_propaga_area_para_buscas(self):
@@ -743,18 +754,28 @@ class TestFiltroAreaJuridicaNaBusca:
             return []
 
         with (
-            patch("App.routes.rag.gerar_embedding_query", return_value=self._make_emb()),
-            patch("App.routes.rag.buscar_defesas_semanticas", side_effect=fake_semantica),
+            patch(
+                "App.routes.rag.gerar_embedding_query", return_value=self._make_emb()
+            ),
+            patch(
+                "App.routes.rag.buscar_defesas_semanticas", side_effect=fake_semantica
+            ),
             patch("App.routes.rag.buscar_defesas_lexicais", side_effect=fake_lexical),
         ):
             # Reusa __run helper do TestRagRoute
             import asyncio
             from fastapi import Request
 
-            req = Request(scope={
-                "type": "http", "method": "POST", "path": "/api/rag/defesas-similares",
-                "headers": [], "query_string": b"", "client": ("127.0.0.1", 0),
-            })
+            req = Request(
+                scope={
+                    "type": "http",
+                    "method": "POST",
+                    "path": "/api/rag/defesas-similares",
+                    "headers": [],
+                    "query_string": b"",
+                    "client": ("127.0.0.1", 0),
+                }
+            )
             asyncio.new_event_loop().run_until_complete(
                 rag_route.buscar_defesas_similares(
                     request=req,

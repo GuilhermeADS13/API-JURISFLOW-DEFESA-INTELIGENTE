@@ -41,24 +41,19 @@ class TestNormalizarNumeroCNJ:
         from App.services.datajud_service import normalizar_numero_cnj
 
         assert (
-            normalizar_numero_cnj("0000793-00.2009.5.04.0018")
-            == "00007930020095040018"
+            normalizar_numero_cnj("0000793-00.2009.5.04.0018") == "00007930020095040018"
         )
 
     def test_aceita_numero_ja_unformatado(self):
         from App.services.datajud_service import normalizar_numero_cnj
 
-        assert (
-            normalizar_numero_cnj("00793000920095040018")
-            == "00793000920095040018"
-        )
+        assert normalizar_numero_cnj("00793000920095040018") == "00793000920095040018"
 
     def test_remove_espacos_internos(self):
         from App.services.datajud_service import normalizar_numero_cnj
 
         assert (
-            normalizar_numero_cnj("0079300 09 2009 5 04 0018")
-            == "00793000920095040018"
+            normalizar_numero_cnj("0079300 09 2009 5 04 0018") == "00793000920095040018"
         )
 
     def test_rejeita_numero_curto(self):
@@ -107,7 +102,9 @@ class TestDataJudClient:
 
         args, kwargs = mocked.call_args
         assert args[0].endswith("/api_publica_tst/_search")
-        assert kwargs["json"]["query"]["term"]["numeroProcesso"] == "00007930020095040018"
+        assert (
+            kwargs["json"]["query"]["term"]["numeroProcesso"] == "00007930020095040018"
+        )
 
     def test_buscar_por_numero_retorna_none_sem_hits(self):
         from App.services.datajud_service import DataJudClient
@@ -282,8 +279,10 @@ class TestRotaValidar:
         resp_mock.ok = True
         resp_mock.json.return_value = {"hits": {"hits": [{"_source": source}]}}
 
-        with patch.object(cliente_mock.session, "post", return_value=resp_mock), \
-             patch("App.routes.datajud._get_cliente", return_value=cliente_mock):
+        with (
+            patch.object(cliente_mock.session, "post", return_value=resp_mock),
+            patch("App.routes.datajud._get_cliente", return_value=cliente_mock),
+        ):
             resp = _run(
                 route.validar_processo(
                     request=_fake_request(),

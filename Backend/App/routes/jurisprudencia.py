@@ -77,7 +77,8 @@ def _executar_semantica(
     except Exception as err:
         logger.error(
             "Falha na busca semantica de jurisprudencia area=%s erro=%s",
-            area_juridica, err,
+            area_juridica,
+            err,
         )
         return []
 
@@ -97,14 +98,13 @@ def _executar_lexical(
     except Exception as err:
         logger.error(
             "Falha na busca lexical de jurisprudencia area=%s erro=%s",
-            area_juridica, err,
+            area_juridica,
+            err,
         )
         return []
 
 
-def _mesclar_rrf(
-    semanticos: list[dict], lexicais: list[dict]
-) -> list[dict]:
+def _mesclar_rrf(semanticos: list[dict], lexicais: list[dict]) -> list[dict]:
     """RRF sobre (tribunal, numero_processo) — chave UNIQUE da tabela."""
     rrf_scores: dict[tuple[str, str], float] = {}
     acordaos_por_chave: dict[tuple[str, str], dict] = {}
@@ -166,7 +166,7 @@ async def buscar_jurisprudencia(
         return _resposta_vazia(
             "sem_resultados",
             "Nenhuma jurisprudencia indexada bate com esta query. "
-            "Rode `python scripts/scrape_jurisprudencia.py` pra popular a base."
+            "Rode `python scripts/scrape_jurisprudencia.py` pra popular a base.",
         )
 
     mesclados = _mesclar_rrf(semanticos, lexicais)

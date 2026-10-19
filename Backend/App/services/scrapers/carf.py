@@ -58,10 +58,12 @@ class CARFScraper:
 
     def __init__(self) -> None:
         self.session = requests.Session()
-        self.session.headers.update({
-            "User-Agent": self.USER_AGENT,
-            "Accept": "application/json",
-        })
+        self.session.headers.update(
+            {
+                "User-Agent": self.USER_AGENT,
+                "Accept": "application/json",
+            }
+        )
         self._last_request_ts: float = 0.0
 
     def buscar(self, query: str, *, max_resultados: int = 20) -> list[dict[str, Any]]:
@@ -85,7 +87,11 @@ class CARFScraper:
             rows = min(self.PAGE_SIZE, faltam)
             logger.info(
                 "CARF scraper: query=%r start=%d rows=%d (coletados=%d/%d)",
-                query, start, rows, len(acordaos), max_resultados,
+                query,
+                start,
+                rows,
+                len(acordaos),
+                max_resultados,
             )
             try:
                 data = self._fetch_pagina(query, start, rows)
@@ -206,9 +212,7 @@ class CARFScraper:
         if not s:
             return None
         minus = {"de", "da", "do", "das", "dos", "e"}
-        return " ".join(
-            p if p in minus else p.capitalize() for p in s.lower().split()
-        )
+        return " ".join(p if p in minus else p.capitalize() for p in s.lower().split())
 
     @classmethod
     def _data_iso(cls, raw: Any) -> str | None:

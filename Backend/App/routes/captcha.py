@@ -25,7 +25,17 @@ token no header (facilita UX no fluxo humano).
 
 import logging
 
-from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Body,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+    status,
+)
 
 from App.limiter import limiter
 from App.security import get_authenticated_user
@@ -72,7 +82,7 @@ async def solve(
         if len(image_bytes) > _MAX_IMAGE_BYTES:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"Imagem excede {_MAX_IMAGE_BYTES // (1024*1024)} MB.",
+                detail=f"Imagem excede {_MAX_IMAGE_BYTES // (1024 * 1024)} MB.",
             )
 
     # Tipos sem imagem esperada (Turnstile, reCAPTCHA v3) — image_bytes fica None

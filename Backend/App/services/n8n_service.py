@@ -7,6 +7,7 @@ Refatorado na Etapa 5:
   one-liners que so configuram o webhook URL e a politica de erro.
 - Eliminou duplicacao de construcao de Request + tratamento de erros.
 """
+
 import asyncio
 import json
 import logging
@@ -262,9 +263,7 @@ def _enviar_para_n8n_peticao_sync(dados: dict[str, Any]) -> Any:
 # ─────────────────────────── Wrappers assincronos ────────────────────────────
 
 
-async def enviar_para_n8n(
-    dados: dict[str, Any], webhook_url: str | None = None
-) -> Any:
+async def enviar_para_n8n(dados: dict[str, Any], webhook_url: str | None = None) -> Any:
     """Envia payload sem bloquear o loop principal da API.
 
     `webhook_url` opcional sobrescreve a env var `N8N_WEBHOOK_URL` (PR8 P1.2).

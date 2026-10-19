@@ -32,6 +32,7 @@ def auth_fake():
 def limpar_pendentes():
     """Cada teste comeca com storage limpo do orchestrator."""
     from App.services import captcha_orchestrator as orch
+
     orch._pendentes.clear()
     orch._telegram_msg_para_token.clear()
     yield
@@ -42,11 +43,13 @@ def limpar_pendentes():
 def _notif_ok(canal="email", msg_id=None):
     """Helper: retorno de notificar_humano simulando sucesso."""
     from App.services.captcha_notifier import ResultadoNotificacao
+
     return ResultadoNotificacao(enviado=True, canal=canal, telegram_message_id=msg_id)
 
 
 def _notif_falha():
     from App.services.captcha_notifier import ResultadoNotificacao
+
     return ResultadoNotificacao(enviado=False)
 
 
@@ -58,6 +61,7 @@ def _notif_falha():
 class TestOrchestrator:
     def test_crnn_resolve_retorna_ok_sem_criar_pending(self, monkeypatch):
         from App.services import captcha_orchestrator as orch
+
         # Simula CRNN retornando texto
         monkeypatch.setattr(orch, "_tentar_crnn", lambda b: "ABCD")
         resultado = orch.resolver(b"fake-png", tipo="visual", tribunal="STJ")
@@ -68,6 +72,7 @@ class TestOrchestrator:
 
     def test_crnn_falha_notify_ok_retorna_pending(self, monkeypatch):
         from App.services import captcha_orchestrator as orch
+
         monkeypatch.setattr(orch, "_tentar_crnn", lambda b: None)
         monkeypatch.setattr(orch, "notificar_humano", lambda **kw: _notif_ok())
         resultado = orch.resolver(b"fake-png", tipo="visual", tribunal="STJ")
@@ -78,6 +83,7 @@ class TestOrchestrator:
 
     def test_crnn_falha_notify_falha_retorna_sem_canal(self, monkeypatch):
         from App.services import captcha_orchestrator as orch
+
         monkeypatch.setattr(orch, "_tentar_crnn", lambda b: None)
         monkeypatch.setattr(orch, "notificar_humano", lambda **kw: _notif_falha())
         resultado = orch.resolver(b"fake-png", tipo="visual")
@@ -88,8 +94,11 @@ class TestOrchestrator:
     def test_tipo_turnstile_pula_crnn_e_notifica_direto(self, monkeypatch):
         """Turnstile nao tem imagem — CRNN nao roda; vai direto pra notify."""
         from App.services import captcha_orchestrator as orch
+
         crnn_chamado = []
-        monkeypatch.setattr(orch, "_tentar_crnn", lambda b: crnn_chamado.append(b) or None)
+        monkeypatch.setattr(
+            orch, "_tentar_crnn", lambda b: crnn_chamado.append(b) or None
+        )
         monkeypatch.setattr(orch, "notificar_humano", lambda **kw: _notif_ok())
         resultado = orch.resolver(None, tipo="turnstile", tribunal="STJ")
         assert resultado.status == "pending"
@@ -97,6 +106,7 @@ class TestOrchestrator:
 
     def test_registrar_resposta_atualiza_task(self, monkeypatch):
         from App.services import captcha_orchestrator as orch
+
         monkeypatch.setattr(orch, "_tentar_crnn", lambda b: None)
         monkeypatch.setattr(orch, "notificar_humano", lambda **kw: _notif_ok())
         resultado = orch.resolver(b"png", tipo="visual")
@@ -107,6 +117,7 @@ class TestOrchestrator:
 
     def test_consultar_status_retorna_ok_apos_resposta(self, monkeypatch):
         from App.services import captcha_orchestrator as orch
+
         monkeypatch.setattr(orch, "_tentar_crnn", lambda b: None)
         monkeypatch.setattr(orch, "notificar_humano", lambda **kw: _notif_ok())
         token = orch.resolver(b"png", tipo="visual").token
@@ -119,11 +130,13 @@ class TestOrchestrator:
 
     def test_consultar_status_token_inexistente_retorna_expirado(self):
         from App.services import captcha_orchestrator as orch
+
         r = orch.consultar_status("token-que-nao-existe-123")
         assert r.status == "expirado"
 
     def test_ttl_expira_e_limpa_task(self, monkeypatch):
         from App.services import captcha_orchestrator as orch
+
         monkeypatch.setattr(orch, "_tentar_crnn", lambda b: None)
         monkeypatch.setattr(orch, "notificar_humano", lambda **kw: _notif_ok())
         token = orch.resolver(b"png", tipo="visual", ttl_sec=0).token
@@ -142,6 +155,7 @@ class TestOrchestrator:
 class TestNotifier:
     def test_sem_canal_configurado_retorna_false(self, monkeypatch):
         from App.services import captcha_notifier
+
         # Desliga ambos os canais
         monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
         monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
@@ -149,7 +163,9 @@ class TestNotifier:
         monkeypatch.delenv("CAPTCHA_NOTIFY_EMAIL", raising=False)
         monkeypatch.delenv("SUPPORT_EMAIL_TO", raising=False)
         r = captcha_notifier.notificar_humano(
-            token_pending="X", tipo_captcha="visual", tribunal="STJ",
+            token_pending="X",
+            tipo_captcha="visual",
+            tribunal="STJ",
         )
         assert r.enviado is False
         assert r.canal is None
@@ -163,15 +179,20 @@ class TestNotifier:
         chamadas = {"telegram": 0, "email": 0}
         # _enviar_telegram agora retorna message_id (int) em sucesso
         monkeypatch.setattr(
-            captcha_notifier, "_enviar_telegram",
-            lambda **kw: chamadas.__setitem__("telegram", chamadas["telegram"] + 1) or 42,
+            captcha_notifier,
+            "_enviar_telegram",
+            lambda **kw: chamadas.__setitem__("telegram", chamadas["telegram"] + 1)
+            or 42,
         )
         monkeypatch.setattr(
-            captcha_notifier, "_enviar_email",
+            captcha_notifier,
+            "_enviar_email",
             lambda **kw: chamadas.__setitem__("email", chamadas["email"] + 1) or True,
         )
         r = captcha_notifier.notificar_humano(
-            token_pending="X", tipo_captcha="visual", tribunal="STJ",
+            token_pending="X",
+            tipo_captcha="visual",
+            tribunal="STJ",
         )
         assert r.enviado is True
         assert r.canal == "telegram"
@@ -188,25 +209,32 @@ class TestNotifier:
 class TestDedup:
     def test_dedup_key_reusa_task_pendente_sem_notificar_de_novo(self, monkeypatch):
         from App.services import captcha_orchestrator as orch
+
         monkeypatch.setattr(orch, "_tentar_crnn", lambda b: None)
         notify_calls = []
         monkeypatch.setattr(
-            orch, "notificar_humano",
+            orch,
+            "notificar_humano",
             lambda **kw: notify_calls.append(kw) or _notif_ok(),
         )
         # Primeira chamada cria task + notifica
-        r1 = orch.resolver(None, tipo="turnstile", tribunal="STJ", dedup_key="stj:rescisao")
+        r1 = orch.resolver(
+            None, tipo="turnstile", tribunal="STJ", dedup_key="stj:rescisao"
+        )
         assert r1.status == "pending"
         assert len(notify_calls) == 1
 
         # Segunda chamada com MESMA dedup_key reusa — NAO notifica de novo
-        r2 = orch.resolver(None, tipo="turnstile", tribunal="STJ", dedup_key="stj:rescisao")
+        r2 = orch.resolver(
+            None, tipo="turnstile", tribunal="STJ", dedup_key="stj:rescisao"
+        )
         assert r2.status == "pending"
         assert r2.token == r1.token  # mesmo token
         assert len(notify_calls) == 1  # nao floodou
 
     def test_dedup_keys_diferentes_criam_tasks_separadas(self, monkeypatch):
         from App.services import captcha_orchestrator as orch
+
         monkeypatch.setattr(orch, "_tentar_crnn", lambda b: None)
         monkeypatch.setattr(orch, "notificar_humano", lambda **kw: _notif_ok())
         r1 = orch.resolver(None, tipo="turnstile", dedup_key="a")
@@ -216,9 +244,12 @@ class TestDedup:
     def test_dedup_apos_resposta_nova_chamada_cria_task_nova(self, monkeypatch):
         """Task respondida nao serve mais de dedup — nova chamada notifica."""
         from App.services import captcha_orchestrator as orch
+
         monkeypatch.setattr(orch, "_tentar_crnn", lambda b: None)
         n = []
-        monkeypatch.setattr(orch, "notificar_humano", lambda **kw: n.append(1) or _notif_ok())
+        monkeypatch.setattr(
+            orch, "notificar_humano", lambda **kw: n.append(1) or _notif_ok()
+        )
         r1 = orch.resolver(None, tipo="turnstile", dedup_key="k")
         orch.registrar_resposta(r1.token, "resolvido")
         r2 = orch.resolver(None, tipo="turnstile", dedup_key="k")
@@ -234,10 +265,12 @@ class TestDedup:
 class TestTelegramReply:
     def test_token_por_telegram_msg_apos_solve_telegram(self, monkeypatch):
         from App.services import captcha_orchestrator as orch
+
         monkeypatch.setattr(orch, "_tentar_crnn", lambda b: None)
         monkeypatch.setattr(orch, "_iniciar_poller_telegram", lambda: None)
         monkeypatch.setattr(
-            orch, "notificar_humano",
+            orch,
+            "notificar_humano",
             lambda **kw: _notif_ok(canal="telegram", msg_id=555),
         )
         r = orch.resolver(None, tipo="turnstile", tribunal="STJ")
@@ -246,10 +279,12 @@ class TestTelegramReply:
 
     def test_mapa_telegram_limpo_apos_resposta(self, monkeypatch):
         from App.services import captcha_orchestrator as orch
+
         monkeypatch.setattr(orch, "_tentar_crnn", lambda b: None)
         monkeypatch.setattr(orch, "_iniciar_poller_telegram", lambda: None)
         monkeypatch.setattr(
-            orch, "notificar_humano",
+            orch,
+            "notificar_humano",
             lambda **kw: _notif_ok(canal="telegram", msg_id=777),
         )
         r = orch.resolver(None, tipo="turnstile")
@@ -264,7 +299,8 @@ class TestTelegramReply:
         monkeypatch.setattr(orch, "_tentar_crnn", lambda b: None)
         monkeypatch.setattr(orch, "_iniciar_poller_telegram", lambda: None)
         monkeypatch.setattr(
-            orch, "notificar_humano",
+            orch,
+            "notificar_humano",
             lambda **kw: _notif_ok(canal="telegram", msg_id=999),
         )
         r = orch.resolver(None, tipo="turnstile", tribunal="STJ")
@@ -290,7 +326,8 @@ class TestTelegramReply:
         monkeypatch.setattr(orch, "_tentar_crnn", lambda b: None)
         monkeypatch.setattr(orch, "_iniciar_poller_telegram", lambda: None)
         monkeypatch.setattr(
-            orch, "notificar_humano",
+            orch,
+            "notificar_humano",
             lambda **kw: _notif_ok(canal="telegram", msg_id=111),
         )
         r = orch.resolver(None, tipo="turnstile")
@@ -306,7 +343,8 @@ class TestTelegramReply:
         monkeypatch.setattr(orch, "_tentar_crnn", lambda b: None)
         monkeypatch.setattr(orch, "_iniciar_poller_telegram", lambda: None)
         monkeypatch.setattr(
-            orch, "notificar_humano",
+            orch,
+            "notificar_humano",
             lambda **kw: _notif_ok(canal="telegram", msg_id=222),
         )
         r = orch.resolver(None, tipo="turnstile")
@@ -324,6 +362,7 @@ class TestRotaSolve:
     def test_solve_sem_arquivo_visual_e_pending(self, auth_fake, monkeypatch):
         """Sem imagem + tipo=visual → CRNN nao roda; cai no notify."""
         from App.services import captcha_orchestrator as orch
+
         monkeypatch.setattr(orch, "notificar_humano", lambda **kw: _notif_ok())
         resp = client.post(
             "/api/captcha/solve",
@@ -341,6 +380,7 @@ class TestRotaSolve:
 
     def test_solve_ok_quando_crnn_resolve(self, auth_fake, monkeypatch):
         from App.services import captcha_orchestrator as orch
+
         monkeypatch.setattr(orch, "_tentar_crnn", lambda b: "ABCD")
         # Manda arquivo (bytes fake)
         resp = client.post(
@@ -355,6 +395,7 @@ class TestRotaSolve:
 
     def test_solve_sem_canal_503(self, auth_fake, monkeypatch):
         from App.services import captcha_orchestrator as orch
+
         monkeypatch.setattr(orch, "_tentar_crnn", lambda b: None)
         monkeypatch.setattr(orch, "notificar_humano", lambda **kw: _notif_falha())
         resp = client.post(
@@ -372,6 +413,7 @@ class TestRotaStatusEAnswer:
 
     def test_ciclo_completo_solve_status_answer(self, auth_fake, monkeypatch):
         from App.services import captcha_orchestrator as orch
+
         monkeypatch.setattr(orch, "_tentar_crnn", lambda b: None)
         monkeypatch.setattr(orch, "notificar_humano", lambda **kw: _notif_ok())
 
@@ -419,6 +461,7 @@ class TestRotaPendentes:
 
     def test_pendentes_lista_apos_solve(self, auth_fake, monkeypatch):
         from App.services import captcha_orchestrator as orch
+
         monkeypatch.setattr(orch, "_tentar_crnn", lambda b: None)
         monkeypatch.setattr(orch, "notificar_humano", lambda **kw: _notif_ok())
         client.post(

@@ -125,7 +125,9 @@ def consolidar_texto_provas(provas: list[dict]) -> str:
     blocos: list[str] = []
     total = 0
     for indice, prova in enumerate(provas, start=1):
-        texto = ocr_documento_prova(prova.get("conteudo") or b"", prova.get("nome") or "")
+        texto = ocr_documento_prova(
+            prova.get("conteudo") or b"", prova.get("nome") or ""
+        )
         if len(texto.strip()) < _MIN_TEXTO_PROVA:
             continue
         texto = texto[:OCR_PROVA_MAX_CHARS].strip()
@@ -147,6 +149,7 @@ def consolidar_texto_provas(provas: list[dict]) -> str:
         "contestacao e impugnar as alegacoes da inicial. NAO sao pedidos do autor.\n\n"
         + "\n\n".join(blocos)
     )
+
 
 # Marcadores de secoes que aparecem em peticoes brasileiras. Casamento
 # case-insensitive, ancorado em inicio de linha apos whitespace, com
@@ -252,9 +255,7 @@ def _extrair_doc_legado(conteudo: bytes) -> str:
     """Extracao basica de .doc legado (texto ASCII/Latin-1 imprimivel)."""
     texto = conteudo.decode("latin1", errors="ignore")
     return "".join(
-        c
-        for c in texto
-        if c in ("\n", "\r", "\t") or 0x20 <= ord(c) <= 0xFFFF
+        c for c in texto if c in ("\n", "\r", "\t") or 0x20 <= ord(c) <= 0xFFFF
     )
 
 

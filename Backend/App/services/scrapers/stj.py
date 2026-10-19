@@ -62,6 +62,7 @@ from typing import Any
 # nao basta (WAF tem JS challenge tambem). Veja fallback Playwright abaixo.
 try:
     from curl_cffi import requests as cffi_requests
+
     _HAS_CURL_CFFI = True
 except ImportError:
     cffi_requests = None
@@ -72,6 +73,7 @@ except ImportError:
 # qualquer IP. Usado como fallback quando curl_cffi retorna 403.
 try:
     from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+
     _HAS_PLAYWRIGHT = True
 except ImportError:
     sync_playwright = None
@@ -115,14 +117,16 @@ class STJScraper:
                 "STJ scraper: curl_cffi nao instalado, caindo em requests "
                 "(provavel 403 pelo WAF do portal)"
             )
-        self.session.headers.update({
-            "User-Agent": self.USER_AGENT,
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Connection": "keep-alive",
-            "Upgrade-Insecure-Requests": "1",
-        })
+        self.session.headers.update(
+            {
+                "User-Agent": self.USER_AGENT,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Connection": "keep-alive",
+                "Upgrade-Insecure-Requests": "1",
+            }
+        )
         self._last_request_ts: float = 0.0
         self._cookies_obtidos: bool = False
         # PR26: carrega cookies pre-autenticados (dev resolveu Turnstile
@@ -156,7 +160,8 @@ class STJScraper:
         if not isinstance(cookies, list):
             logger.warning(
                 "Cookies STJ mal formatados em %s (esperava lista, recebi %s)",
-                path, type(cookies),
+                path,
+                type(cookies),
             )
             return
 
@@ -199,7 +204,9 @@ class STJScraper:
             self._cookies_obtidos = True
             logger.info(
                 "STJ cookies pre-autenticados carregados de %s (%d cookies) — "
-                "pulando visita a HOME_URL", path, aplicados,
+                "pulando visita a HOME_URL",
+                path,
+                aplicados,
             )
         else:
             # PR27 (finding #3): dev configurou --cookies mas TODOS pularam.
@@ -208,7 +215,9 @@ class STJScraper:
                 "STJ cookies file lido de %s mas 0 cookies aplicados "
                 "(%d pulados) — scraper caira no fluxo Turnstile padrao. "
                 "Verifique estrutura do JSON: cada entrada precisa de "
-                "'name' e 'value' nao-vazios.", path, pulados,
+                "'name' e 'value' nao-vazios.",
+                path,
+                pulados,
             )
 
     def buscar(self, query: str, *, max_resultados: int = 20) -> list[dict[str, Any]]:
@@ -268,6 +277,7 @@ class STJScraper:
     def _build_search_url(self, query: str) -> str:
         """Constroi URL completa da pesquisa STJ (usado por curl_cffi e Playwright)."""
         from urllib.parse import urlencode
+
         params = {
             "operador": "e",
             "b": "ACOR",
@@ -350,7 +360,9 @@ class STJScraper:
                 try:
                     # 1. Visita home — Turnstile aparece aqui se for primeira visita.
                     #    domcontentloaded é melhor que networkidle (turnstile mantem socket).
-                    page.goto(self.HOME_URL, wait_until="domcontentloaded", timeout=30000)
+                    page.goto(
+                        self.HOME_URL, wait_until="domcontentloaded", timeout=30000
+                    )
                     self._aguardar_turnstile(page)
 
                     # 2. Vai pra pesquisa (deveria ja ter cookies do challenge)
@@ -365,7 +377,8 @@ class STJScraper:
                         logger.warning(
                             "STJ scraper: div.documento nao apareceu em 20s "
                             "(query sem hits, ainda em turnstile, ou layout mudou?). "
-                            "Titulo atual: %r", page.title()[:80]
+                            "Titulo atual: %r",
+                            page.title()[:80],
                         )
                     return page.content()
                 finally:
@@ -425,7 +438,9 @@ class STJScraper:
             # Mesmo com 200, o portal pode ter retornado pagina de captcha
             if not self._detectou_captcha(html):
                 return html
-            logger.warning("STJ scraper: curl_cffi recebeu captcha — fallback Playwright")
+            logger.warning(
+                "STJ scraper: curl_cffi recebeu captcha — fallback Playwright"
+            )
         except Exception as err:
             logger.warning(
                 "STJ scraper: curl_cffi falhou (%s) — fallback Playwright", err
@@ -548,7 +563,8 @@ class STJScraper:
         """Se ementa tem 'TESE FIRMADA: ...' ou 'TESE: ...' no fim, extrai."""
         m = re.search(
             r"(?:TESE\s+FIRMADA|TESE\s+JURIDICA|TESE)\s*[:\.\-]\s*(.+?)(?:\Z|\n\n)",
-            ementa, re.IGNORECASE | re.DOTALL,
+            ementa,
+            re.IGNORECASE | re.DOTALL,
         )
         if not m:
             return None
