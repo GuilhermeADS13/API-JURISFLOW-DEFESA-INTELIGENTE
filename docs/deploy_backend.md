@@ -115,9 +115,13 @@ O n8n sobe vazio. Rode o script (usa a CLI do n8n dentro do container — funcio
 numa instância nova, sem API key):
 ```bash
 bash scripts/deploy/import_n8n_workflows.sh
+bash scripts/deploy/scrape_cron.sh --instalar
 ```
-Ele importa os 4 JSONs (`docs/n8n_workflow_*.json`) e ativa todos (registra os
-webhooks + o schedule semanal). Alternativa manual: importar pela UI
+O primeiro importa e publica os 3 workflows de webhook (n8n 2.x: publicar =
+ativar) e reinicia o n8n pra registrar os webhooks. O segundo agenda o scrape de
+jurisprudência no cron da VM (Dom 03h e Seg/Sex 15h de Brasília) — no VPS ele
+substitui o workflow de agendamento do n8n, que depende de uma credential que só
+a API REST cria. O `vps_setup.sh` já roda os dois. Alternativa manual: importar pela UI
 (`http://<IP>:5678`, atrás de SSH tunnel — ver A.6).
 
 ### A.5 HTTPS com Caddy

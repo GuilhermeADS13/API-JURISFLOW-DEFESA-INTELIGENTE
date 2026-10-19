@@ -9,7 +9,8 @@ import StatsSection from "./components/StatsSection";
 import MainPanelSection from "./components/MainPanelSection";
 import DashboardSection from "./components/DashboardSection";
 import SupportSection from "./components/SupportSection";
-import JurisprudenciaAdminPage from "./components/JurisprudenciaAdminPage";
+// Painel so de admin: carregado sob demanda, fora do bundle inicial.
+const JurisprudenciaAdminPage = React.lazy(() => import("./components/JurisprudenciaAdminPage"));
 import { USER_IS_ADMIN_URL } from "./config/api";
 import AppFooter from "./components/AppFooter";
 import RevisaoHumanaModal from "./components/RevisaoHumanaModal";
@@ -2005,7 +2006,9 @@ export default function App() {
       )}
 
       {currentPage === "jurisprudencia" && (
-        <JurisprudenciaAdminPage getAccessToken={getSupabaseAccessToken} />
+        <React.Suspense fallback={<div className="container py-5 text-center">Carregando...</div>}>
+          <JurisprudenciaAdminPage getAccessToken={getSupabaseAccessToken} />
+        </React.Suspense>
       )}
 
       <AppFooter />

@@ -611,6 +611,22 @@ class TestRagHibrido:
         assert mesclado[0]["numero_processo"] == "SHARED"
         assert mesclado[0]["_rrf_score"] > mesclado[1]["_rrf_score"]
 
+    def test_similaridade_semantica_so_existe_para_hit_semantico(self):
+        """O RRF e posicional (1o lexical vira ~1.0); o Gerador decide copiar a
+        tese pelo cosseno real, que so existe quando o caso veio da semantica."""
+        from App.routes.rag import _mesclar_rrf
+
+        sem = {**self._caso_sem(1), "numero_processo": "SEM", "similarity": 0.62}
+        lex = {**self._caso_lex(1), "numero_processo": "LEX"}
+        lex.pop("similarity", None)
+
+        por_numero = {c["numero_processo"]: c for c in _mesclar_rrf([sem], [lex])}
+
+        assert por_numero["SEM"]["similaridade_semantica"] == pytest.approx(0.62)
+        assert por_numero["LEX"]["similaridade_semantica"] is None
+        # `similarity` continua com o fallback antigo (frontend/n8n leem ele).
+        assert por_numero["LEX"]["similarity"] == pytest.approx(1.0)
+
     def test_rrf_lista_vazia_funciona(self):
         """Uma das duas listas vazia -> RRF degenera pra ranking da outra."""
         from App.routes.rag import _mesclar_rrf

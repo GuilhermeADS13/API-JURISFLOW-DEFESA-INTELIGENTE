@@ -100,6 +100,47 @@ await caso('529 rapido continua sendo repetido (3 chamadas)', async () => {
   assert.equal(chamadas.length, 3);
 });
 
+const comDefesa = (caso, numeroAtual = '0001111-11.2026.5.06.0001') => ({
+  ...envGerador,
+  dados_extraidos: { ...envGerador.dados_extraidos, numero_processo: numeroAtual },
+  defesas_anteriores: { casos: [{ tese_central: 'TESE_DO_RAG_X', fundamentos_curtos: 'f', ...caso }] },
+});
+const textoUser = (chamadas) => JSON.stringify(bodyDe(chamadas[0]).messages);
+await caso('tese do RAG pouco parecida vira REFERENCIA (nao copia literal)', async () => {
+  const { out, chamadas } = await rodar(P, 'Claude Gerador de Contestacao', comDefesa({ similaridade_semantica: 0.55 }), ENV, claudeOk(jsonMinuta));
+  assert.equal(out.engine_ia.tese_rag.modo, 'referencia');
+  assert.ok(textoUser(chamadas).includes('CASO APENAS PARECIDO'));
+  assert.equal(textoUser(chamadas).includes('REPLIQUE LITERALMENTE'), false);
+});
+await caso('lexical-only (sem cosseno) tambem vira REFERENCIA', async () => {
+  const { out } = await rodar(P, 'Claude Gerador de Contestacao', comDefesa({ similaridade_semantica: null, similarity: 1.0 }), ENV, claudeOk(jsonMinuta));
+  assert.equal(out.engine_ia.tese_rag.modo, 'referencia');
+});
+await caso('caso quase identico (cosseno >= 0.80) mantem tese literal', async () => {
+  const { out, chamadas } = await rodar(P, 'Claude Gerador de Contestacao', comDefesa({ similaridade_semantica: 0.91 }), ENV, claudeOk(jsonMinuta));
+  assert.equal(out.engine_ia.tese_rag.modo, 'literal');
+  assert.ok(textoUser(chamadas).includes('REPLIQUE LITERALMENTE'));
+});
+await caso('mesmo processo mantem tese literal mesmo sem cosseno', async () => {
+  const { out } = await rodar(P, 'Claude Gerador de Contestacao', comDefesa({ numero_processo: '0001111-11.2026.5.06.0001', similaridade_semantica: null }), ENV, claudeOk(jsonMinuta));
+  assert.equal(out.engine_ia.tese_rag.modo, 'literal');
+});
+
+await caso('modelo base e defesas anteriores nao sao fonte de numeros deste caso', async () => {
+  const { chamadas } = await rodar(P, 'Claude Gerador de Contestacao', envGerador, ENV, claudeOk(jsonMinuta));
+  const sistema = bodyDe(chamadas[0]).system[0].text;
+  assert.ok(sistema.includes('[DADOS_DE_OUTRO_CASO]'));
+  assert.equal(/do modelo base, das defesas RAG ou dos pontos do advogado/.test(sistema), false);
+});
+
+await caso('prompt segue a estrutura do modelo do escritorio', async () => {
+  const { chamadas } = await rodar(P, 'Claude Gerador de Contestacao', envGerador, ENV, claudeOk(jsonMinuta));
+  const sistema = bodyDe(chamadas[0]).system[0].text;
+  assert.ok(sistema.includes('IV – DOS CÁLCULOS'));
+  assert.ok(sistema.includes('"calculos": "'));
+  assert.equal(/II\.A\)|U\+2014/.test(sistema), false);
+});
+
 console.log('Extrator');
 await caso('prompt sem comentario de codigo e sem temperature no sonnet-5', async () => {
   const envE = { status: 'ok', contexto: { texto_peticao: 'x'.repeat(100) } };
@@ -123,6 +164,12 @@ await caso('resposta truncada vira erro explicito, nao "sem contradicoes"', asyn
   assert.equal(bodyDe(chamadas[0]).max_tokens, 4000);
   const det = Object.values(out).find((v) => v && typeof v === 'object' && 'api_error' in v && 'provider' in v && v !== out.engine_ia);
   assert.match(String(det && det.api_error), /truncada/);
+});
+await caso('Detector nao trata a defesa negando fatos do autor como erro', async () => {
+  const { chamadas } = await rodar(P, 'Detector de Contradicoes', { status: 'ok', minuta, dados_extraidos: {} }, ENV, claudeOk('{"contradicoes":[]}'));
+  const sistema = JSON.stringify(bodyDe(chamadas[0]).system);
+  assert.ok(sistema.includes('NAO e erro'));
+  assert.ok(sistema.includes('PEDIDO DO AUTOR SEM IMPUGNACAO'));
 });
 
 for (const [arquivo, nome, envelope] of [

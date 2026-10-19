@@ -1410,7 +1410,9 @@ def buscar_defesas_semanticas(
                 WHERE status = 'ok'
                   AND tipo_acao ILIKE %s ESCAPE '\\'
                   AND fatos_embedding IS NOT NULL
-                  AND (%s::text IS NULL OR area_juridica = %s)
+                  AND (%s::text IS NULL OR area_juridica = %s OR area_juridica IS NULL)
+                  -- area NULL = registro legado/curado sem classificacao (ex.: exemplar
+                  -- humano id 18); continua candidato, o filtro por tipo_acao ja restringe.
                   AND (
                     usuario_id = %s
                     OR (n8n_resposta::jsonb->'engine_ia'->>'provider' = 'humano')
@@ -1546,7 +1548,9 @@ def buscar_defesas_lexicais(
                 WHERE status = 'ok'
                   AND tipo_acao ILIKE %s ESCAPE '\\'
                   AND fatos_tsv @@ plainto_tsquery('portuguese', %s)
-                  AND (%s::text IS NULL OR area_juridica = %s)
+                  AND (%s::text IS NULL OR area_juridica = %s OR area_juridica IS NULL)
+                  -- area NULL = registro legado/curado sem classificacao (ex.: exemplar
+                  -- humano id 18); continua candidato, o filtro por tipo_acao ja restringe.
                   AND (
                     usuario_id = %s
                     OR (n8n_resposta::jsonb->'engine_ia'->>'provider' = 'humano')
