@@ -133,6 +133,14 @@ await caso('modelo base e defesas anteriores nao sao fonte de numeros deste caso
   assert.equal(/do modelo base, das defesas RAG ou dos pontos do advogado/.test(sistema), false);
 });
 
+await caso('prompt segue a estrutura do modelo do escritorio', async () => {
+  const { chamadas } = await rodar(P, 'Claude Gerador de Contestacao', envGerador, ENV, claudeOk(jsonMinuta));
+  const sistema = bodyDe(chamadas[0]).system[0].text;
+  assert.ok(sistema.includes('IV – DOS CÁLCULOS'));
+  assert.ok(sistema.includes('"calculos": "'));
+  assert.equal(/II\.A\)|U\+2014/.test(sistema), false);
+});
+
 console.log('Extrator');
 await caso('prompt sem comentario de codigo e sem temperature no sonnet-5', async () => {
   const envE = { status: 'ok', contexto: { texto_peticao: 'x'.repeat(100) } };

@@ -671,69 +671,62 @@ def _build_docx_from_template_inner(
         )
         doc.add_paragraph("")
 
-    # 4) Conteudo das secoes — numeracao romana DINAMICA conforme presenca de
-    # secoes opcionais (Litigancia, Danos Morais, Fundamentos). I e II sao
-    # fixos (Preliminares e Merito); demais sao renumeradas em sequencia.
+    # 4) Conteudo das secoes na estrutura do modelo do escritorio:
+    # I – PRELIMINARMENTE; II – MERITO (danos morais como ultima subsecao);
+    # III – LITIGANCIA DE MA-FE e IV – DOS CALCULOS (opcionais); V –
+    # AUTENTICIDADE; VI – PEDIDOS. Opcionais ausentes renumeram em sequencia.
+    # `fundamentos` NAO vira secao: o modelo fundamenta dentro do merito; o
+    # campo fica como referencia interna (como impugnacao_pedidos).
     _ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"]
-    _add_secao(
-        doc, minuta.get("preliminares"), contador, numerar=True, cabecalho_padrao=None
-    )
+    preliminares = minuta.get("preliminares")
+    if preliminares and str(preliminares).strip():
+        _add_secao(
+            doc,
+            preliminares,
+            contador,
+            numerar=True,
+            cabecalho_padrao=f"I {_TRACO_SECAO} PRELIMINARMENTE.",
+        )
+
+    merito = str(minuta.get("merito") or "").strip()
+    danos = str(minuta.get("danos_morais") or "").strip()
+    if danos:
+        merito = f"{merito}\n\n{_danos_como_subsecao_do_merito(merito, danos)}".strip()
     _add_secao(
         doc,
-        minuta.get("merito"),
+        merito or None,
         contador,
         numerar=True,
-        cabecalho_padrao="II — MERITO.",
+        cabecalho_padrao=f"II {_TRACO_SECAO} MÉRITO.",
     )
 
     # impugnacao_pedidos NAO eh renderizado na peca final — fica como
     # referencia interna do prompt (keys snake_case nao saem para o cliente).
-    # A IA ja deve incluir as impugnacoes nas subsecoes II.A, II.B... do merito.
+    # A IA ja deve incluir as impugnacoes nas subsecoes A), B)... do merito.
 
     secao_idx = 3  # proxima apos II
-    litigancia = minuta.get("litigancia_ma_fe")
-    if litigancia and str(litigancia).strip():
-        litigancia_norm = re.sub(
-            r"^##\s*[IVXLCDM]+\s*[—\-]?\s*",
-            f"## {_ROMAN[secao_idx]} — ",
-            str(litigancia).strip(),
-            count=1,
-            flags=re.MULTILINE,
+    for campo, titulo_padrao in (
+        ("litigancia_ma_fe", "DA LITIGÂNCIA DE MÁ-FÉ."),
+        ("calculos", "DOS CÁLCULOS."),
+    ):
+        texto = str(minuta.get(campo) or "").strip()
+        if not texto:
+            continue
+        # Renumera o titulo que a IA mandou, ou poe o padrao se veio sem titulo.
+        texto = re.sub(r"^##\s*[IVXLCDM]+\s*[—–-]?\s*", "## ", texto, count=1)
+        if not texto.startswith("##"):
+            texto = f"## {titulo_padrao}\n\n{texto}"
+        texto = re.sub(
+            r"^##\s*", f"## {_ROMAN[secao_idx]} {_TRACO_SECAO} ", texto, count=1
         )
-        if not litigancia_norm.lstrip().startswith("##"):
-            litigancia_norm = (
-                f"## {_ROMAN[secao_idx]} — DA LITIGANCIA DE MA-FE.\n\n{litigancia_norm}"
-            )
-        _add_secao(doc, litigancia_norm, contador, numerar=True, cabecalho_padrao=None)
-        secao_idx += 1
-
-    danos = minuta.get("danos_morais")
-    if danos and str(danos).strip():
-        danos_norm = re.sub(
-            r"^##\s*[IVXLCDM]+\s*[—\-]?\s*",
-            f"## {_ROMAN[secao_idx]} — ",
-            str(danos).strip(),
-            count=1,
-            flags=re.MULTILINE,
-        )
-        if not danos_norm.lstrip().startswith("##"):
-            danos_norm = f"## {_ROMAN[secao_idx]} — DA IMPROCEDENCIA DO PEDIDO DE INDENIZACAO POR DANOS MORAIS.\n\n{danos_norm}"
-        _add_secao(doc, danos_norm, contador, numerar=True, cabecalho_padrao=None)
-        secao_idx += 1
-
-    if minuta.get("fundamentos"):
-        _add_secao(
-            doc,
-            minuta["fundamentos"],
-            contador,
-            numerar=True,
-            cabecalho_padrao=f"{_ROMAN[secao_idx]} — DOS FUNDAMENTOS JURIDICOS.",
-        )
+        _add_secao(doc, texto, contador, numerar=True, cabecalho_padrao=None)
         secao_idx += 1
 
     # AUTENTICIDADE (sempre presente)
     _add_heading(
-        doc, f"{_ROMAN[secao_idx]} — DA AUTENTICIDADE DOS DOCUMENTOS.", nivel=1
+        doc,
+        f"{_ROMAN[secao_idx]} {_TRACO_SECAO} DA AUTENTICIDADE DOS DOCUMENTOS ORA ACOSTADOS.",
+        nivel=1,
     )
     doc.add_paragraph("")
     autenticidade_texto = minuta.get("autenticidade_documentos") or (
@@ -752,7 +745,7 @@ def _build_docx_from_template_inner(
         minuta.get("pedidos"),
         contador,
         numerar=False,
-        cabecalho_padrao=f"{_ROMAN[secao_idx]} — DOS PEDIDOS.",
+        cabecalho_padrao=f"{_ROMAN[secao_idx]} {_TRACO_SECAO} DOS PEDIDOS.",
     )
     secao_idx += 1
 
@@ -764,7 +757,7 @@ def _build_docx_from_template_inner(
         _escrever_rol_documentos(
             doc,
             anexos,
-            titulo=f"{_ROMAN[secao_idx]} — ROL DE DOCUMENTOS QUE INSTRUEM A PRESENTE.",
+            titulo=f"{_ROMAN[secao_idx]} {_TRACO_SECAO} ROL DE DOCUMENTOS QUE INSTRUEM A PRESENTE.",
             imagens_embedar=imagens_embedar,
         )
         doc.add_paragraph("")
@@ -935,7 +928,17 @@ def _add_heading(doc: Any, texto: str, *, nivel: int) -> None:
     )
     texto_limpo = _RE_INLINE_BOLD.sub(r"\1", texto)
     if nivel == 1:
-        texto_limpo = texto_limpo.upper()
+        # Travessao do modelo do escritorio ('II – MERITO'), qualquer que seja
+        # o que a IA escreveu ('—', '-' ou '–').
+        texto_limpo = re.sub(
+            r"^([IVXLCDM]+)\s*[—–-]\s*",
+            rf"\1 {_TRACO_SECAO} ",
+            texto_limpo.strip(),
+            count=1,
+        ).upper()
+    else:
+        # Subsecao com letra simples como no modelo: 'II.A) DO X' -> 'A) DO X'.
+        texto_limpo = re.sub(r"^[IVXLCDM]+\.(?=[A-Z]\))", "", texto_limpo.strip())
     _run(p, texto_limpo, bold=True, underline=True)
 
 
@@ -1029,6 +1032,20 @@ def _add_secao(
         else:
             _add_text_para(doc, bloco, contador, numerar=numerar)
             doc.add_paragraph("")
+
+
+def _danos_como_subsecao_do_merito(merito: str, danos: str) -> str:
+    """No modelo do escritorio, danos morais e a ultima subsecao do merito.
+
+    Tira o titulo de secao que a IA possa ter mandado ('## IV — ...') e usa a
+    letra seguinte a ultima subsecao do merito ('### B) ...' -> 'C)').
+    """
+    corpo = re.sub(r"^#{1,4}[^\n]*\n*", "", danos.strip(), count=1).strip()
+    letras = re.findall(
+        r"^#{3,4}\s*(?:[IVXLCDM]+\.)?([A-Z])\)", merito, flags=re.MULTILINE
+    )
+    prefixo = f"{chr(ord(max(letras)) + 1)}) " if letras else ""
+    return f"### {prefixo}DA IMPROCEDÊNCIA DO PEDIDO DE INDENIZAÇÃO POR DANOS MORAIS.\n\n{corpo}"
 
 
 def _add_quote_para(doc: Any, bloco: str) -> None:
@@ -1140,6 +1157,8 @@ def _safe_void_step(descricao: str, func: Callable, *args, **kwargs) -> bool:
 
 
 # ── Regex compartilhadas pelo renderer python-docx ───────────────────────────
+# Travessao dos titulos de secao no modelo do escritorio (en dash, U+2013).
+_TRACO_SECAO = "–"
 _RE_HEADING1 = re.compile(r"^#{1,2}\s+(.+?)\s*$")  # ## TITULO  ou  # TITULO
 _RE_HEADING2 = re.compile(r"^#{3,4}\s+(.+?)\s*$")  # ### Subtitulo
 _RE_INLINE_BOLD = re.compile(r"\*\*(.+?)\*\*")
