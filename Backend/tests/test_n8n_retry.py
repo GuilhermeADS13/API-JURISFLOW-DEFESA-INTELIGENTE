@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import socket
 from unittest.mock import MagicMock, patch
 from urllib.error import HTTPError, URLError
 from urllib.request import Request
@@ -30,7 +31,11 @@ def test_retry_funciona_na_terceira_tentativa(fake_request, monkeypatch):
     sucesso_mock.__enter__ = lambda s: s
     sucesso_mock.__exit__ = MagicMock(return_value=False)
 
-    chamadas = [URLError("timeout 1"), URLError("timeout 2"), sucesso_mock]
+    chamadas = [
+        URLError(ConnectionRefusedError("n8n reiniciando")),
+        URLError(socket.gaierror("autojuri_n8n sem DNS")),
+        sucesso_mock,
+    ]
 
     def fake_urlopen(*args, **kwargs):
         result = chamadas.pop(0)
@@ -57,7 +62,8 @@ def test_retry_levanta_apos_todas_as_tentativas(fake_request, monkeypatch):
 
     importlib.reload(n8n_service)
 
-    with patch.object(n8n_service, "urlopen", side_effect=URLError("sempre falha")):
+    erro = URLError(ConnectionRefusedError("sempre falha"))
+    with patch.object(n8n_service, "urlopen", side_effect=erro):
         with patch.object(n8n_service.time, "sleep"):
             with pytest.raises(URLError, match="sempre falha"):
                 n8n_service._enviar_com_retry(fake_request, 10, "contestacao")
@@ -92,12 +98,15 @@ def test_retry_sucesso_na_primeira_tentativa_nao_dorme(fake_request, monkeypatch
             "http://localhost:5678/webhook/test", 500, "workflow falhou", None, None
         ),
         TimeoutError("read timeout"),
+        # urllib embrulha erro do ENVIO em URLError: o POST pode ter chegado.
+        URLError(ConnectionResetError("reset no meio do POST")),
+        URLError(TimeoutError("timeout no envio")),
     ],
-    ids=["http_500", "read_timeout"],
+    ids=["http_500", "read_timeout", "reset_no_envio", "timeout_no_envio"],
 )
 def test_nao_repete_quando_n8n_ja_recebeu_o_request(fake_request, monkeypatch, erro):
-    """HTTP de erro ou timeout de leitura = workflow ja rodou (ou segue rodando)
-    e ja chamou o Claude. Repetir reexecutaria o pipeline e multiplicaria o custo."""
+    """Erro que NAO garante que o request ficou de fora = o workflow pode ja ter
+    chamado o Claude. Repetir reexecutaria o pipeline e multiplicaria o custo."""
     monkeypatch.setenv("N8N_MAX_RETRIES", "3")
     import importlib
 

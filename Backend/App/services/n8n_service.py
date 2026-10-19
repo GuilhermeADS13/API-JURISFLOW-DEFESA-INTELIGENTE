@@ -12,6 +12,7 @@ import asyncio
 import json
 import logging
 import os
+import socket
 import time
 from typing import Any, Callable
 from urllib.error import HTTPError, URLError
@@ -63,6 +64,13 @@ def get_n8n_webhook_auth_token() -> str:
 # ───────────────────────────── Retry com backoff ─────────────────────────────
 
 
+def _falhou_antes_de_entregar(error: Exception) -> bool:
+    """True so quando a conexao nem foi estabelecida (seguro repetir)."""
+    if isinstance(error, HTTPError) or not isinstance(error, URLError):
+        return False
+    return isinstance(error.reason, (ConnectionRefusedError, socket.gaierror))
+
+
 def _enviar_com_retry(request: Request, timeout: int, label: str) -> bytes:
     """Tenta N8N_MAX_RETRIES vezes com backoff exponencial antes de levantar.
 
@@ -75,12 +83,12 @@ def _enviar_com_retry(request: Request, timeout: int, label: str) -> bytes:
             with urlopen(request, timeout=timeout) as response:
                 return response.read()
         except _REDE_ERRORS as error:
-            # So repete falha de CONEXAO (URLError puro: n8n fora/cold-start —
-            # o request nao chegou). HTTPError (subclasse de URLError) ou
-            # timeout de leitura = o workflow ja rodou ou segue rodando e ja
-            # chamou o Claude: repetir reexecutaria o pipeline e multiplicaria
-            # custo/tempo. Esses sobem direto.
-            if isinstance(error, HTTPError) or not isinstance(error, URLError):
+            # So repete erro que GARANTE que o request nao chegou ao n8n:
+            # conexao recusada ou DNS (n8n fora/reiniciando). Qualquer outro —
+            # HTTPError, timeout, ou URLError de falha no MEIO do envio (reset)
+            # — pode significar que o workflow ja comecou e ja chamou o Claude:
+            # repetir rodaria a geracao de novo (webhook nao e idempotente).
+            if not _falhou_antes_de_entregar(error):
                 raise
             last_error = error
             if attempt < N8N_MAX_RETRIES:
