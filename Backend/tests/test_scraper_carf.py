@@ -60,9 +60,13 @@ def test_parse_mapeia_campos_do_primeiro():
 def test_fonte_url_cai_pro_processo_quando_sem_decisao():
     from App.services.scrapers.carf import CARFScraper
 
-    resp = {"response": {"docs": [
-        {"numero_processo_s": "10925.900663/2006-51", "ementa_s": "ementa x"},
-    ]}}
+    resp = {
+        "response": {
+            "docs": [
+                {"numero_processo_s": "10925.900663/2006-51", "ementa_s": "ementa x"},
+            ]
+        }
+    }
     a = CARFScraper()._parse_resposta(resp)[0]
     assert "numero_processo_s" in a["fonte_url"]
 
@@ -98,11 +102,15 @@ def test_campo_aceita_lista_ou_string():
 def test_parse_doc_sem_ementa_ou_numero_e_descartado():
     from App.services.scrapers.carf import CARFScraper
 
-    resp = {"response": {"docs": [
-        {"numero_decisao_s": "9101-1", "ementa_s": "ementa valida aqui"},
-        {"numero_decisao_s": "9101-2", "ementa_s": ""},        # sem ementa
-        {"numero_decisao_s": "", "ementa_s": "tem ementa mas sem numero"},
-    ]}}
+    resp = {
+        "response": {
+            "docs": [
+                {"numero_decisao_s": "9101-1", "ementa_s": "ementa valida aqui"},
+                {"numero_decisao_s": "9101-2", "ementa_s": ""},  # sem ementa
+                {"numero_decisao_s": "", "ementa_s": "tem ementa mas sem numero"},
+            ]
+        }
+    }
     out = CARFScraper()._parse_resposta(resp)
     assert len(out) == 1
     assert out[0]["numero_processo"] == "9101-1"
@@ -111,9 +119,13 @@ def test_parse_doc_sem_ementa_ou_numero_e_descartado():
 def test_numero_cai_pro_processo_quando_sem_decisao():
     from App.services.scrapers.carf import CARFScraper
 
-    resp = {"response": {"docs": [
-        {"numero_processo_s": "10925.900663/2006-51", "ementa_s": "ementa x"},
-    ]}}
+    resp = {
+        "response": {
+            "docs": [
+                {"numero_processo_s": "10925.900663/2006-51", "ementa_s": "ementa x"},
+            ]
+        }
+    }
     a = CARFScraper()._parse_resposta(resp)[0]
     assert a["numero_processo"] == "10925.900663/2006-51"
 
@@ -131,12 +143,22 @@ def test_parse_resposta_vazia_ou_malformada_retorna_lista():
 def test_peso_maior_na_camara_superior():
     from App.services.scrapers.carf import CARFScraper
 
-    resp = {"response": {"docs": [
-        {"numero_decisao_s": "9101-CSRF", "ementa_s": "ementa csrf",
-         "secao_s": "Camara Superior de Recursos Fiscais"},
-        {"numero_decisao_s": "3301-ORD", "ementa_s": "ementa ordinaria",
-         "secao_s": "Terceira Secao de Julgamento"},
-    ]}}
+    resp = {
+        "response": {
+            "docs": [
+                {
+                    "numero_decisao_s": "9101-CSRF",
+                    "ementa_s": "ementa csrf",
+                    "secao_s": "Camara Superior de Recursos Fiscais",
+                },
+                {
+                    "numero_decisao_s": "3301-ORD",
+                    "ementa_s": "ementa ordinaria",
+                    "secao_s": "Terceira Secao de Julgamento",
+                },
+            ]
+        }
+    }
     csrf, ordinaria = CARFScraper()._parse_resposta(resp)
     assert csrf["peso_relevancia_sugerido"] == 7
     assert ordinaria["peso_relevancia_sugerido"] == 5

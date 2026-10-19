@@ -92,18 +92,23 @@ def main() -> int:
 
             cookies = context.cookies()
             if not cookies:
-                print("AVISO: nenhum cookie capturado. Verifique se o navegador "
-                      "carregou a pagina corretamente.", file=sys.stderr)
+                print(
+                    "AVISO: nenhum cookie capturado. Verifique se o navegador "
+                    "carregou a pagina corretamente.",
+                    file=sys.stderr,
+                )
                 return 1
 
             # Filtra so cookies do dominio STJ pra reduzir ruido
             cookies_stj = [
-                c for c in cookies
-                if "stj.jus.br" in (c.get("domain") or "")
+                c for c in cookies if "stj.jus.br" in (c.get("domain") or "")
             ]
             if not cookies_stj:
-                print("AVISO: nenhum cookie do dominio stj.jus.br foi encontrado. "
-                      "Salvando TODOS os cookies mesmo assim.", file=sys.stderr)
+                print(
+                    "AVISO: nenhum cookie do dominio stj.jus.br foi encontrado. "
+                    "Salvando TODOS os cookies mesmo assim.",
+                    file=sys.stderr,
+                )
                 cookies_stj = cookies
 
             output.write_text(
@@ -113,7 +118,8 @@ def main() -> int:
 
             # Diagnostico: menor expires do bloco = validade real da sessao
             expires_epochs = [
-                c.get("expires") for c in cookies_stj
+                c.get("expires")
+                for c in cookies_stj
                 if isinstance(c.get("expires"), (int, float)) and c["expires"] > 0
             ]
             if expires_epochs:
@@ -123,14 +129,11 @@ def main() -> int:
             else:
                 validade = " — cookies de sessao (expiram ao fechar o navegador)"
 
-            print(
-                f"\nOK: {len(cookies_stj)} cookies exportados pra {output}"
-                f"{validade}"
-            )
+            print(f"\nOK: {len(cookies_stj)} cookies exportados pra {output}{validade}")
             print(
                 "\nUso agora:\n"
                 f"  .venv\\Scripts\\python.exe scripts/scrape_jurisprudencia.py \\\n"
-                f"      --tribunal=stj --query=\"sua query\" --max=10 \\\n"
+                f'      --tribunal=stj --query="sua query" --max=10 \\\n'
                 f"      --cookies={output.relative_to(ROOT)}\n"
             )
             print(

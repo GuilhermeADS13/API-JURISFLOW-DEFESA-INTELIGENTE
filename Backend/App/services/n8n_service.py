@@ -7,10 +7,12 @@ Refatorado na Etapa 5:
   one-liners que so configuram o webhook URL e a politica de erro.
 - Eliminou duplicacao de construcao de Request + tratamento de erros.
 """
+
 import asyncio
 import json
 import logging
 import os
+import socket
 import time
 from typing import Any, Callable
 from urllib.error import HTTPError, URLError
@@ -62,6 +64,13 @@ def get_n8n_webhook_auth_token() -> str:
 # ───────────────────────────── Retry com backoff ─────────────────────────────
 
 
+def _falhou_antes_de_entregar(error: Exception) -> bool:
+    """True so quando a conexao nem foi estabelecida (seguro repetir)."""
+    if isinstance(error, HTTPError) or not isinstance(error, URLError):
+        return False
+    return isinstance(error.reason, (ConnectionRefusedError, socket.gaierror))
+
+
 def _enviar_com_retry(request: Request, timeout: int, label: str) -> bytes:
     """Tenta N8N_MAX_RETRIES vezes com backoff exponencial antes de levantar.
 
@@ -74,6 +83,13 @@ def _enviar_com_retry(request: Request, timeout: int, label: str) -> bytes:
             with urlopen(request, timeout=timeout) as response:
                 return response.read()
         except _REDE_ERRORS as error:
+            # So repete erro que GARANTE que o request nao chegou ao n8n:
+            # conexao recusada ou DNS (n8n fora/reiniciando). Qualquer outro —
+            # HTTPError, timeout, ou URLError de falha no MEIO do envio (reset)
+            # — pode significar que o workflow ja comecou e ja chamou o Claude:
+            # repetir rodaria a geracao de novo (webhook nao e idempotente).
+            if not _falhou_antes_de_entregar(error):
+                raise
             last_error = error
             if attempt < N8N_MAX_RETRIES:
                 wait = N8N_RETRY_BACKOFF_BASE * (2 ** (attempt - 1))
@@ -255,9 +271,7 @@ def _enviar_para_n8n_peticao_sync(dados: dict[str, Any]) -> Any:
 # ─────────────────────────── Wrappers assincronos ────────────────────────────
 
 
-async def enviar_para_n8n(
-    dados: dict[str, Any], webhook_url: str | None = None
-) -> Any:
+async def enviar_para_n8n(dados: dict[str, Any], webhook_url: str | None = None) -> Any:
     """Envia payload sem bloquear o loop principal da API.
 
     `webhook_url` opcional sobrescreve a env var `N8N_WEBHOOK_URL` (PR8 P1.2).

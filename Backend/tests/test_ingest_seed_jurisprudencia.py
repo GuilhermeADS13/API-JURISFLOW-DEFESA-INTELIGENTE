@@ -9,9 +9,6 @@ Garante que:
 
 import json
 from pathlib import Path
-from unittest.mock import patch
-
-import pytest
 
 
 SEED_PATH = Path(__file__).resolve().parents[1] / "data" / "jurisprudencia_seed.json"
@@ -45,7 +42,9 @@ def test_seed_sem_duplicatas_de_tribunal_numero():
     o ingest re-roda e atualiza, mas alerta de curadoria errada."""
     data = json.loads(SEED_PATH.read_text(encoding="utf-8"))
     chaves = [(e["tribunal"], e["numero_processo"]) for e in data]
-    assert len(chaves) == len(set(chaves)), f"Duplicatas em chaves: {len(chaves) - len(set(chaves))}"
+    assert len(chaves) == len(set(chaves)), (
+        f"Duplicatas em chaves: {len(chaves) - len(set(chaves))}"
+    )
 
 
 def test_seed_pesos_dentro_de_1_10():
@@ -101,7 +100,11 @@ def test_main_pula_entrada_com_campo_faltando(monkeypatch, tmp_path):
     import scripts.ingest_seed_jurisprudencia as script
 
     seed_invalido = [
-        {"tribunal": "TST", "numero_processo": "X", "ementa": "Sem campos OK aqui pra passar."},
+        {
+            "tribunal": "TST",
+            "numero_processo": "X",
+            "ementa": "Sem campos OK aqui pra passar.",
+        },
         {"tribunal": "", "numero_processo": "Y", "ementa": "Tribunal vazio — pular."},
         {"tribunal": "STJ", "numero_processo": "Z"},  # sem ementa
     ]

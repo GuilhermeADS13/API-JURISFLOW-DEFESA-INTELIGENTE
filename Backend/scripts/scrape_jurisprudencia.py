@@ -81,28 +81,36 @@ def parse_args() -> argparse.Namespace:
         description="Coleta jurisprudencia de tribunais e indexa no RAG.",
     )
     parser.add_argument(
-        "--tribunal", required=True, choices=sorted(SCRAPERS.keys()),
+        "--tribunal",
+        required=True,
+        choices=sorted(SCRAPERS.keys()),
         help="Tribunal alvo. Hoje so STJ; TJ-PE e TST em PRs futuros.",
     )
     parser.add_argument(
-        "--query", required=True,
+        "--query",
+        required=True,
         help="Termo de busca (ex: 'rescisao indireta', 'adicional insalubridade').",
     )
     parser.add_argument(
-        "--area", default=None,
+        "--area",
+        default=None,
         help="Area juridica canonica (trabalhista|consumidor|...). Opcional.",
     )
     parser.add_argument(
-        "--max", type=int, default=10,
+        "--max",
+        type=int,
+        default=10,
         help="Max acordaos por execucao. Cap rigido em 50 (alem disso o portal "
         "bloqueia com captcha).",
     )
     parser.add_argument(
-        "--dry-run", action="store_true",
+        "--dry-run",
+        action="store_true",
         help="Nao grava no banco, so mostra o que seria salvo.",
     )
     parser.add_argument(
-        "--cookies", default=None,
+        "--cookies",
+        default=None,
         help="Path pra JSON de cookies pre-autenticados (workflow anti-Cloudflare "
         "Turnstile). Exportar via `scripts/exportar_cookies_stj.py`.",
     )
@@ -117,6 +125,7 @@ def main() -> int:
     # (PR26); tribunais futuros (TJ-PE, TST) podem nao aceitar. Verificacao
     # dinamica em vez de TypeError silencioso.
     import inspect
+
     scraper_kwargs: dict = {}
     if args.cookies:
         sig = inspect.signature(scraper_cls.__init__)
@@ -125,14 +134,18 @@ def main() -> int:
         else:
             logger.warning(
                 "Scraper %s nao aceita --cookies (nao tem cookies_path no __init__). "
-                "Ignorando flag.", args.tribunal,
+                "Ignorando flag.",
+                args.tribunal,
             )
     scraper = scraper_cls(**scraper_kwargs)
 
     inicio = time.time()
     logger.info(
         "Iniciando coleta tribunal=%s query=%r max=%d dry=%s",
-        args.tribunal, args.query, args.max, args.dry_run,
+        args.tribunal,
+        args.query,
+        args.max,
+        args.dry_run,
     )
 
     try:
@@ -164,14 +177,18 @@ def main() -> int:
             else:
                 logger.warning(
                     "[%d/%d] %s sem embedding (provider local indisponivel?)",
-                    i, len(acordaos), ac["numero_processo"],
+                    i,
+                    len(acordaos),
+                    ac["numero_processo"],
                 )
 
             if args.dry_run:
                 logger.info(
                     "[DRY] %s | %s | data=%s | ementa=%d chars",
-                    ac["numero_processo"], ac["tipo_decisao"],
-                    ac.get("data_julgamento", "?"), len(ac["ementa"]),
+                    ac["numero_processo"],
+                    ac["tipo_decisao"],
+                    ac.get("data_julgamento", "?"),
+                    len(ac["ementa"]),
                 )
             else:
                 upsert_jurisprudencia(
@@ -192,13 +209,20 @@ def main() -> int:
             falhas += 1
             logger.error(
                 "[%d/%d] Falha no upsert de %s: %s",
-                i, len(acordaos), ac.get("numero_processo", "?"), err,
+                i,
+                len(acordaos),
+                ac.get("numero_processo", "?"),
+                err,
             )
 
     duracao = time.time() - inicio
     logger.info(
         "Concluido em %.1fs | capturados=%d embeddings=%d falhas=%d dry=%s",
-        duracao, capturados, embeddings_gerados, falhas, args.dry_run,
+        duracao,
+        capturados,
+        embeddings_gerados,
+        falhas,
+        args.dry_run,
     )
     return 0
 

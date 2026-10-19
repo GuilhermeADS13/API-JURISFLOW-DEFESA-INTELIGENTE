@@ -15,6 +15,16 @@ from fastapi import Header, HTTPException, Request, Response, status
 
 from App.database import get_sessao_ativa
 
+try:
+    from psycopg2 import Error as _PsycopgError
+except ImportError:  # driver ausente: database.py ja converte em RuntimeError
+    _PsycopgError = RuntimeError
+
+# Erros de infra ao consultar a sessao local. psycopg2.Error (ex.:
+# OperationalError com banco fora) NAO herda de OSError — sem ele aqui o erro
+# vazava como 500 em vez de cair no fallback Supabase / 503.
+_SESSION_DB_ERRORS = (RuntimeError, OSError, ValueError, _PsycopgError)
+
 logger = logging.getLogger(__name__)
 
 # Nome do cookie de sessao enviado ao navegador.
@@ -269,7 +279,7 @@ async def get_authenticated_user(
         # Compatibilidade: aceita token opaco legado ou JWT do Supabase no header.
         try:
             session = get_sessao_ativa(bearer_token)
-        except (RuntimeError, OSError, ValueError) as err:
+        except _SESSION_DB_ERRORS as err:
             # DB indisponivel ou token mal formado: continua tentando Supabase.
             logger.warning(
                 "Sessao local indisponivel (%s); tentando validacao Supabase.",
@@ -292,7 +302,7 @@ async def get_authenticated_user(
     # sem isso, erro de infra virava 500 generico em vez de 503 explicito.
     try:
         session = get_sessao_ativa(token)
-    except (RuntimeError, OSError, ValueError) as err:
+    except _SESSION_DB_ERRORS as err:
         logger.warning(
             "Sessao local indisponivel ao validar cookie (%s).",
             type(err).__name__,

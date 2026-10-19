@@ -5,8 +5,6 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import patch
 
-import pytest
-
 
 def _usuario_fake():
     return {"id": "u1", "nome": "Advogado", "email": "a@a.com"}
@@ -104,9 +102,16 @@ class TestRotaBuscarLegislacao:
         ]
 
         with (
-            patch("App.routes.legislacao.gerar_embedding_query", return_value=[0.1] * 384),
-            patch("App.routes.legislacao.buscar_legislacao_semantica", return_value=semanticos),
-            patch("App.routes.legislacao.buscar_legislacao_lexical", return_value=lexicais),
+            patch(
+                "App.routes.legislacao.gerar_embedding_query", return_value=[0.1] * 384
+            ),
+            patch(
+                "App.routes.legislacao.buscar_legislacao_semantica",
+                return_value=semanticos,
+            ),
+            patch(
+                "App.routes.legislacao.buscar_legislacao_lexical", return_value=lexicais
+            ),
         ):
             resp = _run(
                 route.buscar_legislacao(
@@ -118,7 +123,7 @@ class TestRotaBuscarLegislacao:
 
         assert resp["status"] == "sucesso"
         # Sem duplicacao: 3 + 2 - 1 (compartilhado) = 4 unicos
-        chaves = {(l["origem"], l["numero"]) for l in resp["leis"]}
+        chaves = {(lei["origem"], lei["numero"]) for lei in resp["leis"]}
         assert len(chaves) == 4
         # art. 818 aparece em ambas → maior RRF, top-1
         assert resp["leis"][0]["origem"] == "CLT"
@@ -129,12 +134,18 @@ class TestRotaBuscarLegislacao:
         from App.routes import legislacao as route
 
         lei_lex = {
-            "origem": "CLT", "numero": "art. 71", "texto": "intervalo",
-            "area_juridica": "trabalhista", "score": 0.5,
+            "origem": "CLT",
+            "numero": "art. 71",
+            "texto": "intervalo",
+            "area_juridica": "trabalhista",
+            "score": 0.5,
         }
         with (
             patch("App.routes.legislacao.gerar_embedding_query", return_value=None),
-            patch("App.routes.legislacao.buscar_legislacao_lexical", return_value=[lei_lex]),
+            patch(
+                "App.routes.legislacao.buscar_legislacao_lexical",
+                return_value=[lei_lex],
+            ),
         ):
             resp = _run(
                 route.buscar_legislacao(
@@ -151,16 +162,23 @@ class TestRotaBuscarLegislacao:
         from App.routes import legislacao as route
 
         lei = {
-            "origem": "CLT", "numero": "art. 477", "texto": "verbas rescisorias",
-            "area_juridica": "trabalhista", "score": 0.3,
+            "origem": "CLT",
+            "numero": "art. 477",
+            "texto": "verbas rescisorias",
+            "area_juridica": "trabalhista",
+            "score": 0.3,
         }
         with (
-            patch("App.routes.legislacao.gerar_embedding_query", return_value=[0.1] * 384),
+            patch(
+                "App.routes.legislacao.gerar_embedding_query", return_value=[0.1] * 384
+            ),
             patch(
                 "App.routes.legislacao.buscar_legislacao_semantica",
                 side_effect=RuntimeError("pgvector down"),
             ),
-            patch("App.routes.legislacao.buscar_legislacao_lexical", return_value=[lei]),
+            patch(
+                "App.routes.legislacao.buscar_legislacao_lexical", return_value=[lei]
+            ),
         ):
             resp = _run(
                 route.buscar_legislacao(

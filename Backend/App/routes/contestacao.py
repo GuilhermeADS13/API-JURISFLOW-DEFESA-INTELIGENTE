@@ -58,7 +58,10 @@ def _extrair_texto_arquivo(
     except ExtracaoError as error:
         logger.warning(
             "[%s] falha na extracao usuario_id=%s nome=%s erro=%s",
-            rotulo, usuario_id, nome, error,
+            rotulo,
+            usuario_id,
+            nome,
+            error,
         )
         return ""
 

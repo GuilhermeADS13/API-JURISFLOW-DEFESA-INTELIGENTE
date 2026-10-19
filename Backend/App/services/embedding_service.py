@@ -192,7 +192,8 @@ def gerar_embeddings_batch(textos: list[str]) -> list[Optional[list[float]]]:
         if len(vetor) != EMBEDDING_DIM:
             logger.warning(
                 "Batch: embedding com %d dims (esperado %d)",
-                len(vetor), EMBEDDING_DIM,
+                len(vetor),
+                EMBEDDING_DIM,
             )
             resultado.append(None)
         else:

@@ -61,12 +61,12 @@ TRIBUNAL_ALIASES: dict[str, str] = {
     "tjrj": "api_publica_tjrj",
     "tjmg": "api_publica_tjmg",
     "tjrs": "api_publica_tjrs",
-    "trt6": "api_publica_trt6",   # PE/AL
-    "trt1": "api_publica_trt1",   # RJ
-    "trt2": "api_publica_trt2",   # SP
-    "trt3": "api_publica_trt3",   # MG
-    "trt4": "api_publica_trt4",   # RS
-    "trt15": "api_publica_trt15", # SP interior
+    "trt6": "api_publica_trt6",  # PE/AL
+    "trt1": "api_publica_trt1",  # RJ
+    "trt2": "api_publica_trt2",  # SP
+    "trt3": "api_publica_trt3",  # MG
+    "trt4": "api_publica_trt4",  # RS
+    "trt15": "api_publica_trt15",  # SP interior
 }
 
 
@@ -100,12 +100,14 @@ class DataJudClient:
         rate_limit_sec: float = RATE_LIMIT_SEC,
     ) -> None:
         self.session = requests.Session()
-        self.session.headers.update({
-            "Authorization": f"APIKey {api_key}",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "User-Agent": "JurisFlowBot/1.0 (+contato@jurisflow.local)",
-        })
+        self.session.headers.update(
+            {
+                "Authorization": f"APIKey {api_key}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "User-Agent": "JurisFlowBot/1.0 (+contato@jurisflow.local)",
+            }
+        )
         self.timeout_sec = timeout_sec
         self.rate_limit_sec = rate_limit_sec
         self._ultimo_request_ts = 0.0
@@ -158,9 +160,7 @@ class DataJudClient:
                 "Conferir em https://datajud-wiki.cnj.jus.br/api-publica/acesso/"
             )
         if not resp.ok:
-            raise DataJudError(
-                f"DataJud HTTP {resp.status_code}: {resp.text[:200]}"
-            )
+            raise DataJudError(f"DataJud HTTP {resp.status_code}: {resp.text[:200]}")
 
         data = resp.json()
         hits = data.get("hits", {}).get("hits", [])
@@ -168,9 +168,7 @@ class DataJudClient:
             return None
         return hits[0].get("_source")
 
-    def validar_processo(
-        self, numero_processo: str, tribunal: str
-    ) -> dict[str, Any]:
+    def validar_processo(self, numero_processo: str, tribunal: str) -> dict[str, Any]:
         """Wrapper user-facing: retorna {existe: bool, metadata: dict|None, erro: str|None}.
 
         Nunca levanta excecao — sempre retorna o dict. Erro de rede ou input

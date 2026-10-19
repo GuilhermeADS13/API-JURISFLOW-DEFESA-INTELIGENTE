@@ -146,8 +146,13 @@ def ingerir_lote(
                 logger.error("[%s] upsert falhou p/ %s: %s", fonte, numero, err)
 
         por_tema[tema] = novos_tema
-        logger.info("[%s] tema=%r -> %d novos (retornou %d)",
-                    fonte, tema, novos_tema, len(acordaos))
+        logger.info(
+            "[%s] tema=%r -> %d novos (retornou %d)",
+            fonte,
+            tema,
+            novos_tema,
+            len(acordaos),
+        )
 
     stats = {
         "fonte": fonte,

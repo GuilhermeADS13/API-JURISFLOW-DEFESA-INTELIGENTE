@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, Request
 
 from App.database import buscar_legislacao_lexical, buscar_legislacao_semantica
 from App.limiter import limiter
@@ -66,7 +66,9 @@ def _executar_semantica(
             limit=_CANDIDATOS_POR_BUSCA,
         )
     except Exception as err:
-        logger.error("Falha na busca semantica de legislacao area=%s erro=%s", area_juridica, err)
+        logger.error(
+            "Falha na busca semantica de legislacao area=%s erro=%s", area_juridica, err
+        )
         return []
 
 
@@ -78,13 +80,13 @@ def _executar_lexical(texto_query: str, area_juridica: str | None) -> list[dict]
             limit=_CANDIDATOS_POR_BUSCA,
         )
     except Exception as err:
-        logger.error("Falha na busca lexical de legislacao area=%s erro=%s", area_juridica, err)
+        logger.error(
+            "Falha na busca lexical de legislacao area=%s erro=%s", area_juridica, err
+        )
         return []
 
 
-def _mesclar_rrf(
-    semanticos: list[dict], lexicais: list[dict]
-) -> list[dict]:
+def _mesclar_rrf(semanticos: list[dict], lexicais: list[dict]) -> list[dict]:
     """RRF sobre (origem, numero) — chave unica em public.legislacao."""
     rrf_scores: dict[tuple[str, str], float] = {}
     leis_por_chave: dict[tuple[str, str], dict] = {}
@@ -104,7 +106,7 @@ def _mesclar_rrf(
         lei = dict(leis_por_chave[chave])
         lei["rrf_score"] = score * (_RRF_K + 1)
         resultado.append(lei)
-    resultado.sort(key=lambda l: l["rrf_score"], reverse=True)
+    resultado.sort(key=lambda lei: lei["rrf_score"], reverse=True)
     return resultado[:_TOP_N_FINAL]
 
 
@@ -148,13 +150,13 @@ async def buscar_legislacao(
     mesclados = _mesclar_rrf(semanticos, lexicais)
     leis = [
         {
-            "origem": l["origem"],
-            "numero": l["numero"],
-            "texto": l["texto"],
-            "area_juridica": l.get("area_juridica"),
-            "score": round(l.get("rrf_score", 0.0), 4),
+            "origem": lei["origem"],
+            "numero": lei["numero"],
+            "texto": lei["texto"],
+            "area_juridica": lei.get("area_juridica"),
+            "score": round(lei.get("rrf_score", 0.0), 4),
         }
-        for l in mesclados
+        for lei in mesclados
     ]
 
     return {

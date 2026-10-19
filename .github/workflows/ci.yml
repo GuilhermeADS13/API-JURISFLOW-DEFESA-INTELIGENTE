@@ -50,6 +50,10 @@ jobs:
             --junitxml=relatorio-testes.xml \
             -v
 
+      - name: Testar Code nodes dos workflows n8n
+        working-directory: .
+        run: node scripts/test_n8n_workflows.mjs
+
       - name: Publicar resultado dos testes
         if: always()
         uses: actions/upload-artifact@v4.6.2

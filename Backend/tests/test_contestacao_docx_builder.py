@@ -6,9 +6,9 @@ Strategy: invocar `montar_docx_programatico` com diferentes shapes de
 
 from __future__ import annotations
 
+import itertools
 from io import BytesIO
 
-import pytest
 from docx import Document
 
 
@@ -202,16 +202,30 @@ def _png_colorido(cor: str = "white") -> bytes:
 
 
 # Contador global pra gerar PNGs unicos em cada chamada (cor sequencial).
-_CORES_TESTE = ("red", "green", "blue", "yellow", "purple", "orange", "cyan", "magenta", "pink", "brown")
+_CORES_TESTE = (
+    "red",
+    "green",
+    "blue",
+    "yellow",
+    "purple",
+    "orange",
+    "cyan",
+    "magenta",
+    "pink",
+    "brown",
+)
+_proxima_cor = itertools.count()
 
 
 def _imagem_embedavel(tipo: str, nome: str = "fake.png", cor_idx: int | None = None):
     """Helper pra criar ImagemEmbedavel com PNG UNICO (evita dedup do docx)."""
     from App.services.embed_processor import ImagemEmbedavel
 
-    # Cor diferente por chamada — se cor_idx for None, hash do nome decide.
+    # Cor diferente por chamada — se cor_idx for None, contador sequencial
+    # decide. (hash(nome) era aleatorio por processo e as vezes colidia ->
+    # mesmo PNG -> docx deduplicava -> teste intermitente.)
     if cor_idx is None:
-        cor_idx = hash(nome) % len(_CORES_TESTE)
+        cor_idx = next(_proxima_cor)
     cor = _CORES_TESTE[cor_idx % len(_CORES_TESTE)]
     return ImagemEmbedavel(
         tipo=tipo,
@@ -340,7 +354,9 @@ def test_falha_em_embedding_de_imagem_corrompida_nao_quebra():
 
     docx_bytes = montar_docx_programatico(
         _dados_minimos(),
-        _minuta_minima(documentos_anexos=[{"numero": "Doc. 01", "tipo": "FGTS", "descricao": "x"}]),
+        _minuta_minima(
+            documentos_anexos=[{"numero": "Doc. 01", "tipo": "FGTS", "descricao": "x"}]
+        ),
         imagens_embedar=[imagem_quebrada],
     )
     texto = _texto_do_docx(docx_bytes)
@@ -385,7 +401,6 @@ def _modelo_b64_sem_heading_styles() -> str:
     import base64
 
     from docx import Document
-    from docx.shared import Pt
 
     doc = Document()
     # Adiciona header com "TIMBRE DO ESCRITORIO"
@@ -416,9 +431,11 @@ def test_pr162_rol_documentos_nao_quebra_template_sem_heading_styles():
     """
     from App.services.contestacao_docx_builder import montar_docx_com_modelo
 
-    minuta = _minuta_minima(documentos_anexos=[
-        {"numero": "Doc. 01", "tipo": "Folha de Ponto", "descricao": "jornada"},
-    ])
+    minuta = _minuta_minima(
+        documentos_anexos=[
+            {"numero": "Doc. 01", "tipo": "Folha de Ponto", "descricao": "jornada"},
+        ]
+    )
 
     modelo_b64 = _modelo_b64_sem_heading_styles()
     docx_bytes = montar_docx_com_modelo(modelo_b64, _dados_minimos(), minuta)
@@ -431,6 +448,7 @@ def test_pr162_rol_documentos_nao_quebra_template_sem_heading_styles():
     )
     # Header preservado (timbre do escritorio aparece no docx final)
     from docx import Document
+
     d = Document(BytesIO(docx_bytes))
     header_text = "\n".join(p.text for p in d.sections[0].header.paragraphs)
     assert "TIMBRE G. TRINDADE" in header_text, (
@@ -458,6 +476,7 @@ def test_pr162_outras_provas_nao_quebra_template_sem_heading_styles():
 
     assert docx_bytes is not None, "Builder template nao deve cair em fallback"
     from docx import Document
+
     d = Document(BytesIO(docx_bytes))
     header_text = "\n".join(p.text for p in d.sections[0].header.paragraphs)
     assert "TIMBRE G. TRINDADE" in header_text

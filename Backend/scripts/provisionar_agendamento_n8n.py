@@ -44,11 +44,19 @@ def _le_env(path: Path, chave: str) -> str:
     return ""
 
 
-def _api(method: str, path: str, api_key: str, body: dict | None = None,
-         *, tolerante: bool = False) -> dict:
+def _api(
+    method: str,
+    path: str,
+    api_key: str,
+    body: dict | None = None,
+    *,
+    tolerante: bool = False,
+) -> dict:
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(
-        N8N_URL + path, data=data, method=method,
+        N8N_URL + path,
+        data=data,
+        method=method,
         headers={"X-N8N-API-KEY": api_key, "Content-Type": "application/json"},
     )
     try:
@@ -87,11 +95,16 @@ def main() -> int:
                 cred_antiga = ref["id"]
 
     # 2) cria a credential nova
-    cred = _api("POST", "/api/v1/credentials", api_key, {
-        "name": CRED_NAME,
-        "type": "httpHeaderAuth",
-        "data": {"name": "Authorization", "value": f"Bearer {token}"},
-    })
+    cred = _api(
+        "POST",
+        "/api/v1/credentials",
+        api_key,
+        {
+            "name": CRED_NAME,
+            "type": "httpHeaderAuth",
+            "data": {"name": "Authorization", "value": f"Bearer {token}"},
+        },
+    )
     cred_id = cred["id"]
     print(f"credential criada: id={cred_id}")
 

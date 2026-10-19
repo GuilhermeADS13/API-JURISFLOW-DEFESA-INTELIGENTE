@@ -5,7 +5,6 @@ from __future__ import annotations
 import base64
 from dataclasses import dataclass
 from io import BytesIO
-from unittest.mock import patch
 
 from PIL import Image
 
@@ -91,11 +90,11 @@ def test_pdf_vira_uma_imagem_embedavel_por_pagina_mockada(monkeypatch):
 
     # Mock _pdf_para_pngs pra retornar 3 PNGs fake
     fake_pngs = [b"\x89PNG" + b"x" * 50 for _ in range(3)]
-    monkeypatch.setattr(
-        embed_processor, "_pdf_para_pngs", lambda b, *, nome: fake_pngs
-    )
+    monkeypatch.setattr(embed_processor, "_pdf_para_pngs", lambda b, *, nome: fake_pngs)
 
-    arq = _FakeArquivo(base64=_pdf_minimo_b64(), nome="laudo.pdf", tipo="laudo_pericial")
+    arq = _FakeArquivo(
+        base64=_pdf_minimo_b64(), nome="laudo.pdf", tipo="laudo_pericial"
+    )
     resultado = embed_processor.processar_arquivos_embedar([arq])
 
     assert len(resultado) == 3
@@ -132,14 +131,17 @@ def test_mistura_de_tipos_processada_corretamente(monkeypatch):
     from App.services import embed_processor
 
     monkeypatch.setattr(
-        embed_processor, "_pdf_para_pngs",
+        embed_processor,
+        "_pdf_para_pngs",
         lambda b, *, nome: [b"\x89PNG" + b"a" * 30, b"\x89PNG" + b"b" * 30],
     )
 
     arqs = [
         _FakeArquivo(base64=_png_b64(), nome="png1.png", tipo="folha_ponto"),
         _FakeArquivo(base64=_pdf_minimo_b64(), nome="multi.pdf", tipo="laudo_pericial"),
-        _FakeArquivo(base64=_jpg_b64(), nome="img.jpg", tipo="print", mime_type="image/jpeg"),
+        _FakeArquivo(
+            base64=_jpg_b64(), nome="img.jpg", tipo="print", mime_type="image/jpeg"
+        ),
     ]
     resultado = embed_processor.processar_arquivos_embedar(arqs)
 

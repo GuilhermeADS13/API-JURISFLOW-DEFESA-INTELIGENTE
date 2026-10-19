@@ -64,7 +64,9 @@ def main() -> int:
 
     for i, entry in enumerate(entries, start=1):
         # Valida campos obrigatorios — sem eles o upsert nem chega a tentar
-        faltando = [c for c in CAMPOS_OBRIGATORIOS if not str(entry.get(c) or "").strip()]
+        faltando = [
+            c for c in CAMPOS_OBRIGATORIOS if not str(entry.get(c) or "").strip()
+        ]
         if faltando:
             print(
                 f"  [{i}/{len(entries)}] SKIP — campos faltando {faltando}: "

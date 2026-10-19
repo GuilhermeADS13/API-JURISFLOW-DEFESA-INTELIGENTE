@@ -11,15 +11,17 @@ Fontes:
   #3 prestadora VR/SESC (pedido de demissao ja quitado, enquadramento sindical,
      insalubridade quimica, horas extras por ponto)               - Erica Cavalcante
 """
+
 import sys
+
 sys.path.insert(0, "/app")
 from App.database import _get_connection, salvar_exemplar, get_contestacoes_exemplares  # noqa
 
 # Raciocinio comum ao escritorio: defesa ancorada em PROVA DOCUMENTAL.
 _PROVA_DOC = (
     " RACIOCINIO/PROVA DOCUMENTAL (central no estilo do escritorio): cada negativa "
-    "factual e ancorada num documento anexo (\"conforme doc. em anexo\", \"vide prova "
-    "documental colacionada\") - TRCT, comprovante de pagamento (Pix/TEV), extrato de "
+    'factual e ancorada num documento anexo ("conforme doc. em anexo", "vide prova '
+    'documental colacionada") - TRCT, comprovante de pagamento (Pix/TEV), extrato de '
     "FGTS da CAIXA, cartoes/fichas de ponto anotados pela obreira, ficha de entrega de "
     "EPI, ASO demissional, PCMSO/PPRA, recibos de ferias, contracheques e laudo pericial "
     "como PROVA EMPRESTADA; os documentos da autora (fotos/videos) sao impugnados um a um "
@@ -95,7 +97,8 @@ EXEMPLARES = [
             "REQUERIMENTOS CAUTELARES (eventualidade): apuracao em liquidacao de sentenca, juros/correcao Lei "
             "8.177/91 e Sumula 381 TST, evolucao salarial, retencao na fonte de IR e INSS. PEDIDOS: indeferir "
             "gratuidade da autora, conceder gratuidade a re, improcedencia total, condenacao em ma-fe (R$ 5.000), "
-            "honorarios de 15%. Depoimento pessoal sob pena de confissao (Sumula 74 TST)." + _PROVA_DOC
+            "honorarios de 15%. Depoimento pessoal sob pena de confissao (Sumula 74 TST)."
+            + _PROVA_DOC
         ),
         "nota_qualidade": 9,
     },
@@ -133,7 +136,8 @@ EXEMPLARES = [
             "MA-FE (arts. 793-A a 793-D CLT): gratuidade NAO isenta a multa (jurisprudencia TST/STF/STJ). "
             "Impugnacao de calculos. AUTENTICIDADE (art. 830 CLT). PEDIDOS: improcedencia total, "
             "honorarios/custas a autora, condenacao em ma-fe, compensacao/deducao e retencao previdenciaria/"
-            "fiscal (art. 767 CLT), notificacoes so no patrono (Sumula 427 TST)." + _PROVA_DOC
+            "fiscal (art. 767 CLT), notificacoes so no patrono (Sumula 427 TST)."
+            + _PROVA_DOC
         ),
         "nota_qualidade": 9,
     },
@@ -147,9 +151,15 @@ with _get_connection() as c:
 
 for ex in EXEMPLARES:
     novo_id = salvar_exemplar(
-        ex["tipo_acao"], ex["tese_central"], ex["fundamentos_resumo"], ex["nota_qualidade"]
+        ex["tipo_acao"],
+        ex["tese_central"],
+        ex["fundamentos_resumo"],
+        ex["nota_qualidade"],
     )
     print(f"  exemplar id={novo_id} | {ex['tipo_acao'][:62]}")
 
 print()
-print("total exemplares agora:", len(get_contestacoes_exemplares("reclamacao trabalhista")))
+print(
+    "total exemplares agora:",
+    len(get_contestacoes_exemplares("reclamacao trabalhista")),
+)

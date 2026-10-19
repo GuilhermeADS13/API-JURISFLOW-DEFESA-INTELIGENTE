@@ -134,12 +134,14 @@ Caddy pega o certificado Let's Encrypt sozinho. Teste:
 `curl https://api.seu-dominio.com/health` → `{"status":"ok"}` (ou equivalente).
 
 ### A.6 Firewall (importante)
-O compose publica o n8n em `:5678` no host — **não deixe isso aberto na internet**.
-O backend fala com o n8n pela rede interna do Docker (`http://n8n:5678`), então
-`:5678` não precisa estar público.
+O compose publica o n8n (`:5678`) e o backend (`:8000`) **só em `127.0.0.1`** —
+**não troque isso por `0.0.0.0`**: porta publicada pelo Docker passa por cima do
+`ufw` (o Docker escreve as próprias regras no iptables), então o firewall do host
+*não* a bloquearia. O backend fala com o n8n pela rede interna do Docker e a Caddy
+alcança o backend em `127.0.0.1:8000`, então nenhuma das duas precisa ser pública.
 ```bash
 sudo ufw allow 22/tcp && sudo ufw allow 80/tcp && sudo ufw allow 443/tcp
-sudo ufw enable        # bloqueia 5678/8000 de fora; acesse o n8n via SSH tunnel:
+sudo ufw enable        # protege o resto do host; acesse o n8n via SSH tunnel:
 # no seu PC:  ssh -L 5678:localhost:5678 usuario@<IP>  -> abra http://localhost:5678
 ```
 (Alternativa: expor o n8n num subdomínio com basic auth — bloco comentado no `Caddyfile`.)

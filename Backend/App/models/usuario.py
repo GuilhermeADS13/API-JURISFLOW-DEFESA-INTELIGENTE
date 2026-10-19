@@ -25,8 +25,8 @@ def normalizar_email(email: str) -> str:
 _REQUISITOS_SENHA: tuple[tuple[str, callable], ...] = (
     ("maiuscula", lambda c: c.isupper()),
     ("minuscula", lambda c: c.islower()),
-    ("numero",    lambda c: c.isdigit()),
-    ("simbolo",   lambda c: not c.isalnum()),
+    ("numero", lambda c: c.isdigit()),
+    ("simbolo", lambda c: not c.isalnum()),
 )
 
 

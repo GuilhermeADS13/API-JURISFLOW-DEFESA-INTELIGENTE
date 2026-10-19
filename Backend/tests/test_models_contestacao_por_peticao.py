@@ -155,7 +155,9 @@ def _jpg_bytes_minimo() -> bytes:
     return buf.getvalue()
 
 
-def _embed_item(tipo: str = "fgts", nome: str = "fake.png", b64: str | None = None) -> dict:
+def _embed_item(
+    tipo: str = "fgts", nome: str = "fake.png", b64: str | None = None
+) -> dict:
     if b64 is None:
         b64 = base64.b64encode(_png_bytes_minimo()).decode("ascii")
     return {"base64": b64, "nome": nome, "mime_type": "image/png", "tipo": tipo}
@@ -211,9 +213,7 @@ class TestArquivoEmbedar:
             "tipo": "outro",
         }
         with pytest.raises(ValidationError, match="JPG, JPEG, PNG ou PDF"):
-            ContestacaoPorPeticao.model_validate(
-                _payload(arquivos_embedar=[item])
-            )
+            ContestacaoPorPeticao.model_validate(_payload(arquivos_embedar=[item]))
 
     def test_rejeita_base64_com_magic_bytes_invalidos(self):
         item = {
@@ -223,9 +223,7 @@ class TestArquivoEmbedar:
             "tipo": "outro",
         }
         with pytest.raises(ValidationError, match="JPG, PNG ou PDF"):
-            ContestacaoPorPeticao.model_validate(
-                _payload(arquivos_embedar=[item])
-            )
+            ContestacaoPorPeticao.model_validate(_payload(arquivos_embedar=[item]))
 
     def test_aceita_lista_vazia_default(self):
         payload = ContestacaoPorPeticao.model_validate(_payload())
@@ -234,15 +232,11 @@ class TestArquivoEmbedar:
     def test_rejeita_mais_de_10_arquivos_embedar(self):
         items = [_embed_item(tipo="outro", nome=f"f{i}.png") for i in range(11)]
         with pytest.raises(ValidationError, match="Maximo de 10 arquivos embedaveis"):
-            ContestacaoPorPeticao.model_validate(
-                _payload(arquivos_embedar=items)
-            )
+            ContestacaoPorPeticao.model_validate(_payload(arquivos_embedar=items))
 
     def test_aceita_exatamente_10(self):
         items = [_embed_item(tipo="outro", nome=f"f{i}.png") for i in range(10)]
-        payload = ContestacaoPorPeticao.model_validate(
-            _payload(arquivos_embedar=items)
-        )
+        payload = ContestacaoPorPeticao.model_validate(_payload(arquivos_embedar=items))
         assert len(payload.arquivos_embedar) == 10
 
     def test_tipos_canonicos_aceitos(self):
@@ -254,4 +248,3 @@ class TestArquivoEmbedar:
                 _payload(arquivos_embedar=[_embed_item(tipo=tipo)])
             )
             assert payload.arquivos_embedar[0].tipo == tipo
-

@@ -77,9 +77,7 @@ def _pdf_para_pngs(pdf_bytes: bytes, *, nome: str) -> list[bytes]:
     silenciosamente (PDFs gigantes inflam o docx demais).
     """
     if not _PDF2IMAGE_DISPONIVEL or convert_from_bytes is None:
-        logger.warning(
-            "pdf2image indisponivel — PDF %s nao sera embedado", nome
-        )
+        logger.warning("pdf2image indisponivel — PDF %s nao sera embedado", nome)
         return []
 
     try:
@@ -147,8 +145,11 @@ def processar_arquivos_embedar(
         if nome_lower.endswith((".jpg", ".jpeg", ".png")):
             resultado.append(
                 ImagemEmbedavel(
-                    tipo=tipo, nome=nome, bytes_png=raw,
-                    pagina=1, eh_imagem_direta=True,
+                    tipo=tipo,
+                    nome=nome,
+                    bytes_png=raw,
+                    pagina=1,
+                    eh_imagem_direta=True,
                 )
             )
             continue
@@ -159,8 +160,11 @@ def processar_arquivos_embedar(
             for idx, png in enumerate(paginas, start=1):
                 resultado.append(
                     ImagemEmbedavel(
-                        tipo=tipo, nome=nome, bytes_png=png,
-                        pagina=idx, eh_imagem_direta=False,
+                        tipo=tipo,
+                        nome=nome,
+                        bytes_png=png,
+                        pagina=idx,
+                        eh_imagem_direta=False,
                     )
                 )
             continue

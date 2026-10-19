@@ -5,8 +5,6 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 
 def _usuario_fake():
     return {"id": "u1", "nome": "Advogado", "email": "a@a.com"}
@@ -83,8 +81,14 @@ class TestRotaBuscarJurisprudencia:
         emb = [0.1] * 384
         with (
             patch("App.routes.jurisprudencia.gerar_embedding_query", return_value=emb),
-            patch("App.routes.jurisprudencia.buscar_jurisprudencia_semantica", return_value=[]),
-            patch("App.routes.jurisprudencia.buscar_jurisprudencia_lexical", return_value=[]),
+            patch(
+                "App.routes.jurisprudencia.buscar_jurisprudencia_semantica",
+                return_value=[],
+            ),
+            patch(
+                "App.routes.jurisprudencia.buscar_jurisprudencia_lexical",
+                return_value=[],
+            ),
         ):
             resp = _run(
                 route.buscar_jurisprudencia(
@@ -111,9 +115,18 @@ class TestRotaBuscarJurisprudencia:
         ]
 
         with (
-            patch("App.routes.jurisprudencia.gerar_embedding_query", return_value=[0.1] * 384),
-            patch("App.routes.jurisprudencia.buscar_jurisprudencia_semantica", return_value=semanticos),
-            patch("App.routes.jurisprudencia.buscar_jurisprudencia_lexical", return_value=lexicais),
+            patch(
+                "App.routes.jurisprudencia.gerar_embedding_query",
+                return_value=[0.1] * 384,
+            ),
+            patch(
+                "App.routes.jurisprudencia.buscar_jurisprudencia_semantica",
+                return_value=semanticos,
+            ),
+            patch(
+                "App.routes.jurisprudencia.buscar_jurisprudencia_lexical",
+                return_value=lexicais,
+            ),
         ):
             resp = _run(
                 route.buscar_jurisprudencia(
@@ -136,7 +149,10 @@ class TestRotaBuscarJurisprudencia:
         lex = _make_acordao("REsp 7.777/SC")
         with (
             patch("App.routes.jurisprudencia.gerar_embedding_query", return_value=None),
-            patch("App.routes.jurisprudencia.buscar_jurisprudencia_lexical", return_value=[lex]),
+            patch(
+                "App.routes.jurisprudencia.buscar_jurisprudencia_lexical",
+                return_value=[lex],
+            ),
         ):
             resp = _run(
                 route.buscar_jurisprudencia(
@@ -153,12 +169,18 @@ class TestRotaBuscarJurisprudencia:
 
         lex = _make_acordao("REsp 9.000/BA")
         with (
-            patch("App.routes.jurisprudencia.gerar_embedding_query", return_value=[0.1] * 384),
+            patch(
+                "App.routes.jurisprudencia.gerar_embedding_query",
+                return_value=[0.1] * 384,
+            ),
             patch(
                 "App.routes.jurisprudencia.buscar_jurisprudencia_semantica",
                 side_effect=RuntimeError("pgvector down"),
             ),
-            patch("App.routes.jurisprudencia.buscar_jurisprudencia_lexical", return_value=[lex]),
+            patch(
+                "App.routes.jurisprudencia.buscar_jurisprudencia_lexical",
+                return_value=[lex],
+            ),
         ):
             resp = _run(
                 route.buscar_jurisprudencia(
@@ -184,17 +206,28 @@ class TestRotaBuscarJurisprudencia:
         assert JURISPRUDENCIA_DATA_MINIMA_DEFAULT == "2000-01-01"
 
         captured = {}
+
         def fake_sem(**kw):
             captured["sem"] = kw
             return []
+
         def fake_lex(**kw):
             captured["lex"] = kw
             return []
 
         with (
-            patch("App.routes.jurisprudencia.gerar_embedding_query", return_value=[0.1] * 384),
-            patch("App.routes.jurisprudencia.buscar_jurisprudencia_semantica", side_effect=fake_sem),
-            patch("App.routes.jurisprudencia.buscar_jurisprudencia_lexical", side_effect=fake_lex),
+            patch(
+                "App.routes.jurisprudencia.gerar_embedding_query",
+                return_value=[0.1] * 384,
+            ),
+            patch(
+                "App.routes.jurisprudencia.buscar_jurisprudencia_semantica",
+                side_effect=fake_sem,
+            ),
+            patch(
+                "App.routes.jurisprudencia.buscar_jurisprudencia_lexical",
+                side_effect=fake_lex,
+            ),
         ):
             _run(
                 route.buscar_jurisprudencia(

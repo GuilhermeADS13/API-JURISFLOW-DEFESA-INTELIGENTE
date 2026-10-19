@@ -34,7 +34,16 @@ import binascii
 import logging
 import threading
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Request, status
+from fastapi import (
+    APIRouter,
+    Body,
+    Depends,
+    HTTPException,
+    Path,
+    Query,
+    Request,
+    status,
+)
 
 from App.database import (
     atualizar_contestacao_pos_revisao,
@@ -156,7 +165,9 @@ def _texto_provas_para_ia(arquivos_embedar, usuario_id: str) -> str:
                 }
             )
         except (binascii.Error, ValueError):
-            logger.warning("Prova descartada do OCR por base64 invalido: %s", embed.nome)
+            logger.warning(
+                "Prova descartada do OCR por base64 invalido: %s", embed.nome
+            )
     try:
         return consolidar_texto_provas(provas)
     except Exception as error:  # OCR nunca deve derrubar o fluxo principal
@@ -231,9 +242,7 @@ async def _chamar_n8n_peticao(
     try:
         resposta = await enviar_para_n8n_peticao(payload_n8n)
     except N8NServiceError as error:
-        logger.error(
-            "n8n %s indisponivel %s erro=%s", fluxo, contexto_log, error
-        )
+        logger.error("n8n %s indisponivel %s erro=%s", fluxo, contexto_log, error)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Servico de geracao indisponivel. Tente novamente em instantes.",
@@ -743,7 +752,11 @@ async def baixar_contestacao(
             ) from exc
 
         nome_docx = _montar_nome_saida(dados_extraidos)
-        nome_pdf = nome_docx[:-5] + ".pdf" if nome_docx.endswith(".docx") else nome_docx + ".pdf"
+        nome_pdf = (
+            nome_docx[:-5] + ".pdf"
+            if nome_docx.endswith(".docx")
+            else nome_docx + ".pdf"
+        )
         return {
             "arquivo_editado_base64": base64.b64encode(pdf_bytes).decode("ascii"),
             "arquivo_editado_nome": nome_pdf,

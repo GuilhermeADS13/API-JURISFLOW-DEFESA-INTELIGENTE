@@ -86,16 +86,22 @@ async def criar_jurisprudencia(
     # que mockam tudo.
     from App.database import upsert_jurisprudencia
 
-    texto_pra_embed = " ".join(filter(None, [
-        payload.numero_processo,
-        payload.tese_firmada or "",
-        payload.ementa,
-    ]))
+    texto_pra_embed = " ".join(
+        filter(
+            None,
+            [
+                payload.numero_processo,
+                payload.tese_firmada or "",
+                payload.ementa,
+            ],
+        )
+    )
     embedding = gerar_embedding(texto_pra_embed)
     if embedding is None:
         logger.warning(
             "Cadastro manual sem embedding (provider local indisponivel?): %s %s",
-            payload.tribunal, payload.numero_processo,
+            payload.tribunal,
+            payload.numero_processo,
         )
 
     try:
@@ -116,7 +122,9 @@ async def criar_jurisprudencia(
     except Exception as err:
         logger.error(
             "Falha upsert jurisprudencia manual %s %s: %s",
-            payload.tribunal, payload.numero_processo, err,
+            payload.tribunal,
+            payload.numero_processo,
+            err,
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -125,7 +133,9 @@ async def criar_jurisprudencia(
 
     logger.info(
         "Jurisprudencia paradigma cadastrada: %s %s por %s",
-        payload.tribunal, payload.numero_processo, usuario.get("email", "?"),
+        payload.tribunal,
+        payload.numero_processo,
+        usuario.get("email", "?"),
     )
 
     return {
@@ -155,7 +165,8 @@ async def listar(
     tribunal: str | None = Query(default=None, max_length=20),
     area_juridica: str | None = Query(default=None, max_length=40),
     busca: str | None = Query(
-        default=None, max_length=200,
+        default=None,
+        max_length=200,
         description="ILIKE em numero_processo OU ementa OU relator",
     ),
     usuario: dict[str, str] = Depends(exige_admin_dep),
@@ -165,8 +176,11 @@ async def listar(
 
     try:
         return listar_jurisprudencia(
-            limit=limit, offset=offset, tribunal=tribunal,
-            area_juridica=area_juridica, busca=busca,
+            limit=limit,
+            offset=offset,
+            tribunal=tribunal,
+            area_juridica=area_juridica,
+            busca=busca,
         )
     except Exception as err:
         logger.error("Falha ao listar jurisprudencia: %s", err)
@@ -214,11 +228,16 @@ async def atualizar(
     """
     from App.database import atualizar_jurisprudencia
 
-    texto_pra_embed = " ".join(filter(None, [
-        payload.numero_processo,
-        payload.tese_firmada or "",
-        payload.ementa,
-    ]))
+    texto_pra_embed = " ".join(
+        filter(
+            None,
+            [
+                payload.numero_processo,
+                payload.tese_firmada or "",
+                payload.ementa,
+            ],
+        )
+    )
     embedding = gerar_embedding(texto_pra_embed)
 
     try:
@@ -240,9 +259,7 @@ async def atualizar(
             embedding=embedding,
         )
     except Exception as err:
-        logger.error(
-            "Falha update jurisprudencia id=%s: %s", jurisprudencia_id, err
-        )
+        logger.error("Falha update jurisprudencia id=%s: %s", jurisprudencia_id, err)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Erro ao atualizar no banco. Confira logs do backend.",
@@ -256,7 +273,9 @@ async def atualizar(
 
     logger.info(
         "Jurisprudencia paradigma atualizada: id=%s %s %s por %s",
-        jurisprudencia_id, payload.tribunal, payload.numero_processo,
+        jurisprudencia_id,
+        payload.tribunal,
+        payload.numero_processo,
         usuario.get("email", "?"),
     )
     return {
@@ -287,9 +306,7 @@ async def deletar(
     try:
         removeu = deletar_jurisprudencia(jurisprudencia_id)
     except Exception as err:
-        logger.error(
-            "Falha delete jurisprudencia id=%s: %s", jurisprudencia_id, err
-        )
+        logger.error("Falha delete jurisprudencia id=%s: %s", jurisprudencia_id, err)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Erro ao remover no banco. Confira logs do backend.",
@@ -303,7 +320,8 @@ async def deletar(
 
     logger.info(
         "Jurisprudencia paradigma removida: id=%s por %s",
-        jurisprudencia_id, usuario.get("email", "?"),
+        jurisprudencia_id,
+        usuario.get("email", "?"),
     )
     return {
         "status": "ok",
@@ -320,7 +338,9 @@ async def deletar(
 class ScrapeLoteRequest(BaseModel):
     """Corpo do POST /admin/jurisprudencia/scrape."""
 
-    fonte: str = Field(default="tst", description="tst (trabalhista) | carf (tributario) | todas")
+    fonte: str = Field(
+        default="tst", description="tst (trabalhista) | carf (tributario) | todas"
+    )
     max_por_tema: int = Field(default=4, ge=1, le=20)
 
 
@@ -378,7 +398,9 @@ async def scrape_lote(
     background_tasks.add_task(_rodar_scrape_background, fonte, payload.max_por_tema)
     logger.info(
         "Scrape em lote agendado: fonte=%s max=%d por %s",
-        fonte, payload.max_por_tema, usuario.get("email", "?"),
+        fonte,
+        payload.max_por_tema,
+        usuario.get("email", "?"),
     )
     return {
         "status": "accepted",

@@ -18,7 +18,9 @@ def test_consolidar_texto_provas_monta_bloco_rotulado(monkeypatch):
         "trct.png": "TRCT - Saldo de salario R$ 713,36 - rescisao a pedido do empregado",
         "foto.jpg": "   ",  # foto pura, sem texto legivel
     }
-    monkeypatch.setattr(pe, "ocr_documento_prova", lambda conteudo, nome: textos.get(nome, ""))
+    monkeypatch.setattr(
+        pe, "ocr_documento_prova", lambda conteudo, nome: textos.get(nome, "")
+    )
 
     provas = [
         {"nome": "trct.png", "tipo": "trct", "conteudo": b"x"},
@@ -45,7 +47,9 @@ def test_consolidar_texto_provas_todas_sem_texto(monkeypatch):
 def test_consolidar_texto_provas_respeita_cap_por_documento(monkeypatch):
     monkeypatch.setattr(pe, "OCR_PROVA_MAX_CHARS", 20)
     monkeypatch.setattr(pe, "ocr_documento_prova", lambda conteudo, nome: "A" * 500)
-    bloco = pe.consolidar_texto_provas([{"nome": "x.png", "tipo": "outro", "conteudo": b"q"}])
+    bloco = pe.consolidar_texto_provas(
+        [{"nome": "x.png", "tipo": "outro", "conteudo": b"q"}]
+    )
     # 20 chars do doc + cabecalho/rotulo; garante que truncou o corpo do documento.
     assert "A" * 20 in bloco
     assert "A" * 21 not in bloco

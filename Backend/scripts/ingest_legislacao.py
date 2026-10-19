@@ -83,7 +83,9 @@ def main() -> int:
     for origem in sorted(por_origem):
         print(f"  {origem}: {por_origem[origem]}")
     if sem_embedding:
-        print(f"AVISO: {sem_embedding} entradas sem embedding — busca semantica nao retornara essas")
+        print(
+            f"AVISO: {sem_embedding} entradas sem embedding — busca semantica nao retornara essas"
+        )
     return 0
 
 

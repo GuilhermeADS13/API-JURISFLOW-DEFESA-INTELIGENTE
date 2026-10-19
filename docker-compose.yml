@@ -24,7 +24,9 @@ services:
       dockerfile: Dockerfile
     container_name: autojuri_backend
     ports:
-      - "${BACKEND_PORT:-8000}:8000"
+      # So loopback: porta publicada pelo Docker ignora o ufw. No VPS o acesso
+      # externo vem pela Caddy (127.0.0.1:8000); containers usam a rede interna.
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
     environment:
       # Banco PostgreSQL (Supabase pooler)
       - DATABASE_URL=${DATABASE_URL}
@@ -116,7 +118,8 @@ services:
     image: n8nio/n8n:2.17.5
     container_name: autojuri_n8n
     ports:
-      - "${N8N_PORT:-5678}:5678"
+      # So loopback (ver nota no backend). No VPS: acesse via SSH tunnel.
+      - "127.0.0.1:${N8N_PORT:-5678}:5678"
     volumes:
       - n8n_data:/home/node/.n8n
       - ./docs:/data/workflows:ro    # JSONs dos workflows disponiveis para importar

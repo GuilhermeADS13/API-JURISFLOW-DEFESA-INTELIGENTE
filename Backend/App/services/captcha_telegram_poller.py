@@ -53,7 +53,9 @@ def iniciar_se_preciso() -> None:
         if _thread is not None and _thread.is_alive():
             return
         _thread = threading.Thread(
-            target=_loop, name="captcha-telegram-poller", daemon=True,
+            target=_loop,
+            name="captcha-telegram-poller",
+            daemon=True,
         )
         _thread.start()
         logger.info("Poller Telegram iniciado")
@@ -132,7 +134,9 @@ def _loop() -> None:
         if orch.tem_pendentes_nao_respondidos():
             ultimo_pendente_ts = time.time()
         elif time.time() - ultimo_pendente_ts > _IDLE_STOP_SEC:
-            logger.info("Poller Telegram idle %ds sem pendentes — encerrando", _IDLE_STOP_SEC)
+            logger.info(
+                "Poller Telegram idle %ds sem pendentes — encerrando", _IDLE_STOP_SEC
+            )
             return
 
         updates = _get_updates(token_bot)

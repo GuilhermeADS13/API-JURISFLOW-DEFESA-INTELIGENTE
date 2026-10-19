@@ -10,8 +10,6 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 
 FIXTURE = Path(__file__).parent / "fixtures" / "tst_sample.json"
 
@@ -88,8 +86,8 @@ def test_parse_registro_sem_ementa_ou_numero_e_descartado():
         "totalRegistros": 3,
         "registros": [
             {"registro": {"numFormatado": "RR-1", "ementa": "ementa valida aqui"}},
-            {"registro": {"numFormatado": "RR-2", "ementa": ""}},        # sem ementa
-            {"registro": {"numFormatado": "", "ementa": "tem ementa"}},   # sem numero
+            {"registro": {"numFormatado": "RR-2", "ementa": ""}},  # sem ementa
+            {"registro": {"numFormatado": "", "ementa": "tem ementa"}},  # sem numero
         ],
     }
     out = TSTScraper()._parse_resposta(resp)
@@ -112,10 +110,13 @@ def test_peso_maior_quando_tem_tema():
 
     resp = {
         "registros": [
-            {"registro": {
-                "numFormatado": "RR-9", "ementa": "ementa com tema vinculante",
-                "temaProcs": [{"descricao": "Tema 1046 - terceirizacao"}],
-            }},
+            {
+                "registro": {
+                    "numFormatado": "RR-9",
+                    "ementa": "ementa com tema vinculante",
+                    "temaProcs": [{"descricao": "Tema 1046 - terceirizacao"}],
+                }
+            },
         ],
     }
     a = TSTScraper()._parse_resposta(resp)[0]
@@ -150,8 +151,10 @@ def test_buscar_falha_http_retorna_lista_vazia():
     from App.services.scrapers.tst import TSTScraper
 
     scraper = TSTScraper()
+
     def boom(*a, **kw):
         raise requests.ConnectionError("offline")
+
     with patch.object(scraper, "_fetch_pagina", side_effect=boom):
         assert scraper.buscar("horas extras") == []
 
@@ -162,9 +165,11 @@ def test_buscar_para_quando_pagina_vazia(monkeypatch):
 
     scraper = TSTScraper()
     chamadas = {"n": 0}
+
     def fake_fetch(query, pagina, tamanho):
         chamadas["n"] += 1
         return {"registros": []}  # sempre vazio
+
     monkeypatch.setattr(scraper, "_fetch_pagina", fake_fetch)
     monkeypatch.setattr(scraper, "_rate_limit_aguardar", lambda: None)
 

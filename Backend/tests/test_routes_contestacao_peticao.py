@@ -169,11 +169,13 @@ def test_happy_path_encaminha_citacoes_e_contradicoes(monkeypatch):
     async def fake_n8n(dados):
         resp = _resposta_n8n_ok()
         resp["citacoes_incertas"] = [
-            {"texto": "STJ, REsp 9.999.999/SP", "tipo": "acordao", "motivo": "numero suspeito"}
+            {
+                "texto": "STJ, REsp 9.999.999/SP",
+                "tipo": "acordao",
+                "motivo": "numero suspeito",
+            }
         ]
-        resp["citacoes_verificadas"] = [
-            {"texto": "art. 818 da CLT", "tipo": "lei"}
-        ]
+        resp["citacoes_verificadas"] = [{"texto": "art. 818 da CLT", "tipo": "lei"}]
         resp["contradicoes"] = [
             {
                 "tipo": "data",
@@ -716,9 +718,7 @@ def test_delete_contestacao_sucesso(monkeypatch):
         chamadas["uid"] = uid
         return True
 
-    monkeypatch.setattr(
-        "App.database.excluir_contestacao", fake_excluir, raising=False
-    )
+    monkeypatch.setattr("App.database.excluir_contestacao", fake_excluir, raising=False)
 
     resposta = asyncio.run(
         peticao_route.excluir_contestacao_rota(

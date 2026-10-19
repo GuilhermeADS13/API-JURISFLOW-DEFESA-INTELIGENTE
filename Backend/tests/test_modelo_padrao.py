@@ -12,18 +12,27 @@ from App.routes import contestacao_peticao as rc
 
 
 def _payload(**kw):
-    base = {"modelo_base_base64": "", "modelo_base_nome": None, "salvar_como_modelo_padrao": False}
+    base = {
+        "modelo_base_base64": "",
+        "modelo_base_nome": None,
+        "salvar_como_modelo_padrao": False,
+    }
     base.update(kw)
     return SimpleNamespace(**base)
 
 
 def test_default_field_salvar_como_modelo_padrao_false():
-    assert ContestacaoPorPeticao.model_fields["salvar_como_modelo_padrao"].default is False
+    assert (
+        ContestacaoPorPeticao.model_fields["salvar_como_modelo_padrao"].default is False
+    )
 
 
 def test_resolver_usa_timbre_padrao_quando_sem_upload(monkeypatch):
-    monkeypatch.setattr(rc, "get_modelo_padrao",
-                        lambda uid: {"nome": "Timbre G. Trindade", "arquivo_b64": "BASE64DOCX"})
+    monkeypatch.setattr(
+        rc,
+        "get_modelo_padrao",
+        lambda uid: {"nome": "Timbre G. Trindade", "arquivo_b64": "BASE64DOCX"},
+    )
     salvos = []
     monkeypatch.setattr(rc, "salvar_modelo_padrao", lambda *a, **k: salvos.append(a))
 
@@ -38,11 +47,17 @@ def test_resolver_usa_timbre_padrao_quando_sem_upload(monkeypatch):
 def test_resolver_salva_como_padrao_quando_pedido(monkeypatch):
     monkeypatch.setattr(rc, "get_modelo_padrao", lambda uid: None)
     capturado = {}
-    monkeypatch.setattr(rc, "salvar_modelo_padrao",
-                        lambda uid, nome, b64: capturado.update(uid=uid, nome=nome, b64=b64))
+    monkeypatch.setattr(
+        rc,
+        "salvar_modelo_padrao",
+        lambda uid, nome, b64: capturado.update(uid=uid, nome=nome, b64=b64),
+    )
 
-    p = _payload(modelo_base_base64="XYZ", modelo_base_nome="meu_timbre.docx",
-                 salvar_como_modelo_padrao=True)
+    p = _payload(
+        modelo_base_base64="XYZ",
+        modelo_base_nome="meu_timbre.docx",
+        salvar_como_modelo_padrao=True,
+    )
     rc._resolver_modelo(p, "user-1")
 
     assert capturado == {"uid": "user-1", "nome": "meu_timbre.docx", "b64": "XYZ"}

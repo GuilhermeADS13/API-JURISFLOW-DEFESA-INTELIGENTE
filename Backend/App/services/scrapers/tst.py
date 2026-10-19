@@ -60,13 +60,15 @@ class TSTScraper:
 
     def __init__(self) -> None:
         self.session = requests.Session()
-        self.session.headers.update({
-            "User-Agent": self.USER_AGENT,
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "Origin": "https://jurisprudencia.tst.jus.br",
-            "Referer": self.FRONT_URL,
-        })
+        self.session.headers.update(
+            {
+                "User-Agent": self.USER_AGENT,
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Origin": "https://jurisprudencia.tst.jus.br",
+                "Referer": self.FRONT_URL,
+            }
+        )
         self._last_request_ts: float = 0.0
 
     def buscar(self, query: str, *, max_resultados: int = 20) -> list[dict[str, Any]]:
@@ -90,7 +92,11 @@ class TSTScraper:
             tamanho = min(self.PAGE_SIZE, faltam)
             logger.info(
                 "TST scraper: query=%r pagina=%d tamanho=%d (coletados=%d/%d)",
-                query, pagina, tamanho, len(acordaos), max_resultados,
+                query,
+                pagina,
+                tamanho,
+                len(acordaos),
+                max_resultados,
             )
             try:
                 data = self._fetch_pagina(query, pagina, tamanho)
@@ -129,8 +135,12 @@ class TSTScraper:
             "ementa": None,
             "dispositivo": None,
             "numeracaoUnica": {
-                "numero": None, "digito": None, "ano": None,
-                "orgao": "5", "tribunal": None, "vara": None,
+                "numero": None,
+                "digito": None,
+                "ano": None,
+                "orgao": "5",
+                "tribunal": None,
+                "vara": None,
             },
             "orgaosJudicantes": [],
             "ministros": [],
@@ -147,7 +157,9 @@ class TSTScraper:
         self._rate_limit_aguardar()
         url = f"{self.BASE_URL}/{pagina}/{tamanho}"
         resp = self.session.post(
-            url, json=self._build_body(query), timeout=self.TIMEOUT_SEC,
+            url,
+            json=self._build_body(query),
+            timeout=self.TIMEOUT_SEC,
         )
         resp.raise_for_status()
         return resp.json()
@@ -217,9 +229,7 @@ class TSTScraper:
         # preposicoes ficam minusculas
         minus = {"de", "da", "do", "das", "dos", "e"}
         partes = s.lower().split()
-        return " ".join(
-            p if p in minus else p.capitalize() for p in partes
-        )
+        return " ".join(p if p in minus else p.capitalize() for p in partes)
 
     @staticmethod
     def _data_iso(raw: Any) -> str | None:
@@ -240,7 +250,8 @@ class TSTScraper:
             nome = str(tipo.get("nome") or "").strip()
             if nome:
                 sem_acento = "".join(
-                    c for c in unicodedata.normalize("NFKD", nome)
+                    c
+                    for c in unicodedata.normalize("NFKD", nome)
                     if not unicodedata.combining(c)
                 )
                 return sem_acento

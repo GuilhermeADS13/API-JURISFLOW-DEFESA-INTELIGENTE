@@ -132,9 +132,7 @@ def _extrair_estilo_modelo(doc: Any) -> dict[str, Any]:
                 estilo["line_spacing"] = cap_line_spacing(ls)
             if pf.space_after:
                 try:
-                    estilo["space_after_pt"] = cap_space_after_pt(
-                        pf.space_after.pt
-                    )
+                    estilo["space_after_pt"] = cap_space_after_pt(pf.space_after.pt)
                 except (AttributeError, TypeError):
                     pass
         except Exception as err:  # noqa: BLE001 — paragrafo corrompido, ignora
@@ -218,7 +216,9 @@ def _escrever_cabecalho(doc: Any, dados: dict[str, Any]) -> None:
     titulo = doc.add_heading("CONTESTACAO", level=0)
     titulo.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    _add_paragraph(doc, f"Processo numero: {dados.get('numero_processo') or 'a definir'}")
+    _add_paragraph(
+        doc, f"Processo numero: {dados.get('numero_processo') or 'a definir'}"
+    )
     _add_paragraph(doc, f"Autor: {dados.get('autor') or ''}")
     _add_paragraph(doc, f"Reu: {dados.get('reu') or ''}")
     _add_paragraph(doc, f"Tipo de acao: {dados.get('tipo_acao') or ''}")
@@ -282,7 +282,9 @@ def _normalizar_tipo_anexo(tipo_bruto: Any) -> str:
     if not t:
         return "outro"
     # Match por substring — robusto ao Claude usar variacoes ("Folha de Ponto" vs "Cartoes de Ponto")
-    if any(kw in t for kw in ("folha de ponto", "cartao", "cartoes", "controle de jornada")):
+    if any(
+        kw in t for kw in ("folha de ponto", "cartao", "cartoes", "controle de jornada")
+    ):
         return "folha_ponto"
     if "fgts" in t or "extrato analitico" in t:
         return "fgts"
@@ -299,9 +301,7 @@ def _normalizar_tipo_anexo(tipo_bruto: Any) -> str:
     return "outro"
 
 
-def _achar_imagens_pra_tipo(
-    tipo_canonico: str, imagens_pendentes: list
-) -> list:
+def _achar_imagens_pra_tipo(tipo_canonico: str, imagens_pendentes: list) -> list:
     """Remove e retorna todas as ImagemEmbedavel cujo tipo bate com o canonico.
 
     Mutates a lista pra remover as escolhidas (cada imagem casa com um item da
@@ -345,7 +345,8 @@ def _escrever_rol_documentos(
         return
 
     itens_validos = [
-        a for a in anexos
+        a
+        for a in anexos
         if isinstance(a, dict) and (a.get("tipo") or a.get("descricao"))
     ]
     if not itens_validos:
@@ -559,8 +560,12 @@ def montar_docx_com_modelo(
         return None
 
     return _safe_step(
-        "montar .docx a partir do modelo", _build_docx_from_template,
-        modelo_bytes, dados, minuta, imagens_embedar,
+        "montar .docx a partir do modelo",
+        _build_docx_from_template,
+        modelo_bytes,
+        dados,
+        minuta,
+        imagens_embedar,
     )
 
 
@@ -636,7 +641,8 @@ def _build_docx_from_template_inner(
         _add_para_simples(
             doc,
             f"Excelentíssimo Senhor Doutor Juiz da {dados.get('vara') or ''}.",
-            negrito=True, alinhamento="justify",
+            negrito=True,
+            alinhamento="justify",
         )
         doc.add_paragraph("")
         p = doc.add_paragraph()
@@ -644,25 +650,41 @@ def _build_docx_from_template_inner(
         _run(p, "\t")
         _run(p, f"{dados.get('reu') or ''}, ", bold=True)
         _run(p, "pessoa jurídica de direito privado, já qualificada nos autos da ")
-        _run(p, f"Reclamação Trabalhista nº {dados.get('numero_processo') or ''}",
-              bold=True, underline=True)
+        _run(
+            p,
+            f"Reclamação Trabalhista nº {dados.get('numero_processo') or ''}",
+            bold=True,
+            underline=True,
+        )
         _run(p, ", movida por ")
         _run(p, dados.get("autor") or "", bold=True)
-        _run(p, ", vem respeitosamente à presença de V. Exa., por intermédio de "
-                "seu advogado ao final assinado, apresentar ")
+        _run(
+            p,
+            ", vem respeitosamente à presença de V. Exa., por intermédio de "
+            "seu advogado ao final assinado, apresentar ",
+        )
         _run(p, "CONTESTAÇÃO", bold=True)
-        _run(p, " com fundamento no art. 847 da CLT, em conformidade com as "
-                "razões expostas a seguir:")
+        _run(
+            p,
+            " com fundamento no art. 847 da CLT, em conformidade com as "
+            "razões expostas a seguir:",
+        )
         doc.add_paragraph("")
 
     # 4) Conteudo das secoes — numeracao romana DINAMICA conforme presenca de
     # secoes opcionais (Litigancia, Danos Morais, Fundamentos). I e II sao
     # fixos (Preliminares e Merito); demais sao renumeradas em sequencia.
     _ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"]
-    _add_secao(doc, minuta.get("preliminares"), contador, numerar=True,
-               cabecalho_padrao=None)
-    _add_secao(doc, minuta.get("merito"), contador, numerar=True,
-               cabecalho_padrao="II — MERITO.")
+    _add_secao(
+        doc, minuta.get("preliminares"), contador, numerar=True, cabecalho_padrao=None
+    )
+    _add_secao(
+        doc,
+        minuta.get("merito"),
+        contador,
+        numerar=True,
+        cabecalho_padrao="II — MERITO.",
+    )
 
     # impugnacao_pedidos NAO eh renderizado na peca final — fica como
     # referencia interna do prompt (keys snake_case nao saem para o cliente).
@@ -675,7 +697,8 @@ def _build_docx_from_template_inner(
             r"^##\s*[IVXLCDM]+\s*[—\-]?\s*",
             f"## {_ROMAN[secao_idx]} — ",
             str(litigancia).strip(),
-            count=1, flags=re.MULTILINE,
+            count=1,
+            flags=re.MULTILINE,
         )
         if not litigancia_norm.lstrip().startswith("##"):
             litigancia_norm = (
@@ -690,22 +713,28 @@ def _build_docx_from_template_inner(
             r"^##\s*[IVXLCDM]+\s*[—\-]?\s*",
             f"## {_ROMAN[secao_idx]} — ",
             str(danos).strip(),
-            count=1, flags=re.MULTILINE,
+            count=1,
+            flags=re.MULTILINE,
         )
         if not danos_norm.lstrip().startswith("##"):
-            danos_norm = (
-                f"## {_ROMAN[secao_idx]} — DA IMPROCEDENCIA DO PEDIDO DE INDENIZACAO POR DANOS MORAIS.\n\n{danos_norm}"
-            )
+            danos_norm = f"## {_ROMAN[secao_idx]} — DA IMPROCEDENCIA DO PEDIDO DE INDENIZACAO POR DANOS MORAIS.\n\n{danos_norm}"
         _add_secao(doc, danos_norm, contador, numerar=True, cabecalho_padrao=None)
         secao_idx += 1
 
     if minuta.get("fundamentos"):
-        _add_secao(doc, minuta["fundamentos"], contador, numerar=True,
-                   cabecalho_padrao=f"{_ROMAN[secao_idx]} — DOS FUNDAMENTOS JURIDICOS.")
+        _add_secao(
+            doc,
+            minuta["fundamentos"],
+            contador,
+            numerar=True,
+            cabecalho_padrao=f"{_ROMAN[secao_idx]} — DOS FUNDAMENTOS JURIDICOS.",
+        )
         secao_idx += 1
 
     # AUTENTICIDADE (sempre presente)
-    _add_heading(doc, f"{_ROMAN[secao_idx]} — DA AUTENTICIDADE DOS DOCUMENTOS.", nivel=1)
+    _add_heading(
+        doc, f"{_ROMAN[secao_idx]} — DA AUTENTICIDADE DOS DOCUMENTOS.", nivel=1
+    )
     doc.add_paragraph("")
     autenticidade_texto = minuta.get("autenticidade_documentos") or (
         "Nos termos do art. 830 da CLT, o patrono que subscreve a presente peça "
@@ -718,8 +747,13 @@ def _build_docx_from_template_inner(
     secao_idx += 1
 
     # PEDIDOS
-    _add_secao(doc, minuta.get("pedidos"), contador, numerar=False,
-               cabecalho_padrao=f"{_ROMAN[secao_idx]} — DOS PEDIDOS.")
+    _add_secao(
+        doc,
+        minuta.get("pedidos"),
+        contador,
+        numerar=False,
+        cabecalho_padrao=f"{_ROMAN[secao_idx]} — DOS PEDIDOS.",
+    )
     secao_idx += 1
 
     # PR14 — ROL DE DOCUMENTOS PROBATORIOS A ANEXAR (logo apos PEDIDOS).
@@ -765,13 +799,18 @@ def _build_docx_from_template_inner(
     assinatura = minuta.get("assinatura") or {}
     if not isinstance(assinatura, dict):
         assinatura = {}
+
     def _limpar(s: Any) -> str:
         # Remove tabs/quebras espurias que vazam do JSON da IA (ex: 'OAB/PE a pree\tncher')
         return re.sub(r"\s+", " ", str(s or "")).strip()
 
     local_data = _limpar(assinatura.get("local_data"))
     # Se IA deixou 'data a preencher' ou similar, sobrescreve com fallback completo.
-    if not local_data or "preencher" in local_data.lower() or "definir" in local_data.lower():
+    if (
+        not local_data
+        or "preencher" in local_data.lower()
+        or "definir" in local_data.lower()
+    ):
         local_data = f"{_local_padrao(dados)}, {_data_extenso()}."
 
     nome_adv = _limpar(assinatura.get("advogado"))
@@ -800,6 +839,7 @@ def _build_docx_from_template_inner(
 
 
 # ── Helpers de baixo nivel (criam paragraphs com a tipografia do escritorio) ─
+
 
 def _font_default(run: Any) -> None:
     """Aplica fonte do template (default Arial 11).
@@ -962,8 +1002,12 @@ def _add_secao(
         m2 = _RE_HEADING2.match(primeira_linha)
 
         # Detecta blockquote: todas as linhas (nao vazias) comecam com '>'
-        linhas_bloco = [l for l in bloco.split("\n") if l.strip()]
-        is_quote = all(_RE_QUOTE_LINE.match(l) for l in linhas_bloco) if linhas_bloco else False
+        linhas_bloco = [linha for linha in bloco.split("\n") if linha.strip()]
+        is_quote = (
+            all(_RE_QUOTE_LINE.match(linha) for linha in linhas_bloco)
+            if linhas_bloco
+            else False
+        )
 
         if is_quote:
             _add_quote_para(doc, bloco)
@@ -993,11 +1037,11 @@ def _add_quote_para(doc: Any, bloco: str) -> None:
     Mimetiza o estilo do modelo G. Trindade pra citacoes de lei/sumula.
     """
     linhas = []
-    for l in bloco.split("\n"):
-        m = _RE_QUOTE_LINE.match(l)
+    for linha in bloco.split("\n"):
+        m = _RE_QUOTE_LINE.match(linha)
         if m:
             linhas.append(m.group(1).strip())
-    texto = " ".join(l for l in linhas if l)
+    texto = " ".join(linha for linha in linhas if linha)
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     # Recuo do blockquote lido do modelo (default 3.0cm)
@@ -1009,7 +1053,7 @@ def _add_quote_para(doc: Any, bloco: str) -> None:
     pos = 0
     for m in _RE_COMBO.finditer(texto):
         if m.start() > pos:
-            _run(p, texto[pos:m.start()], italic=True)
+            _run(p, texto[pos : m.start()], italic=True)
         if m.group(1) is not None:
             _run(p, m.group(1), bold=True, italic=True)
         else:
@@ -1043,7 +1087,7 @@ def _add_secao_dict(
             pos = 0
             for m in _RE_INLINE_BOLD.finditer(resp_txt):
                 if m.start() > pos:
-                    _run(p, resp_txt[pos:m.start()])
+                    _run(p, resp_txt[pos : m.start()])
                 _run(p, m.group(1), bold=True)
                 pos = m.end()
             if pos < len(resp_txt):
@@ -1076,9 +1120,7 @@ def _safe_step(descricao: str, func: Callable, *args, **kwargs):
     try:
         return func(*args, **kwargs)
     except Exception as error:  # noqa: BLE001 - lib externa, fallback obrigatorio
-        logger.warning(
-            "Falha ao %s: %s: %s", descricao, type(error).__name__, error
-        )
+        logger.warning("Falha ao %s: %s: %s", descricao, type(error).__name__, error)
         return None
 
 
@@ -1093,9 +1135,7 @@ def _safe_void_step(descricao: str, func: Callable, *args, **kwargs) -> bool:
         func(*args, **kwargs)
         return True
     except Exception as error:  # noqa: BLE001 - lib externa
-        logger.warning(
-            "Falha ao %s: %s: %s", descricao, type(error).__name__, error
-        )
+        logger.warning("Falha ao %s: %s: %s", descricao, type(error).__name__, error)
         return False
 
 
@@ -1107,10 +1147,18 @@ _RE_INLINE_UNDER = re.compile(r"__(.+?)__")
 _RE_QUOTE_LINE = re.compile(r"^\s*>\s?(.*)$")
 
 _MESES_PT = {
-    "January": "janeiro", "February": "fevereiro", "March": "março",
-    "April": "abril", "May": "maio", "June": "junho", "July": "julho",
-    "August": "agosto", "September": "setembro", "October": "outubro",
-    "November": "novembro", "December": "dezembro",
+    "January": "janeiro",
+    "February": "fevereiro",
+    "March": "março",
+    "April": "abril",
+    "May": "maio",
+    "June": "junho",
+    "July": "julho",
+    "August": "agosto",
+    "September": "setembro",
+    "October": "outubro",
+    "November": "novembro",
+    "December": "dezembro",
 }
 
 
@@ -1220,7 +1268,7 @@ def _render_inline_markdown(
     pos = 0
     for m in _RE_COMBO.finditer(texto):
         if m.start() > pos:
-            _run(p, texto[pos:m.start()], bold=base_bold, underline=base_underline)
+            _run(p, texto[pos : m.start()], bold=base_bold, underline=base_underline)
         if m.group(1) is not None:  # **bold**
             _run(p, m.group(1), bold=True, underline=base_underline)
         else:  # __underline__

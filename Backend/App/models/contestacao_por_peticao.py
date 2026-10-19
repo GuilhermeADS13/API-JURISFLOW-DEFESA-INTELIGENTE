@@ -35,16 +35,18 @@ MAX_EMBED_FILE_BYTES = 10 * 1024 * 1024  # 10MB por arquivo embedavel
 
 # Tipos canonicos pra casar com documentos_anexos[].tipo gerado pelo Claude.
 # Sao os mesmos slugs usados no enum do frontend e no mapeamento do builder.
-TIPOS_EMBED_CANONICOS = frozenset({
-    "folha_ponto",
-    "fgts",
-    "trct",
-    "laudo_pericial",
-    "contrato",
-    "ctps",
-    "print",
-    "outro",
-})
+TIPOS_EMBED_CANONICOS = frozenset(
+    {
+        "folha_ponto",
+        "fgts",
+        "trct",
+        "laudo_pericial",
+        "contrato",
+        "ctps",
+        "print",
+        "outro",
+    }
+)
 
 # Magic bytes dos formatos permitidos. PDF: %PDF, DOC: OLE2 compound, DOCX: ZIP.
 _MAGIC_BYTES_PETICAO: list[bytes] = [
@@ -125,9 +127,7 @@ class ArquivoEmbedar(BaseModel):
         if not nome:
             raise ValueError("Nome de arquivo embedavel invalido.")
         if not nome.lower().endswith(ALLOWED_EMBED_EXTENSIONS):
-            raise ValueError(
-                "Arquivo embedavel deve ser JPG, JPEG, PNG ou PDF."
-            )
+            raise ValueError("Arquivo embedavel deve ser JPG, JPEG, PNG ou PDF.")
         return nome
 
     @field_validator("tipo")

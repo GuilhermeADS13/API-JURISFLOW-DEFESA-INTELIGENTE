@@ -126,13 +126,13 @@ def _destilar_ementa_via_haiku(
         logger.warning("Haiku falhou: %s", err)
         return None
     if not resp.ok:
-        logger.warning(
-            "Haiku HTTP %d: %s", resp.status_code, resp.text[:200]
-        )
+        logger.warning("Haiku HTTP %d: %s", resp.status_code, resp.text[:200])
         return None
     payload = resp.json()
     blocks = payload.get("content") or []
-    texto = "".join(b.get("text", "") for b in blocks if b.get("type") == "text").strip()
+    texto = "".join(
+        b.get("text", "") for b in blocks if b.get("type") == "text"
+    ).strip()
     return texto or None
 
 
@@ -164,7 +164,10 @@ def _preparar_entrada(
     if not numero:
         logger.warning(
             "[%d/%d] SKIP — sem 'numero_processo' explicito e sem CNJ "
-            "detectavel (tribunal=%s)", indice, total, tribunal,
+            "detectavel (tribunal=%s)",
+            indice,
+            total,
+            tribunal,
         )
         return None
 
@@ -172,24 +175,34 @@ def _preparar_entrada(
         if not api_key:
             logger.warning(
                 "[%d/%d] SKIP — sem 'ementa' e ANTHROPIC_API_KEY nao setada "
-                "(tribunal=%s numero=%s)", indice, total, tribunal, numero,
+                "(tribunal=%s numero=%s)",
+                indice,
+                total,
+                tribunal,
+                numero,
             )
             return None
         logger.info(
             "[%d/%d] destilando ementa via Haiku (tribunal=%s numero=%s)",
-            indice, total, tribunal, numero,
+            indice,
+            total,
+            tribunal,
+            numero,
         )
         ementa = _destilar_ementa_via_haiku(conteudo, api_key=api_key) or ""
         if not ementa:
             logger.warning(
-                "[%d/%d] SKIP — Haiku nao retornou ementa", indice, total,
+                "[%d/%d] SKIP — Haiku nao retornou ementa",
+                indice,
+                total,
             )
             return None
 
     if not ementa:
         logger.warning(
             "[%d/%d] SKIP — sem 'ementa' nem 'conteudo' pra destilar",
-            indice, total,
+            indice,
+            total,
         )
         return None
 
@@ -202,13 +215,21 @@ def _preparar_entrada(
         except (TypeError, ValueError):
             logger.warning(
                 "[%d/%d] SKIP — peso_relevancia invalido %r (%s %s)",
-                indice, total, peso_raw, tribunal, numero,
+                indice,
+                total,
+                peso_raw,
+                tribunal,
+                numero,
             )
             return None
     if peso < 1 or peso > 10:
         logger.warning(
             "[%d/%d] SKIP — peso_relevancia fora de 1-10: %d (%s %s)",
-            indice, total, peso, tribunal, numero,
+            indice,
+            total,
+            peso,
+            tribunal,
+            numero,
         )
         return None
 
@@ -244,7 +265,9 @@ def _processar_entrada(
         logger.warning(
             "[%d/%d] SKIP — sem 'numero_processo' explicito e sem CNJ "
             "detectavel em 'conteudo'/'ementa' (tribunal=%s)",
-            indice, total, tribunal,
+            indice,
+            total,
+            tribunal,
         )
         return "skip"
 
@@ -253,25 +276,34 @@ def _processar_entrada(
         if not api_key:
             logger.warning(
                 "[%d/%d] SKIP — sem 'ementa' no JSON e ANTHROPIC_API_KEY nao setada "
-                "(tribunal=%s numero=%s)", indice, total, tribunal, numero,
+                "(tribunal=%s numero=%s)",
+                indice,
+                total,
+                tribunal,
+                numero,
             )
             return "skip"
         logger.info(
             "[%d/%d] destilando ementa via Haiku (tribunal=%s numero=%s)",
-            indice, total, tribunal, numero,
+            indice,
+            total,
+            tribunal,
+            numero,
         )
         ementa = _destilar_ementa_via_haiku(conteudo, api_key=api_key) or ""
         if not ementa:
             logger.warning(
                 "[%d/%d] SKIP — Haiku nao retornou ementa",
-                indice, total,
+                indice,
+                total,
             )
             return "skip"
 
     if not ementa:
         logger.warning(
             "[%d/%d] SKIP — sem 'ementa' nem 'conteudo' pra destilar",
-            indice, total,
+            indice,
+            total,
         )
         return "skip"
 
@@ -280,7 +312,10 @@ def _processar_entrada(
     if embedding is None:
         logger.warning(
             "[%d/%d] AVISO — sem embedding gerado (%s %s)",
-            indice, total, tribunal, numero,
+            indice,
+            total,
+            tribunal,
+            numero,
         )
 
     # PR27 (finding #12): validar peso_relevancia ANTES do upsert com mensagem
@@ -295,21 +330,34 @@ def _processar_entrada(
         except (TypeError, ValueError):
             logger.warning(
                 "[%d/%d] SKIP — peso_relevancia invalido %r (%s %s)",
-                indice, total, peso_raw, tribunal, numero,
+                indice,
+                total,
+                peso_raw,
+                tribunal,
+                numero,
             )
             return "skip"
     if peso < 1 or peso > 10:
         logger.warning(
             "[%d/%d] SKIP — peso_relevancia fora de 1-10: %d (%s %s)",
-            indice, total, peso, tribunal, numero,
+            indice,
+            total,
+            peso,
+            tribunal,
+            numero,
         )
         return "skip"
 
     if dry_run:
         logger.info(
             "[DRY %d/%d] %s | %s | ementa=%d chars | texto_integral=%d chars | emb=%s",
-            indice, total, tribunal, numero, len(ementa),
-            len(conteudo), embedding is not None,
+            indice,
+            total,
+            tribunal,
+            numero,
+            len(ementa),
+            len(conteudo),
+            embedding is not None,
         )
         return "ok"
 
@@ -331,7 +379,11 @@ def _processar_entrada(
     except Exception as err:  # noqa: BLE001 — falha de um nao trava o lote
         logger.error(
             "[%d/%d] FALHA upsert %s %s: %s",
-            indice, total, tribunal, numero, err,
+            indice,
+            total,
+            tribunal,
+            numero,
+            err,
         )
         return "falha"
 
@@ -344,11 +396,13 @@ def main() -> int:
         description="Importa JSON de scraping externo em jurisprudencia_externa.",
     )
     parser.add_argument(
-        "--input", required=True,
+        "--input",
+        required=True,
         help="Path do JSON de entrada (lista de objetos).",
     )
     parser.add_argument(
-        "--dry-run", action="store_true",
+        "--dry-run",
+        action="store_true",
         help="Nao grava no banco, so simula.",
     )
     args = parser.parse_args()
@@ -376,7 +430,9 @@ def main() -> int:
 
     logger.info(
         "Importando %d entradas de %s (dry=%s)...",
-        len(data), path.name, args.dry_run,
+        len(data),
+        path.name,
+        args.dry_run,
     )
     inicio = time.time()
     por_tribunal: dict[str, int] = {}
@@ -399,7 +455,10 @@ def main() -> int:
             entries_prontos.append(None)
             continue
         preparado = _preparar_entrada(
-            entry, indice=i, total=len(data), api_key=api_key,
+            entry,
+            indice=i,
+            total=len(data),
+            api_key=api_key,
         )
         entries_prontos.append(preparado)
         if preparado is None:
@@ -425,15 +484,22 @@ def main() -> int:
         if embedding is None:
             logger.warning(
                 "[%d/%d] AVISO — sem embedding pra %s (batch falhou)",
-                i, len(data), numero,
+                i,
+                len(data),
+                numero,
             )
 
         tribunal = str(entry.get("tribunal") or "").strip()
         if args.dry_run:
             logger.info(
                 "[DRY %d/%d] %s | %s | ementa=%d chars | texto_integral=%d chars | emb=%s",
-                i, len(data), tribunal, numero, len(ementa),
-                len(conteudo), embedding is not None,
+                i,
+                len(data),
+                tribunal,
+                numero,
+                len(ementa),
+                len(conteudo),
+                embedding is not None,
             )
             por_tribunal[tribunal] = por_tribunal.get(tribunal, 0) + 1
             continue
@@ -459,17 +525,26 @@ def main() -> int:
             falhas += 1
             logger.error(
                 "[%d/%d] FALHA upsert %s %s: %s",
-                i, len(data), tribunal, numero, err,
+                i,
+                len(data),
+                tribunal,
+                numero,
+                err,
             )
 
     duracao = time.time() - inicio
     logger.info(
         "Concluido em %.1fs. Por tribunal: %s | skips=%d falhas=%d dry=%s",
-        duracao, dict(sorted(por_tribunal.items())),
-        skips, falhas, args.dry_run,
+        duracao,
+        dict(sorted(por_tribunal.items())),
+        skips,
+        falhas,
+        args.dry_run,
     )
     # 1 se TUDO falhou; senao 0 (parciais nao sao erro fatal)
-    return 1 if not por_tribunal and (skips + falhas) == len(data) and len(data) > 0 else 0
+    return (
+        1 if not por_tribunal and (skips + falhas) == len(data) and len(data) > 0 else 0
+    )
 
 
 if __name__ == "__main__":
