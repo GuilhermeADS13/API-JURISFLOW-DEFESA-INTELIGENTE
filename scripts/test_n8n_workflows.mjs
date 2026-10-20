@@ -141,6 +141,18 @@ await caso('prompt segue a estrutura do modelo do escritorio', async () => {
   assert.equal(/II\.A\)|U\+2014/.test(sistema), false);
 });
 
+console.log('Buscar Defesas');
+await caso('tipo de acao longo/com virgula nao derruba a busca (caso real id 46)', async () => {
+  const tipo = 'Reclamação Trabalhista - Rito Ordinário (verbas rescisórias, horas extras, FGTS, insalubridade, danos morais)';
+  const env = { status: 'dados_extraidos', dados_extraidos: { tipo_acao: tipo, numero_processo: '0000001-00.2026.5.06.0001', area_juridica: 'trabalhista', pedidos: [] } };
+  const { out, chamadas } = await rodar(P, 'Buscar Defesas Anteriores Supabase', env, { ...ENV, BACKEND_ADMIN_TOKEN: 'tok' },
+    (opts) => ({ statusCode: 200, body: String(opts.url).includes('/rag/') ? { status: 'sucesso', casos: [], total: 0 } : { exemplares: [] } }));
+  const rag = chamadas.find((c) => String(c.url).includes('/api/rag/defesas-similares'));
+  assert.ok(rag, 'chamou o RAG do backend');
+  assert.equal(bodyDe(rag).tipo_acao.includes(','), false);
+  assert.notEqual(out.defesas_anteriores.status, 'input_invalido');
+});
+
 console.log('Extrator');
 await caso('prompt sem comentario de codigo e sem temperature no sonnet-5', async () => {
   const envE = { status: 'ok', contexto: { texto_peticao: 'x'.repeat(100) } };
@@ -170,6 +182,9 @@ await caso('Detector nao trata a defesa negando fatos do autor como erro', async
   const sistema = JSON.stringify(bodyDe(chamadas[0]).system);
   assert.ok(sistema.includes('NAO e erro'));
   assert.ok(sistema.includes('PEDIDO DO AUTOR SEM IMPUGNACAO'));
+  // Falsos positivos do caso real id 46: outro reu e prescricao quinquenal.
+  assert.ok(sistema.includes('OUTROS reus'));
+  assert.ok(sistema.includes('prescricao quinquenal'));
 });
 
 for (const [arquivo, nome, envelope] of [
