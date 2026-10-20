@@ -627,6 +627,63 @@ class TestRagHibrido:
         # `similarity` continua com o fallback antigo (frontend/n8n leem ele).
         assert por_numero["LEX"]["similarity"] == pytest.approx(1.0)
 
+    @pytest.mark.parametrize("busca", ["semantica", "lexical"])
+    def test_mesma_area_casa_mesmo_com_tipo_acao_diferente(self, busca, monkeypatch):
+        """Caso real (id 46): Extrator manda 'Reclamacao Trabalhista - Rito...' e o
+        exemplar curado esta como 'Trabalhista'. A area canonica tem que bastar.
+        Tambem trava o casamento entre placeholders e parametros do SQL."""
+        from contextlib import contextmanager
+
+        from App import database as db
+
+        capturado = {}
+
+        class FakeCursor:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def execute(self, sql, params):
+                capturado["sql"], capturado["params"] = sql, params
+
+            def fetchall(self):
+                return []
+
+        class FakeConn:
+            def cursor(self):
+                return FakeCursor()
+
+        @contextmanager
+        def fake_conn():
+            yield FakeConn()
+
+        monkeypatch.setattr(db, "_get_connection", fake_conn)
+        monkeypatch.setattr(db, "_ensure_db_initialized", lambda: None)
+
+        tipo = "Reclamação Trabalhista - Rito Ordinário (verbas, horas extras)"
+        if busca == "semantica":
+            db.buscar_defesas_semanticas(
+                embedding=[0.1] * 384,
+                tipo_acao=tipo,
+                excluir_numero="0001",
+                usuario_id="system:n8n",
+                area_juridica="trabalhista",
+            )
+        else:
+            db.buscar_defesas_lexicais(
+                texto_query="horas extras",
+                tipo_acao=tipo,
+                excluir_numero="0001",
+                usuario_id="system:n8n",
+                area_juridica="trabalhista",
+            )
+
+        sql = capturado["sql"]
+        assert sql.count("%s") == len(capturado["params"])
+        assert "OR (%s::text IS NOT NULL AND area_juridica = %s)" in sql
+
     def test_rrf_lista_vazia_funciona(self):
         """Uma das duas listas vazia -> RRF degenera pra ranking da outra."""
         from App.routes.rag import _mesclar_rrf

@@ -1408,7 +1408,12 @@ def buscar_defesas_semanticas(
                     1 - (fatos_embedding <=> %s::vector) AS similarity
                 FROM contestacoes
                 WHERE status = 'ok'
-                  AND tipo_acao ILIKE %s ESCAPE '\\'
+                  AND (
+                    tipo_acao ILIKE %s ESCAPE '\\'
+                    -- mesma area canonica casa mesmo com nome de tipo diferente
+                    -- ('Reclamacao Trabalhista - Rito...' x 'Trabalhista').
+                    OR (%s::text IS NOT NULL AND area_juridica = %s)
+                  )
                   AND fatos_embedding IS NOT NULL
                   AND (%s::text IS NULL OR area_juridica = %s OR area_juridica IS NULL)
                   -- area NULL = registro legado/curado sem classificacao (ex.: exemplar
@@ -1427,6 +1432,8 @@ def buscar_defesas_semanticas(
                 (
                     vec_str,
                     pattern_tipo,
+                    area_canonica,
+                    area_canonica,
                     area_canonica,
                     area_canonica,
                     usuario_id or "__sem_usuario__",
@@ -1546,7 +1553,10 @@ def buscar_defesas_lexicais(
                     ts_rank_cd(fatos_tsv, plainto_tsquery('portuguese', %s)) AS rank
                 FROM contestacoes
                 WHERE status = 'ok'
-                  AND tipo_acao ILIKE %s ESCAPE '\\'
+                  AND (
+                    tipo_acao ILIKE %s ESCAPE '\\'
+                    OR (%s::text IS NOT NULL AND area_juridica = %s)
+                  )
                   AND fatos_tsv @@ plainto_tsquery('portuguese', %s)
                   AND (%s::text IS NULL OR area_juridica = %s OR area_juridica IS NULL)
                   -- area NULL = registro legado/curado sem classificacao (ex.: exemplar
@@ -1565,6 +1575,8 @@ def buscar_defesas_lexicais(
                 (
                     query_normalizada,
                     pattern_tipo,
+                    area_canonica,
+                    area_canonica,
                     query_normalizada,
                     area_canonica,
                     area_canonica,
