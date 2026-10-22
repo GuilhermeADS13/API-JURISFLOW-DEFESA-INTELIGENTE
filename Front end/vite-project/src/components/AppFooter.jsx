@@ -16,11 +16,14 @@ export default function AppFooter() {
                 src="/jurisflow-logo-256.png"
                 alt="JurisFlow — Automação Inteligente de Defesas Jurídicas"
                 className="brand-logo brand-logo-lg"
+                width="80"
+                height="80"
+                loading="lazy"
               />
             </div>
             <p className="text-secondary mb-0">
-              Plataforma pensada para organizar o fluxo de defesas com
-              rastreabilidade, produtividade e revisão jurídica final.
+              Minutas de contestação a partir da petição inicial, no modelo
+              do seu escritório.
             </p>
           </div>
 
@@ -40,8 +43,8 @@ export default function AppFooter() {
         </div>
 
         <div className="footer-bottom">
-          <span>Plataforma focada em automação de defesas com clareza operacional</span>
-          <span>Fluxo direto: formulário IA, dashboard e suporte para reclamações</span>
+          <span>JurisFlow</span>
+          <span>A minuta gerada não substitui a revisão do advogado responsável.</span>
         </div>
       </Container>
     </footer>

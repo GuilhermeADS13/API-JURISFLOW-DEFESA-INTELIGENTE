@@ -2,24 +2,24 @@
 // Dados mockados para cards, selects e historico da interface.
 export const stats = [
   {
-    label: "Tempo médio por defesa",
+    label: "Tempo por peça",
     value: "~5 min",
-    detail: "Do upload da petição ao DOCX pronto pra baixar",
+    detail: "Da petição enviada ao Word pronto para revisar.",
   },
   {
-    label: "Citações verificadas",
-    value: "100%",
-    detail: "Toda jurisprudência e artigo são checados antes da entrega",
+    label: "Citações",
+    value: "Conferidas",
+    detail: "Artigos e súmulas citados passam por verificação; os incertos vêm destacados.",
   },
   {
-    label: "Estilo adaptativo",
-    value: "DOCX",
-    detail: "Fonte, espaçamento e cabeçalho copiados do modelo enviado",
+    label: "Base legal",
+    value: "Lei e súmulas",
+    detail: "CLT, CPC, Constituição e súmulas do TST, STF e STJ, artigo por artigo.",
   },
   {
-    label: "Aprendizado contínuo",
-    value: "RAG",
-    detail: "Cada peça aprovada enriquece a base de defesas do escritório",
+    label: "Memória do escritório",
+    value: "Suas teses",
+    detail: "As defesas aprovadas pelo escritório orientam as próximas peças.",
   },
 ];
 

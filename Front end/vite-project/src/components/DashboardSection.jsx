@@ -120,7 +120,7 @@ export default function DashboardSection({
                         <tr>
                           <td colSpan={onBaixarPeca ? 6 : 5} className="text-secondary">
                             {loading
-                              ? "Carregando histórico do banco de dados..."
+                              ? "Carregando histórico do banco de dados…"
                               : "Nenhum caso encontrado no banco para este usuário."}
                           </td>
                         </tr>

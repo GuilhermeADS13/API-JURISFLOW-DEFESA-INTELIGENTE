@@ -285,7 +285,7 @@ export default function JurisprudenciaListaTab({ getAccessToken }) {
       <div className="d-flex justify-content-between align-items-center mb-2">
         <span className="jur-resultbar">
           {loading
-            ? "Carregando..."
+            ? "Carregando…"
             : `${total} resultado${total === 1 ? "" : "s"} · página ${page + 1} de ${totalPages}`}
         </span>
       </div>

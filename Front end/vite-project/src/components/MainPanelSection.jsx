@@ -181,7 +181,15 @@ export default function MainPanelSection({
                   </div>
                 )}
 
-                {feedback && <Alert variant={feedback.variant}>{feedback.text}</Alert>}
+                {feedback && (
+                  <Alert
+                    variant={feedback.variant}
+                    role={feedback.variant === "danger" ? "alert" : "status"}
+                    aria-live="polite"
+                  >
+                    {feedback.text}
+                  </Alert>
+                )}
 
                 {submitted && (
                   <Alert variant="success" className="d-flex align-items-center gap-2">
@@ -329,7 +337,7 @@ export default function MainPanelSection({
 
                     <Row className="g-3 mt-1">
                       <Col md={6}>
-                        <Form.Group>
+                        <Form.Group controlId="campo-tipo-acao-hint">
                           <Form.Label>Tipo de ação (dica para a IA)</Form.Label>
                           <Form.Control
                             value={tipoAcaoHint || ""}
@@ -339,7 +347,7 @@ export default function MainPanelSection({
                         </Form.Group>
                       </Col>
                       <Col xs={12}>
-                        <Form.Group>
+                        <Form.Group controlId="campo-pontos-contestante">
                           <Form.Label>Pontos específicos para atacar</Form.Label>
                           <Form.Control
                             as="textarea"
@@ -519,7 +527,7 @@ export default function MainPanelSection({
 
                     <div className="d-flex flex-wrap gap-2 mt-4">
                       <Button type="submit" variant="dark" disabled={loading}>
-                        {loading ? "Processando..." : "Gerar contestação automaticamente"}
+                        {loading ? "Processando…" : "Gerar contestação automaticamente"}
                       </Button>
                     </div>
                   </Form>
@@ -529,9 +537,10 @@ export default function MainPanelSection({
                 <Form onSubmit={onSubmit}>
                   <Row className="g-3">
                     <Col md={6}>
-                      <Form.Group>
+                      <Form.Group controlId="campo-processo">
                         <Form.Label>Número do processo</Form.Label>
                         <IMaskInput
+                          id="campo-processo"
                           mask="0000000-00.0000.0.00.0000"
                           name="processo"
                           value={form.processo}
@@ -551,7 +560,7 @@ export default function MainPanelSection({
                     </Col>
 
                     <Col md={6}>
-                      <Form.Group>
+                      <Form.Group controlId="campo-autor">
                         <Form.Label>Autor da ação</Form.Label>
                         <Form.Control
                           name="autor"
@@ -567,7 +576,7 @@ export default function MainPanelSection({
                     </Col>
 
                     <Col md={6}>
-                      <Form.Group>
+                      <Form.Group controlId="campo-reu">
                         <Form.Label>Réu (parte que você representa)</Form.Label>
                         <Form.Control
                           name="reu"
@@ -583,7 +592,7 @@ export default function MainPanelSection({
                     </Col>
 
                     <Col md={6}>
-                      <Form.Group>
+                      <Form.Group controlId="campo-tipo-acao">
                         <Form.Label>Ramo do direito</Form.Label>
                         <Form.Select
                           name="tipoAcao"
@@ -610,7 +619,7 @@ export default function MainPanelSection({
 
                     {subtiposAcao[form.tipoAcao] && (
                       <Col md={6}>
-                        <Form.Group>
+                        <Form.Group controlId="campo-subtipo-acao">
                           <Form.Label>Tipo específico da ação</Form.Label>
                           <Form.Select
                             name="subtipoAcao"
@@ -632,7 +641,7 @@ export default function MainPanelSection({
                     )}
 
                     <Col xs={12}>
-                      <Form.Group>
+                      <Form.Group controlId="campo-fatos">
                         <Form.Label>Fatos narrados pelo autor</Form.Label>
                         <Form.Control
                           as="textarea"
@@ -650,7 +659,7 @@ export default function MainPanelSection({
                     </Col>
 
                     <Col xs={12}>
-                      <Form.Group>
+                      <Form.Group controlId="campo-pedidos">
                         <Form.Label>Pedidos do autor</Form.Label>
                         <Form.Control
                           as="textarea"
@@ -794,7 +803,7 @@ export default function MainPanelSection({
 
                   <div className="d-flex flex-wrap gap-2 mt-4">
                     <Button type="submit" variant="dark" disabled={loading}>
-                      {loading ? "Processando..." : "Enviar para IA"}
+                      {loading ? "Processando…" : "Enviar para IA"}
                     </Button>
 
                     <Button

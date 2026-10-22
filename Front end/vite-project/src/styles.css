@@ -2828,7 +2828,10 @@ h6,
   align-items: center;
   justify-content: center;
   padding: 0;
-  transition: all 0.15s ease;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background-color 0.15s ease;
 }
 .jur-admin .jur-acao:hover {
   color: var(--uniform-text);
@@ -2864,4 +2867,89 @@ h6,
   background: var(--uniform-accent);
   border-color: var(--uniform-accent);
   color: #1a1611;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Polimento (out/2026) — ultima camada, sobrepoe as regras anteriores.
+   Auditoria Web Interface Guidelines + direcao da skill frontend-design.
+   ───────────────────────────────────────────────────────────────────────── */
+
+html {
+  color-scheme: dark;
+}
+
+/* Titulos sem viuva no fim da linha. */
+h1,
+h2,
+.hero-title,
+.stats-title {
+  text-wrap: balance;
+}
+
+.hero-title {
+  max-width: 16ch;
+}
+
+.hero-lead {
+  max-width: 58ch;
+}
+
+/* Rotulos em frase normal, nao em CAIXA ALTA espacada. */
+.section-kicker,
+.stat-label,
+.proof-title,
+.console-eyebrow,
+.console-score span,
+.feature-state,
+.footer-title {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.stat-label {
+  font-size: 0.9rem;
+}
+
+.feature-state {
+  white-space: nowrap;
+}
+
+/* Etapas do hero viraram <ol> semantico: sem marcador nativo. */
+.etapas-lista {
+  list-style: none;
+}
+
+/* Foco visivel pelo teclado em todo elemento interativo. */
+a:focus-visible,
+button:focus-visible,
+.btn:focus-visible,
+.nav-link:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--gold, #c2a271);
+  outline-offset: 3px;
+  box-shadow: none;
+}
+
+/* Um unico momento de entrada (o hero). Telas de trabalho nao reanimam a
+   cada navegacao. */
+.stat-card,
+.panel-entry-primary,
+.panel-entry-secondary,
+.panel-entry-tertiary,
+.dashboard-entry-header,
+.dashboard-entry-stat-card,
+.dashboard-entry-main-card,
+.support-entry-primary {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
