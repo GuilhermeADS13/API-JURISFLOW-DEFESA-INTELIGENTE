@@ -60,7 +60,7 @@ function ConfirmEmailScreen({
         onClick={onResend}
       >
         {resendLoading
-          ? "Reenviando..."
+          ? "Reenviando…"
           : secondsLeft > 0
           ? `Reenviar e-mail (${secondsLeft}s)`
           : "Reenviar e-mail de confirmação"}
@@ -220,7 +220,7 @@ export default function AuthModal({
               </Form.Group>
 
               <Button type="submit" variant="dark" className="w-100 auth-submit-btn" disabled={loading}>
-                {loading ? "Processando..." : isSignup ? "Criar conta e entrar" : "Entrar com e-mail"}
+                {loading ? "Processando…" : isSignup ? "Criar conta e entrar" : "Entrar com e-mail"}
               </Button>
             </Form>
 

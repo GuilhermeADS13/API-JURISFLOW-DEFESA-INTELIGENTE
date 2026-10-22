@@ -11,11 +11,10 @@ export default function StatsSection() {
     <section className="stats-band pb-4">
       <Container>
         <div className="stats-intro">
-          <div className="section-kicker">Indicadores da plataforma</div>
-          <h2 className="stats-title">Métricas da operação de automação de defesas</h2>
+          <h2 className="stats-title">O que vem em cada peça</h2>
           <p className="stats-copy mb-0">
-            Visão direta de tempo, capacidade e qualidade para acompanhar o desempenho
-            do fluxo jurídico com clareza.
+            A minuta chega fundamentada e no formato do escritório. A revisão final
+            continua sendo do advogado.
           </p>
         </div>
 

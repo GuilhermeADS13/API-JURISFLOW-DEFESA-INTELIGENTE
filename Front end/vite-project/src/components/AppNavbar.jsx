@@ -53,6 +53,8 @@ export default function AppNavbar({
             src="/jurisflow-logo-256.png"
             alt="JurisFlow — Automação Inteligente de Defesas Jurídicas"
             className="brand-logo"
+            width="56"
+            height="56"
           />
         </Navbar.Brand>
 
