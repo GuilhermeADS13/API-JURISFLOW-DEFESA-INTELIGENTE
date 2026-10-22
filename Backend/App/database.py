@@ -1625,6 +1625,51 @@ def upsert_legislacao(
         connection.commit()
 
 
+def listar_chaves_legislacao() -> set[tuple[str, str]]:
+    """Chaves (origem, numero) ja presentes — a importacao em lote pula estas."""
+    _ensure_db_initialized()
+    with _get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT origem, numero FROM legislacao")
+            return {(row[0], row[1]) for row in cursor.fetchall()}
+
+
+def upsert_legislacao_lote(
+    itens: list[tuple[str, str, str, str | None, list[float] | None]],
+) -> int:
+    """UPSERT em lote (origem, numero, texto, area_juridica, embedding) numa
+    transacao so — a versao 1-a-1 abre uma conexao por linha."""
+    linhas = [
+        (
+            origem,
+            numero,
+            texto,
+            area if area in AREAS_JURIDICAS_CANONICAS else None,
+            _format_pgvector(embedding) if embedding else None,
+        )
+        for origem, numero, texto, area, embedding in itens
+        if origem and numero and texto
+    ]
+    if not linhas:
+        return 0
+    _ensure_db_initialized()
+    with _get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.executemany(
+                """
+                INSERT INTO legislacao (origem, numero, texto, area_juridica, embedding)
+                VALUES (%s, %s, %s, %s, %s::vector)
+                ON CONFLICT (origem, numero) DO UPDATE
+                  SET texto = EXCLUDED.texto,
+                      area_juridica = EXCLUDED.area_juridica,
+                      embedding = EXCLUDED.embedding
+                """,
+                linhas,
+            )
+        connection.commit()
+    return len(linhas)
+
+
 def _row_to_legislacao(row: tuple) -> dict[str, Any]:
     """Mapeia tupla do SELECT de buscar_legislacao para dict."""
     return {
