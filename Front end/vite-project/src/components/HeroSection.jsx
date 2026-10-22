@@ -1,36 +1,76 @@
 // Hero principal da landing com proposta de valor e chamadas para acao.
 import React from "react";
-import { Button, Card, Col, Container, Row } from "react-bootstrap";
-import {
-  FileEarmarkArrowUp,
-  FileEarmarkCheck,
-  Search,
-  ShieldCheck,
-} from "react-bootstrap-icons";
+import { Button, Col, Container, Row } from "react-bootstrap";
 
 // As 4 etapas sao uma sequencia real do pipeline — por isso numeradas.
 const ETAPAS = [
   {
-    icone: <FileEarmarkArrowUp />,
     titulo: "Leitura da petição inicial",
     texto: "PDF ou DOCX. Partes, pedidos e valores são extraídos automaticamente.",
   },
   {
-    icone: <Search />,
     titulo: "Defesas que o escritório já fez",
     texto: "Busca nos casos já contestados para manter a tese e a estratégia da casa.",
   },
   {
-    icone: <ShieldCheck />,
     titulo: "Redação com citações conferidas",
-    texto: "Cada artigo e súmula citado é conferido; o que ficar incerto vem sinalizado para você.",
+    texto: "Cada artigo e súmula citado é conferido; o que ficar incerto vem sinalizado.",
   },
   {
-    icone: <FileEarmarkCheck />,
     titulo: "Word no modelo do escritório",
     texto: "Timbre, fonte e espaçamento do seu modelo, pronto para revisar.",
   },
 ];
+
+/**
+ * Folha ilustrativa da peca gerada, no mesmo formato do Word exportado
+ * (Arial justificado, secoes "I – ...", numeracao "01.-").
+ */
+function FolhaContestacao() {
+  return (
+    <figure className="folha-wrap mb-0">
+      <div
+        className="folha"
+        role="img"
+        aria-label="Exemplo ilustrativo de contestação trabalhista gerada pelo JurisFlow"
+      >
+        <div className="folha-timbre" aria-hidden="true">
+          <span className="folha-monograma" />
+          Timbre do seu escritório
+        </div>
+
+        <div aria-hidden="true">
+          <p className="folha-enderecamento">
+            Excelentíssimo(a) Senhor(a) Juiz(a) da __ª Vara do Trabalho de ________
+          </p>
+          <p className="folha-processo">Processo nº 0000000-00.2026.5.00.0000</p>
+
+          <p>
+            <strong>EMPRESA RÉ LTDA.</strong>, já qualificada nos autos da reclamação
+            trabalhista movida por <strong>RECLAMANTE</strong>, vem apresentar
+          </p>
+          <p className="folha-titulo-peca">CONTESTAÇÃO</p>
+
+          <p className="folha-secao">I – PRELIMINARES</p>
+          <p className="folha-item">01.- Da inépcia do pedido de horas extras</p>
+          <p>
+            A inicial não indica o valor do pedido, como exige o{" "}
+            <mark className="folha-citacao">art. 840, § 1º, da CLT</mark>
+            <span className="folha-selo">conferida</span>
+          </p>
+          <span className="folha-linha" />
+          <span className="folha-linha folha-linha-curta" />
+
+          <p className="folha-secao">II – MÉRITO</p>
+          <span className="folha-linha" />
+          <span className="folha-linha" />
+          <span className="folha-linha folha-linha-media" />
+        </div>
+      </div>
+      <figcaption className="folha-legenda">Exemplo ilustrativo de minuta.</figcaption>
+    </figure>
+  );
+}
 
 /**
  * Secao inicial de apresentacao do produto e atalhos para as telas principais.
@@ -40,7 +80,7 @@ export default function HeroSection({ onNavigate }) {
     <section id="inicio" className="hero-section py-5">
       <Container>
         <Row className="align-items-center g-4 g-lg-5">
-          <Col lg={7} className="hero-copy">
+          <Col lg={6} className="hero-copy">
             <h1 className="hero-title mb-4">
               Da petição inicial à contestação, no padrão do seu escritório.
             </h1>
@@ -71,34 +111,25 @@ export default function HeroSection({ onNavigate }) {
             </div>
           </Col>
 
-          <Col lg={5}>
-            <Card className="hero-console border-0">
-              <Card.Body className="p-4">
-                <div className="console-topbar mb-4">
-                  <div>
-                    <h2 className="h5 mb-1">Como a contestação é montada</h2>
-                    <p className="text-secondary small mb-0">Cerca de 5 minutos por peça.</p>
-                  </div>
-                </div>
-
-                <ol className="etapas-lista d-grid gap-3 mb-0 p-0">
-                  {ETAPAS.map(({ icone, titulo, texto }, i) => (
-                    <li className="feature-row" key={titulo}>
-                      <div className="feature-icon" aria-hidden="true">
-                        {icone}
-                      </div>
-                      <div>
-                        <div className="fw-semibold">{titulo}</div>
-                        <small className="text-secondary">{texto}</small>
-                      </div>
-                      <span className="feature-state">Etapa {i + 1}</span>
-                    </li>
-                  ))}
-                </ol>
-              </Card.Body>
-            </Card>
+          <Col lg={6}>
+            <FolhaContestacao />
           </Col>
         </Row>
+
+        <h2 className="visually-hidden">Como a contestação é montada</h2>
+        <ol className="etapas-faixa">
+          {ETAPAS.map(({ titulo, texto }, i) => (
+            <li key={titulo}>
+              <span className="etapa-numero" aria-hidden="true">
+                {i + 1}
+              </span>
+              <div>
+                <div className="etapa-titulo">{titulo}</div>
+                <p className="etapa-texto mb-0">{texto}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
       </Container>
     </section>
   );

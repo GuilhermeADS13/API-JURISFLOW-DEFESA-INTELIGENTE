@@ -2953,3 +2953,199 @@ button:focus-visible,
     scroll-behavior: auto !important;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Hero com previa da peca: uma folha clara saindo do fundo escuro, no
+   formato do Word exportado. E o unico elemento "chamativo" da pagina.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.folha-wrap {
+  --papel: #f5f3ef;
+  --papel-tinta: #1f2127;
+  --papel-cinza: #d8d4cc;
+  position: relative;
+  max-width: 520px;
+  margin-inline: auto;
+  animation: riseUp 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) 0.15s both;
+}
+
+.folha {
+  position: relative;
+  padding: 2.1rem 2.3rem 2.6rem;
+  background: var(--papel);
+  color: var(--papel-tinta);
+  font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  text-align: justify;
+  hyphens: auto;
+  border-radius: 3px;
+  transform: rotate(1.6deg);
+  box-shadow:
+    0 2px 0 rgba(255, 255, 255, 0.6) inset,
+    0 30px 60px rgba(0, 0, 0, 0.55),
+    0 8px 18px rgba(0, 0, 0, 0.35);
+  /* A folha "continua" para baixo: some no fim em vez de terminar seca. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent);
+  mask-image: linear-gradient(to bottom, #000 78%, transparent);
+}
+
+.folha p {
+  margin-bottom: 0.65rem;
+}
+
+/* A regra global `p { color: var(--muted) !important }` pinta todo <p> de
+   cinza claro; na folha a tinta e escura. */
+.folha p {
+  color: var(--papel-tinta) !important;
+}
+
+.folha-timbre {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding-bottom: 0.7rem;
+  margin-bottom: 1.1rem;
+  border-bottom: 1px solid var(--papel-cinza);
+  font-size: 0.72rem;
+  color: #6b6760;
+  text-align: left;
+}
+
+.folha-monograma {
+  width: 18px;
+  height: 18px;
+  border-radius: 2px;
+  background: #b8975f;
+}
+
+.folha-enderecamento {
+  font-weight: 700;
+  text-transform: uppercase;
+  text-align: left;
+  font-size: 0.74rem;
+}
+
+.folha-processo {
+  text-align: left;
+}
+
+.folha-titulo-peca {
+  text-align: center;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-block: 0.9rem !important;
+}
+
+.folha-secao {
+  font-weight: 700;
+  text-align: left;
+  margin-top: 1rem;
+}
+
+.folha-item {
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-align: left;
+}
+
+.folha-citacao {
+  padding: 0 0.15em;
+  color: inherit;
+  background: rgba(194, 162, 113, 0.32);
+  border-radius: 2px;
+}
+
+.folha-selo {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.45rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: #6e5326;
+  border: 1px solid #b8975f;
+  border-radius: 999px;
+  vertical-align: 1px;
+}
+
+.folha-selo::before {
+  content: "✓ ";
+}
+
+.folha-linha {
+  display: block;
+  height: 0.42rem;
+  margin: 0.55rem 0;
+  border-radius: 2px;
+  background: var(--papel-cinza);
+}
+
+.folha-linha-media {
+  width: 72%;
+}
+
+.folha-linha-curta {
+  width: 46%;
+}
+
+.folha-legenda {
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-align: right;
+}
+
+/* Etapas do pipeline numa faixa abaixo do hero. */
+.etapas-faixa {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1.5rem;
+  margin: 3.5rem 0 2.5rem;
+  padding: 1.75rem 0 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.etapas-faixa li {
+  display: flex;
+  gap: 0.85rem;
+  align-items: flex-start;
+}
+
+.etapa-numero {
+  flex: 0 0 auto;
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 1.9rem;
+  line-height: 1;
+  color: var(--gold, #c2a271);
+}
+
+.etapa-titulo {
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.etapa-texto {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+@media (max-width: 991.98px) {
+  .etapas-faixa {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 575.98px) {
+  .folha {
+    padding: 1.4rem 1.3rem 2rem;
+    font-size: 0.72rem;
+    transform: none;
+  }
+
+  .etapas-faixa {
+    grid-template-columns: 1fr;
+    margin-top: 2.5rem;
+  }
+}
